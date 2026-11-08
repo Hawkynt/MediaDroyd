@@ -63,3 +63,42 @@ jobs:
         with:
           file: screenshots/player.png
           message: '* README screenshot: player'
+      # The store art (fastlane/metadata/android/en-US/images, read by Google Play and F-Droid): the icon and feature
+      # graphic drawn from the launcher icon, and the screenshots above copied in (Icons.kt).
+      - name: Draw the store art
+        run: ./gradlew :desktop:icons --no-daemon
+      - name: Commit the store icon
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/icon.png
+          message: '* store icon'
+      - name: Commit the store feature graphic
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/featureGraphic.png
+          message: '* store feature graphic'
+      - name: Commit the store screenshot of the browse wall
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/phoneScreenshots/1_main.png
+          message: '* store screenshot: browse wall'
+      - name: Commit the store screenshot of the details
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/phoneScreenshots/2_detail.png
+          message: '* store screenshot: details'
+      - name: Commit the store screenshot of the player
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/phoneScreenshots/3_player.png
+          message: '* store screenshot: player'
+      - name: Commit the store screenshot of the filters
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/phoneScreenshots/4_filters.png
+          message: '* store screenshot: filters'
+      - name: Commit the store screenshot of the files
+        uses: Hawkynt/RepositoryTemplate/commit-generated-file@v1
+        with:
+          file: fastlane/metadata/android/en-US/images/phoneScreenshots/5_files.png
+          message: '* store screenshot: files'
