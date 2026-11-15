@@ -216,8 +216,8 @@ fun SettingsScreen(
         if (offers(PlatformSetting.SKIP_INTRO_CREDITS)) {
             SwitchRow(
                 label = "Skip intros and credits",
-                detail = "Jumps over intros and ends an episode at its credits, " +
-                    "where its chapters or its .edl file mark them.",
+                detail = "Jumps over intros and ends an episode at its credits: where its chapters or an .edl " +
+                    "file mark them, else found by the sound it shares with the episodes around it.",
                 checked = settings.skipIntroCredits,
                 onChange = { c -> update { it.skipIntroCredits = c } },
             )
