@@ -68,7 +68,7 @@ class IntroCreditsTest {
     }
 
     @Test
-    fun `the intro is looked for in an episode's first quarter, at most ten minutes, so short ones keep their credits out`() {
+    fun `the intro is looked for in an episode's first quarter, at most ten minutes, credits kept out`() {
         assertEquals(10 * 60_000L, IntroCredits.openingMs(45 * 60_000L))
         assertEquals(5 * 60_000L + 30_000L, IntroCredits.openingMs(22 * 60_000L))
         assertEquals(IntroCredits.OPENING_MS, IntroCredits.openingMs(0))

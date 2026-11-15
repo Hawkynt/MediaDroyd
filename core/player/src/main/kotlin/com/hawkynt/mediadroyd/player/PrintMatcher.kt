@@ -10,14 +10,14 @@ import kotlin.math.sqrt
 /**
  * What two Chromaprint fingerprints (NativeFingerprint) share, and where it lies in each: converted from
  * MediaUploadService's port (src/media_organizer/contentdup/audio.py and align.py, LGPL-3.0, the same author) of
- * Chromaprint's FingerprintMatcher::Match (src/fingerprint_matcher.cpp, utils/gaussian_filter.h, utils/gradient.h;
- * MIT, Lukas Lalinsky; app/THIRD-PARTY-NOTICE.Chromaprint.txt) and checked against Chromaprint's own output.
+ * Chromaprint's FingerprintMatcher::Match (src/fingerprint_matcher.cpp, utils/gaussian_filter.h, utils/gradient.h; MIT,
+ * Lukas Lalinsky; app/THIRD-PARTY-NOTICE.Chromaprint.txt) and checked against Chromaprint's own output.
  *
  * The items' top [ALIGN_BITS] bits vote on the offset between the prints; at an offset the bit errors of the
  * overlapping items are smoothed (three box filters approximating a gaussian of sigma 8), cut where the smoothed
  * curve's gradient peaks above 0.15, and each cut whose mean bit error is below [MATCH_THRESHOLD] of 32 bits is a
- * matching segment, neighbours within 0.7 of each other merged. As in the port, unlike Chromaprint: the [OFFSETS] best offsets
- * are walked and their segments taken longest first, each keeping what no longer one took (an intro at another
+ * matching segment, neighbours within 0.7 of each other merged. As in the port, unlike Chromaprint: the [OFFSETS] best
+ * offsets are walked and their segments taken longest first, each keeping what no longer one took (an intro at another
  * position in each is followed past what lies around it); the tie-breaking noise is a fixed sequence; a bucket of more
  * than [BUCKET] items (silence, a held tone) casts no votes.
  */

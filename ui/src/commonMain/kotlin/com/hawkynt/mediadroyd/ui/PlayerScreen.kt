@@ -68,9 +68,9 @@ interface PlayerPlatform {
 
     /**
      * Gray frames of [location] for finding its intro and credits by their pictures where the sound does not
-     * (PictureCues, SkipFinder): its opening (IntroCredits.openingMs) at PictureCues' hash size every OPENING_STEP_MS, or
-     * where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS; null where the platform
-     * cannot read them. Blocks: called off the main thread.
+     * (PictureCues, SkipFinder): its opening (IntroCredits.openingMs) at PictureCues' hash size every OPENING_STEP_MS,
+     * or where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS; null where the
+     * platform cannot read them. Blocks: called off the main thread.
      */
     fun pictures(location: String, closing: Boolean): PictureCues.Frames? = null
 

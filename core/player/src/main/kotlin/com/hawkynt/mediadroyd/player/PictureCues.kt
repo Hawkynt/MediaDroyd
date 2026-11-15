@@ -100,9 +100,9 @@ object PictureCues {
     }
 
     /**
-     * What [frame] ([width] x [height]) shows: [Look.BLACK] where next to all of it is dark and nothing bright; [Look.TEXT]
-     * where it is mostly dark with a little bright in thin strokes — many edges for its bright pixels, as letters have
-     * and a moon or a lamp has not; else [Look.OTHER].
+     * What [frame] ([width] x [height]) shows: [Look.BLACK] where next to all of it is dark and nothing bright;
+     * [Look.TEXT] where it is mostly dark with a little bright in thin strokes — many edges for its bright pixels, as
+     * letters have and a moon or a lamp has not; else [Look.OTHER].
      */
     fun look(frame: ByteArray, width: Int, height: Int): Look {
         val total = width * height

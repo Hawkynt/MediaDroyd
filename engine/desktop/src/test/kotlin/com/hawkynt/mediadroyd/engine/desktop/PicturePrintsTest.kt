@@ -66,8 +66,9 @@ class PicturePrintsTest {
             assertEquals(51_000.0, a.endMs.toDouble(), 2500.0)
             assertEquals(31_000.0, b.startMs.toDouble(), 2500.0)
             // The credits from the first frame of text, within a step.
-            assertEquals((12 + 40 + STORY) * 1000.0, requireNotNull(PictureCues.creditsStartMs(frames(first, true))).toDouble(), 1000.0)
-            assertEquals((30 + 40 + STORY) * 1000.0, requireNotNull(PictureCues.creditsStartMs(frames(second, true))).toDouble(), 1000.0)
+            fun credits(file: File) = requireNotNull(PictureCues.creditsStartMs(frames(file, true))).toDouble()
+            assertEquals((12 + 40 + STORY) * 1000.0, credits(first), 1000.0)
+            assertEquals((30 + 40 + STORY) * 1000.0, credits(second), 1000.0)
         } finally {
             dir.deleteRecursively()
         }

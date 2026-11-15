@@ -64,7 +64,8 @@ class PictureCuesTest {
     @Test
     fun `the credits begin where black and text frames begin and run to the end`() {
         // Given the story, a cut to black, a minute of credits and a black tail
-        val frames = closing(300 to { i -> scene(i) }, 1 to { _ -> black }, 60 to { i -> credits(i) }, 5 to { _ -> black })
+        val frames =
+            closing(300 to { i -> scene(i) }, 1 to { _ -> black }, 60 to { i -> credits(i) }, 5 to { _ -> black })
         // Then the credits begin at the cut to black
         assertEquals(1_000_000L + 300_000, PictureCues.creditsStartMs(frames))
     }
@@ -75,7 +76,9 @@ class PictureCuesTest {
         assertNull(PictureCues.creditsStartMs(closing(290 to { i -> scene(i) }, 8 to { i -> credits(i) })))
         // Credits in the middle with the story going on long after them are not the end credits.
         assertNull(
-            PictureCues.creditsStartMs(closing(100 to { i -> scene(i) }, 60 to { i -> credits(i) }, 200 to { i -> scene(i) })),
+            PictureCues.creditsStartMs(
+                closing(100 to { i -> scene(i) }, 60 to { i -> credits(i) }, 200 to { i -> scene(i) }),
+            ),
         )
     }
 
@@ -87,7 +90,8 @@ class PictureCuesTest {
         val wobble = Random(seed * 31 + noise)
         val out = ArrayList<ByteArray>()
         while (out.size < seconds * perSecond) {
-            val shot = ByteArray(PictureCues.HASH_WIDTH * PictureCues.HASH_HEIGHT) { (40 + random.nextInt(180)).toByte() }
+            val size = PictureCues.HASH_WIDTH * PictureCues.HASH_HEIGHT
+            val shot = ByteArray(size) { (40 + random.nextInt(180)).toByte() }
             repeat((2 + random.nextInt(3)) * perSecond) {
                 out += ByteArray(shot.size) { i -> ((shot[i].toInt() and 0xff) + wobble.nextInt(-3, 4)).toByte() }
             }
