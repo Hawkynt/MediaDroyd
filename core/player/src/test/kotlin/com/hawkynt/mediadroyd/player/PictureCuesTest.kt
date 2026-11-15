@@ -145,4 +145,29 @@ class PictureCuesTest {
         assertEquals(255, gray[0].toInt() and 0xff)
         assertEquals((77 + 150 + 29 + 29) / 4, gray[1].toInt() and 0xff)
     }
+
+    // Plain scenes, as a cartoon's or a dark room's: an even background with a block or two, which other such scenes
+    // resemble in their hash far more than two filmed pictures do.
+    private fun plain(seconds: Int, seed: Int): List<ByteArray> {
+        val perSecond = (1000 / PictureCues.OPENING_STEP_MS).toInt()
+        val random = Random(seed)
+        val w = PictureCues.HASH_WIDTH
+        val out = ArrayList<ByteArray>()
+        while (out.size < seconds * perSecond) {
+            val background = 60 + random.nextInt(60)
+            val blocks = List(1 + random.nextInt(2)) { random.nextInt(w * PictureCues.HASH_HEIGHT) }
+            val shot = ByteArray(w * PictureCues.HASH_HEIGHT) { if (it in blocks) (background + 80).toByte() else background.toByte() }
+            repeat((2 + random.nextInt(3)) * perSecond) { out += shot }
+        }
+        return out.take(seconds * perSecond)
+    }
+
+    @Test
+    fun `plain scenes alike in their hash do not stretch an intro past its end`() {
+        val first = opening(plain(20, 1) + shots(40, 7, 1) + plain(300, 2))
+        val second = opening(plain(35, 3) + shots(40, 7, 2) + plain(300, 4))
+        val (a, b) = requireNotNull(PictureCues.intro(first, second))
+        assertTrue("${a.startMs}..${a.endMs}", abs(a.endMs - 60_000) <= 2500 && abs(a.startMs - 20_000) <= 2500)
+        assertTrue("${b.startMs}..${b.endMs}", abs(b.endMs - 75_000) <= 2500)
+    }
 }

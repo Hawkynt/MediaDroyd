@@ -52,10 +52,11 @@ object IntroCredits {
     const val LOOKAHEAD_MS = 1000L
 
     /**
-     * When a print's items happen: one every [itemMs], each [leadMs] ahead of what it shows — the sound's
-     * ([SOUND]: Chromaprint's item length and [LOOKAHEAD_MS]) or the pictures' (PictureCues: one frame per step).
+     * When a print's items happen and how alike two must be: one every [itemMs], each [leadMs] ahead of what it shows,
+     * a shared stretch's mean bit error below [threshold] — the sound's ([SOUND]: Chromaprint's item length,
+     * [LOOKAHEAD_MS] and its matcher's threshold) or the pictures' (PictureCues: one frame per step, stricter).
      */
-    class Timing(val itemMs: Double, val leadMs: Long) {
+    class Timing(val itemMs: Double, val leadMs: Long, val threshold: Double = PrintMatcher.MATCH_THRESHOLD) {
         internal fun ms(items: Int) = (items * itemMs).toLong() + leadMs
 
         internal fun inside(first: Int, length: Int) =
@@ -68,11 +69,12 @@ object IntroCredits {
     /**
      * The intro the openings [own] and [other] (prints from each episode's start, items on [timing]) share: its span in
      * each, from each one's start, [MARGIN_MS] inside at both ends; null where they share no stretch of an intro's
-     * length.
+     * length that matches only where it lines up (PrintMatcher.linedUp).
      */
     fun intro(own: IntArray, other: IntArray, timing: Timing = SOUND): Pair<TimeRange, TimeRange>? {
-        val piece = PrintMatcher.shared(own, other)
+        val piece = PrintMatcher.shared(own, other, timing.threshold)
             .filter { timing.ms(it.length) in MIN_INTRO_MS..MAX_INTRO_MS }
+            .filter { PrintMatcher.linedUp(own, other, it, timing.threshold) }
             .maxByOrNull { it.length } ?: return null
         return timing.inside(piece.first1, piece.length) to timing.inside(piece.first2, piece.length)
     }
@@ -90,6 +92,7 @@ object IntroCredits {
     fun credits(own: IntArray, ownStartMs: Long, other: IntArray, otherStartMs: Long): Pair<Long, Long>? {
         val piece = PrintMatcher.shared(own, other)
             .filter { SOUND.ms(it.length) >= MIN_CREDITS_MS }
+            .filter { PrintMatcher.linedUp(own, other, it) }
             .maxByOrNull { it.length } ?: return null
         return ownStartMs + SOUND.ms(piece.first1) + MARGIN_MS to otherStartMs + SOUND.ms(piece.first2) + MARGIN_MS
     }

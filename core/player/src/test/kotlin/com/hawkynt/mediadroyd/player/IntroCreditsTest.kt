@@ -73,4 +73,18 @@ class IntroCreditsTest {
         assertEquals(5 * 60_000L + 30_000L, IntroCredits.openingMs(22 * 60_000L))
         assertEquals(IntroCredits.OPENING_MS, IntroCredits.openingMs(0))
     }
+
+    // [seconds] of steady sound — rain, hum, room tone, noise — whose items all resemble one another: a common pattern
+    // with a few bits of its own each.
+    private fun steady(seconds: Double, seed: Int) = Random(seed).let { r ->
+        IntArray(items(seconds)) { 0x5a3c96e1 xor (1 shl r.nextInt(32)) xor (1 shl r.nextInt(32)) xor (1 shl r.nextInt(32)) }
+    }
+
+    @Test
+    fun `steady sound that resembles itself wherever it is lined up is no intro and no credits`() {
+        val first = noise(20.0, 30) + steady(100.0, 31) + noise(400.0, 32)
+        val second = noise(35.0, 33) + steady(100.0, 34) + noise(400.0, 35)
+        assertNull(IntroCredits.intro(first, second))
+        assertNull(IntroCredits.credits(noise(200.0, 36) + steady(60.0, 37), 0, noise(220.0, 38) + steady(60.0, 39), 0))
+    }
 }

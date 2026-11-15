@@ -34,6 +34,13 @@ object PictureCues {
     /** What a closing frame shows. */
     enum class Look { BLACK, TEXT, OTHER }
 
+    /**
+     * How alike two openings' frames must be on average to be one intro: five of 32 bits. The same picture through
+     * two encodes is a bit or two apart; two filmed pictures about sixteen, but plain scenes (an even background, a
+     * block or two) only ten or twelve — the sound's threshold of ten would let those run on past an intro's end.
+     */
+    const val MATCH_THRESHOLD = 5.0
+
     // Below this a pixel is dark, from this on bright (full-range gray).
     private const val DARK = 48
     private const val BRIGHT = 110
@@ -41,8 +48,10 @@ object PictureCues {
     // A step this large between neighbours is a stroke's edge.
     private const val EDGE = 60
 
-    // Cells this close in brightness make a flat frame: black, a fade, a plain card.
-    private const val FLAT = 12
+    // A step between neighbouring cells this large is clear; a frame with fewer clear steps than this says too little
+    // to be told from others alike — black, a fade, a plain card, an even background with a block or two.
+    private const val STEP = 4
+    private const val CLEAR_STEPS = 8
 
     // How long the story may go on after the credits (a sting, a logo) and how many frames a credit may miss.
     private const val TAIL_MS = 30_000L
@@ -51,8 +60,9 @@ object PictureCues {
 
     /**
      * The 32-bit hash of [frame] ([width] x [height], reduced to the hash size): bit `row * 8 + column` set where a
-     * cell is brighter than the one to its right. A flat frame hashes to a scramble of [salt] instead, so black frames
-     * and fades match nothing; callers give each frame of each video its own salt.
+     * cell is brighter than the one to its right. A frame with fewer than eight clear steps (black, a fade, a plain
+     * scene) hashes to a scramble of [salt] instead, so such frames match nothing; callers give each frame of each
+     * video its own salt.
      */
     fun hash(frame: ByteArray, width: Int, height: Int, salt: Int): Int {
         val cells = IntArray(HASH_WIDTH * HASH_HEIGHT)
@@ -67,15 +77,16 @@ object PictureCues {
                 cells[cy * HASH_WIDTH + cx] = sum / ((x1 - x0) * (y1 - y0))
             }
         }
-        if (cells.max() - cells.min() < FLAT) return scramble(salt)
         var hash = 0
+        var clear = 0
         for (row in 0 until HASH_HEIGHT) {
             for (column in 0 until HASH_WIDTH - 1) {
                 val at = row * HASH_WIDTH + column
                 if (cells[at] > cells[at + 1]) hash = hash or (1 shl (row * (HASH_WIDTH - 1) + column))
+                if (kotlin.math.abs(cells[at] - cells[at + 1]) >= STEP) clear++
             }
         }
-        return hash
+        return if (clear < CLEAR_STEPS) scramble(salt) else hash
     }
 
     // A well-spread 32-bit value for [value]: MurmurHash3's finaliser.
@@ -150,7 +161,7 @@ object PictureCues {
         fun hashes(frames: Frames, side: Int) = IntArray(frames.frames.size) {
             hash(frames.frames[it], frames.width, frames.height, it * 2 + side)
         }
-        val timing = IntroCredits.Timing(own.stepMs.toDouble(), 0)
+        val timing = IntroCredits.Timing(own.stepMs.toDouble(), 0, MATCH_THRESHOLD)
         val (a, b) = IntroCredits.intro(hashes(own, 0), hashes(other, 1), timing) ?: return null
         return a.shift(own.startMs) to b.shift(other.startMs)
     }

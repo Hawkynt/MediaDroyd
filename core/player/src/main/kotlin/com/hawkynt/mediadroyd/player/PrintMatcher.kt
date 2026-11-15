@@ -37,12 +37,15 @@ object PrintMatcher {
     /** A stretch both prints hold: [length] items from item [first1] of the first and [first2] of the second. */
     data class Shared(val first1: Int, val first2: Int, val length: Int)
 
-    /** Everything [a] and [b] share, as pieces that overlap on neither side, in the order they lie in [a]. */
-    fun shared(a: IntArray, b: IntArray): List<Shared> {
+    /**
+     * Everything [a] and [b] share, as pieces that overlap on neither side, in the order they lie in [a]: segments
+     * whose mean bit error stays below [threshold] of 32 bits.
+     */
+    fun shared(a: IntArray, b: IntArray, threshold: Double = MATCH_THRESHOLD): List<Shared> {
         if (a.isEmpty() || b.isEmpty()) return emptyList()
         val pieces = ArrayList<Piece>()
         for ((votes, index) in offsets(a, b).take(OFFSETS)) {
-            for (segment in segmentsAt(a, b, index)) {
+            for (segment in segmentsAt(a, b, index, threshold)) {
                 if (segment.length < MIN_ITEMS) continue
                 pieces += Piece(
                     segment.first1,
@@ -55,6 +58,31 @@ object PrintMatcher {
         }
         return take(pieces, a.size, b.size)
     }
+
+    /**
+     * Whether [piece] of [a] and [b] matches only where it lines up, as a stretch both hold does: shifted along [b] by
+     * one of [SHIFTS] items either way, its mean bit error comes to [threshold] or more. Steady sound — rain, hum, noise
+     * — or a run of look-alike pictures resembles itself wherever it is lined up and is held by neither (#492).
+     */
+    fun linedUp(a: IntArray, b: IntArray, piece: Shared, threshold: Double = MATCH_THRESHOLD): Boolean {
+        for (shift in SHIFTS) {
+            for (direction in intArrayOf(1, -1)) {
+                var errors = 0L
+                var count = 0
+                for (k in 0 until piece.length) {
+                    val j = piece.first2 + k + direction * shift
+                    if (j !in b.indices) continue
+                    errors += Integer.bitCount(a[piece.first1 + k] xor b[j])
+                    count++
+                }
+                if (count * 2 >= piece.length && errors.toDouble() / count >= threshold) return true
+            }
+        }
+        return false
+    }
+
+    // The shifts a stretch is tried at by [linedUp]: no multiple of each other, so a looping theme still drops off.
+    private val SHIFTS = intArrayOf(29, 47)
 
     // A run along one offset (j = i + offset) and how strongly it is backed.
     private class Piece(val first: Int, val last: Int, val offset: Int, val weight: Long)
@@ -111,8 +139,11 @@ object PrintMatcher {
         return peaks.sortedWith(compareByDescending<Pair<Int, Int>> { it.first }.thenByDescending { it.second })
     }
 
-    /** Chromaprint's segmentation at the offset index [offsetIndex] (see [offsets]). */
-    fun segmentsAt(a: IntArray, b: IntArray, offsetIndex: Int): List<Segment> {
+    /**
+     * Chromaprint's segmentation at the offset index [offsetIndex] (see [offsets]), a segment matching below
+     * [threshold].
+     */
+    fun segmentsAt(a: IntArray, b: IntArray, offsetIndex: Int, threshold: Double = MATCH_THRESHOLD): List<Segment> {
         val diff = offsetIndex - b.size
         val offset1 = max(diff, 0)
         val offset2 = max(-diff, 0)
@@ -141,7 +172,7 @@ object PrintMatcher {
             var sum = 0.0
             for (i in begin until end) sum += counts[i]
             val score = sum / length
-            if (score < MATCH_THRESHOLD) {
+            if (score < threshold) {
                 val last = found.lastOrNull()
                 if (last != null && abs(last.score - score) < 0.7 && last.first1 + last.length == offset1 + begin) {
                     val total = last.length + length
