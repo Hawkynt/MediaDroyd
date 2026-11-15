@@ -490,6 +490,9 @@ details, Files, Settings and the player — are shared (`:ui`, Compose Multiplat
   and tearing of the stage's window under the compositor (`./gradlew :desktop:presentationBench` without `-Poffscreen`
   on an unlocked desktop) — and Windows on real graphics; the CI's Windows build runs on Mesa's software OpenGL. The CI
   runs the benchmark on llvmpipe as a regression record only.
+- On X11 (XWayland under Wayland) the window offers and answers EWMH's `_NET_WM_PING`, which Java's AWT does not, so a
+  window manager that asks whether a used window is still there — TileWin, on wlroots — never greys it out as not
+  responding; AWT's X11 toolkit is reached for it by reflection, `java.desktop` opened to the app (`X11Ping`).
 - The picture is decoded on the graphics chip through FFmpeg's hardware decoding — D3D11VA, else DXVA2, on Windows;
   NVDEC, else VA-API, on Linux — and copied back for the stage. Whatever the chip cannot decode (a codec or profile it
   lacks, a driver that opens and then decodes nothing) FFmpeg decodes in software, the next device tried first; a chip

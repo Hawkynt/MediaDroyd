@@ -59,10 +59,15 @@ dependencies {
 // The icons (desktop/icons) on the classpath too, for the window's own icon.
 sourceSets["main"].resources.srcDir("icons")
 
+// AWT's X11 toolkit opened to the app, for answering the window manager's _NET_WM_PING (X11Ping, #502).
+val x11Opens = listOf("sun.awt", "sun.awt.X11", "java.awt").map { "--add-opens=java.desktop/$it=ALL-UNNAMED" }
+
+tasks.withType<Test>().configureEach { jvmArgs(x11Opens) }
+
 compose.desktop {
     application {
         mainClass = "com.hawkynt.mediadroyd.desktop.MainKt"
-        jvmArgs += listOf("-Xmx2g")
+        jvmArgs += listOf("-Xmx2g") + x11Opens
         if (providers.gradleProperty("fullFfmpeg").isPresent) jvmArgs += "-Dmediadroyd.fullFfmpeg=true"
         nativeDistributions {
             packageName = "MediaDroyd"
