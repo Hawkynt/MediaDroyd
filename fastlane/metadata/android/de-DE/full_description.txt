@@ -1,0 +1,35 @@
+Deine Filme und Serien sind längst geordnet: Ordner mit .nfo-Dateien und Covern, über die Jahre von Kodi, Jellyfin oder MediaBrowser gesammelt. MediaDroyd spielt diese Sammlung direkt dort ab, wo sie liegt — auf dem Handy, der SD-Karte, einem NAS, einem FTP-Server oder in einem Cloud-Ordner. Kein Medienserver, kein Konto, kein neues Scrapen, kein Umwandeln.
+
+<b>Deine Sammlung, so wie du sie angelegt hast</b>
+• Liest Kodis .nfo-Dateien für Filme, Serien, Staffeln und Folgen und seine Bildnamen (folder.jpg, Poster, Fanart, Logos)
+• Serien mit Staffeln und Folgen, Filme auch in mehreren Teilen, Stöbern nach Genre und Jahr
+• Weiterschauen, gesehen-Markierungen und Fortsetzungspunkte
+• Netzwerkfreigaben: SMB, NFS, FTP, SFTP und WebDAV — SMB-Server im Netz werden von selbst gefunden
+
+<b>Einfach genug für alle zu Hause</b>
+• Große Cover, ein Tipp zum Abspielen, die nächste Folge kommt von selbst
+• Vorspann und Abspann übersprungen — auch ohne Kapitel oder Schnittdateien, am Ton der Folgen erkannt
+• Kindersperre: Berührungen wirken erst, wenn das Schloss gehalten wird
+• Altersfreigabe aus den NFOs (FSK, MPAA, TV-Ratings), Eltern-Einstellungen hinter einer PIN in Worten
+• Wischen für Helligkeit und Lautstärke — über 100 %, wenn ein leiser Film mehr braucht
+
+<b>Ein Bild, so gut wie dein Gerät es kann</b>
+• Hochskalieren: FSR, NIS, Lanczos, EWA, Anime4K, ACNet, xBRZ — und neuronal Real-ESRGAN, waifu2x, Real-CUGAN und RealSR
+• Deinterlacing für alte DVDs und TV-Aufnahmen: YADIF, BWDIF, Greedy, TomsMoComp, Film-Pulldown rückgängig gemacht
+• Flüssige Bewegung: Überblenden, bewegungskompensierte Zwischenbilder oder neuronal RIFE und IFRNet direkt auf dem Handy
+• Jede Wahl wird vorher auf deinem Gerät getestet — die Wiedergabe bleibt immer flüssig
+• HDR für Bildschirme ohne HDR umgerechnet
+
+<b>Ton und Untertitel</b>
+• AC3, E-AC3, DTS und TrueHD mit eingebautem Decoder, wo das Gerät keinen hat
+• Nachtmodus, Tonversatz je Ausgang, räumlicher Klang
+• ASS/SSA-Untertitel wie gestaltet, SRT, Videotext, eine zweite Untertitelzeile
+
+<b>Auf dem großen Bildschirm</b>
+• Den Film auf Fernseher oder Beamer schicken, das Handy behält die Bedienung und wird dunkel
+• Trapez- und Spiegelkorrektur für Beamer
+• Bildwiederholrate passend zum Film
+
+Frei und quelloffen (LGPL-3.0). Keine Werbung, kein Tracking, kein Konto — nichts verlässt dein Gerät außer dem, was du von deinen eigenen Servern öffnest.
+
+Auch für Windows und Linux: https://github.com/Hawkynt/MediaDroyd

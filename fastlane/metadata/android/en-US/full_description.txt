@@ -1,0 +1,35 @@
+Your movies and shows are already organized: folders with .nfo files and cover art, scraped by Kodi, Jellyfin or MediaBrowser over the years. MediaDroyd plays that library straight from where it lives — the phone, an SD card, a NAS, an FTP server or a cloud folder. No media server to run, no account, no re-scraping, no re-encoding.
+
+<b>Your library, as you built it</b>
+• Reads Kodi's movie, show, season and episode .nfo files and its artwork names (folder.jpg, poster, fanart, logos)
+• Shows with seasons and episodes, movies with multi-part stacking, browsing by genre and year
+• Continue watching, watched marks and resume points
+• Network shares: SMB, NFS, FTP, SFTP and WebDAV — SMB servers on your network found by themselves
+
+<b>Simple enough for everyone at home</b>
+• Big covers, one tap to play, the next episode queued by itself
+• Intros and credits skipped — even without chapters or cut files, found by their sound across the episodes
+• Child lock: touches do nothing until the lock is held
+• An age limit read from the NFOs (FSK, MPAA, TV ratings), parent settings behind a PIN shown as words
+• Swipe for brightness and volume — past 100 % when a quiet film needs more
+
+<b>A picture as good as your device allows</b>
+• Upscaling: FSR, NIS, Lanczos, EWA, Anime4K, ACNet, xBRZ — and neural Real-ESRGAN, waifu2x, Real-CUGAN and RealSR
+• Deinterlacing for old DVDs and TV recordings: YADIF, BWDIF, Greedy, TomsMoComp, film pulldown undone
+• Smooth motion: frame blending, motion-compensated interpolation, or neural RIFE and IFRNet on the phone itself
+• Every choice is tested on your device before it is taken — playback stays smooth, always
+• HDR tone-mapped for screens without HDR
+
+<b>Sound and subtitles</b>
+• AC3, E-AC3, DTS and TrueHD through the built-in decoder where the device has none
+• Night mode, audio delay per output, spatial audio
+• ASS/SSA subtitles drawn as authored, SRT, teletext, a second subtitle line
+
+<b>On the big screen</b>
+• Send the film to a TV or projector while the phone keeps the controls and goes dark
+• Keystone and mirror correction for projectors
+• Refresh rate matched to the film
+
+Free and open source (LGPL-3.0). No ads, no tracking, no account — nothing leaves your device except what you open from your own servers.
+
+Also for Windows and Linux: https://github.com/Hawkynt/MediaDroyd
