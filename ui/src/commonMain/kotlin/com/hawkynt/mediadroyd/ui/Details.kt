@@ -70,7 +70,18 @@ fun DetailsScreen(
     onPlayTrailer: (Movie) -> Unit = {},
 ) {
     val seasons = if (item is Show) item.seasons.sortedBy { it.number } else emptyList()
-    var selected by remember { mutableStateOf(seasons.lastOrNull()?.number ?: 1) }
+    // The season Play next carries on in, not the last one (#486).
+    var selected by remember {
+        val start = (item as? Show)?.let { show ->
+            val nfoWatched = show.seasons.flatMap { it.episodes }.associate { it.videoPath to it.watched }
+            com.hawkynt.mediadroyd.library.PlayStart.seasonOf(
+                show,
+                watched = { store.isWatched(it, nfoWatched[it] == true) },
+                resumed = { store.resumeFor(it) != null },
+            )
+        }
+        mutableStateOf(start ?: seasons.lastOrNull()?.number ?: 1)
+    }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
             Box {
