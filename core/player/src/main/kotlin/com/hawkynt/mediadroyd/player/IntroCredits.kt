@@ -13,8 +13,15 @@ object IntroCredits {
     /** A fingerprint of one stretch of a video's sound: its [items], beginning [startMs] into the video. */
     class SoundPrint(val items: IntArray, val startMs: Long)
 
-    /** How much of an episode's opening is fingerprinted to look for its intro. */
+    /** How much of an episode's opening is fingerprinted to look for its intro, at most ([openingMs]). */
     const val OPENING_MS = 10 * 60_000L
+
+    /**
+     * How much of an episode [durationMs] long is looked at for its intro: its first quarter, at most [OPENING_MS] — so
+     * the credits of a short episode stay out of it, as Jellyfin's Intro Skipper limits it — or [OPENING_MS] where the
+     * length is unknown.
+     */
+    fun openingMs(durationMs: Long): Long = if (durationMs <= 0) OPENING_MS else minOf(OPENING_MS, durationMs / 4)
 
     /** How much before an episode's end is fingerprinted to look for its credits. */
     const val CLOSING_MS = 8 * 60_000L
@@ -44,19 +51,32 @@ object IntroCredits {
      */
     const val LOOKAHEAD_MS = 1000L
 
-    private fun ms(items: Int) = (items * NativeFingerprint.ITEM_SECONDS * 1000).toLong() + LOOKAHEAD_MS
+    /**
+     * When a print's items happen and how alike two must be: one every [itemMs], each [leadMs] ahead of what it shows,
+     * a shared stretch's mean bit error below [threshold] — the sound's ([SOUND]: Chromaprint's item length,
+     * [LOOKAHEAD_MS] and its matcher's threshold) or the pictures' (PictureCues: one frame per step, stricter).
+     */
+    class Timing(val itemMs: Double, val leadMs: Long, val threshold: Double = PrintMatcher.MATCH_THRESHOLD) {
+        internal fun ms(items: Int) = (items * itemMs).toLong() + leadMs
 
-    private fun inside(first: Int, length: Int) = TimeRange(ms(first) + MARGIN_MS, ms(first + length) - MARGIN_MS)
+        internal fun inside(first: Int, length: Int) =
+            TimeRange(ms(first) + MARGIN_MS, ms(first + length) - MARGIN_MS)
+    }
+
+    /** The sound's timing: Chromaprint's items, [LOOKAHEAD_MS] ahead. */
+    val SOUND = Timing(NativeFingerprint.ITEM_SECONDS * 1000, LOOKAHEAD_MS)
 
     /**
-     * The intro the openings [own] and [other] (prints from each episode's start) share: its span in each, from each
-     * one's start, [MARGIN_MS] inside at both ends; null where they share no stretch of an intro's length.
+     * The intro the openings [own] and [other] (prints from each episode's start, items on [timing]) share: its span in
+     * each, from each one's start, [MARGIN_MS] inside at both ends; null where they share no stretch of an intro's
+     * length that matches only where it lines up (PrintMatcher.linedUp).
      */
-    fun intro(own: IntArray, other: IntArray): Pair<TimeRange, TimeRange>? {
-        val piece = PrintMatcher.shared(own, other)
-            .filter { ms(it.length) in MIN_INTRO_MS..MAX_INTRO_MS }
+    fun intro(own: IntArray, other: IntArray, timing: Timing = SOUND): Pair<TimeRange, TimeRange>? {
+        val piece = PrintMatcher.shared(own, other, timing.threshold)
+            .filter { timing.ms(it.length) in MIN_INTRO_MS..MAX_INTRO_MS }
+            .filter { PrintMatcher.linedUp(own, other, it, timing.threshold) }
             .maxByOrNull { it.length } ?: return null
-        return inside(piece.first1, piece.length) to inside(piece.first2, piece.length)
+        return timing.inside(piece.first1, piece.length) to timing.inside(piece.first2, piece.length)
     }
 
     /** [own]'s intro by the longest any of [neighbours]' openings shares with it; null where none does. */
@@ -71,8 +91,9 @@ object IntroCredits {
      */
     fun credits(own: IntArray, ownStartMs: Long, other: IntArray, otherStartMs: Long): Pair<Long, Long>? {
         val piece = PrintMatcher.shared(own, other)
-            .filter { ms(it.length) >= MIN_CREDITS_MS }
+            .filter { SOUND.ms(it.length) >= MIN_CREDITS_MS }
+            .filter { PrintMatcher.linedUp(own, other, it) }
             .maxByOrNull { it.length } ?: return null
-        return ownStartMs + ms(piece.first1) + MARGIN_MS to otherStartMs + ms(piece.first2) + MARGIN_MS
+        return ownStartMs + SOUND.ms(piece.first1) + MARGIN_MS to otherStartMs + SOUND.ms(piece.first2) + MARGIN_MS
     }
 }

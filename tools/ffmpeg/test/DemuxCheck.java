@@ -90,6 +90,17 @@ public final class DemuxCheck {
               java.nio.file.Paths.get(System.getProperty("frames.dir"), name + ".bgra"), raw.array());
         }
         demuxer.close();
+        // Gray pictures every quarter second at 32 x 18 as the intro's picture cues take them, written raw for the
+        // oracle.
+        demuxer = open(file);
+        byte[] gray = demuxer.pictures(0, 2_000_000, 250_000, 32, 18);
+        if (gray == null) {
+          System.out.println("  pictures none");
+        } else {
+          System.out.println("  pictures " + gray.length / (32 * 18) + " of 32x18");
+          java.nio.file.Files.write(java.nio.file.Paths.get(System.getProperty("frames.dir"), name + ".gray"), gray);
+        }
+        demuxer.close();
         // The sound, mono 16-bit at 11025 Hz as the fingerprints take it, from demuxers opened just for it:
         // the whole file, written raw for the oracle, and from the middle on.
         demuxer = open(file);

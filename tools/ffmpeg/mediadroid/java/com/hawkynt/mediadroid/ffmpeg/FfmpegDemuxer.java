@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 
 /**
  * FFmpeg's demuxers over a random-access {@link Input}, for the containers Media3 has no extractor
- * for, and the sound of any common file for finding intros and credits by it. A thin binding of {@code mediadroid_demux.cc} in the FFmpeg extension's native library; one
+ * for, and the sound and sampled pictures of any common file for finding intros and credits by them. A thin binding of {@code mediadroid_demux.cc} in the FFmpeg extension's native library; one
  * instance is used from one thread at a time.
  */
 public final class FfmpegDemuxer implements AutoCloseable {
@@ -206,6 +206,17 @@ public final class FfmpegDemuxer implements AutoCloseable {
     return nSound(handle, startUs, endUs, sampleRate, first);
   }
 
+  /**
+   * Gray pictures of the main video stream from {@code startUs} up to {@code endUs}, one every {@code stepUs} — for
+   * each step the first picture decoded at or after its time — each area-averaged to {@code width} x {@code height}:
+   * the steps' pictures one after the other, a byte a pixel. Null without pictures. Moves the read position: meant for
+   * a demuxer opened just for this.
+   */
+  @Nullable
+  public byte[] pictures(long startUs, long endUs, long stepUs, int width, int height) {
+    return nPictures(handle, startUs, endUs, stepUs, width, height);
+  }
+
   @Override
   public void close() {
     nClose(handle);
@@ -236,6 +247,9 @@ public final class FfmpegDemuxer implements AutoCloseable {
   private static native int[] nFrame(long handle, long timeUs, int maxWidth, int[] size);
 
   private static native short[] nSound(long handle, long startUs, long endUs, int rate, long[] first);
+
+  private static native byte[] nPictures(
+      long handle, long startUs, long endUs, long stepUs, int width, int height);
 
   private static native void nClose(long handle);
 }

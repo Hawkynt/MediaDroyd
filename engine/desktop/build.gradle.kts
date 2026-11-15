@@ -74,7 +74,7 @@ tasks.test {
     } else {
         exclude(
             "**/NativeNetworksTest*", "**/NativeNeuralTest*", "**/LibAssTest*", "**/LibAssEngineTest*",
-            "**/FingerprintTest*", "**/SoundPrintsTest*",
+            "**/FingerprintTest*", "**/SoundPrintsTest*", "**/PicturePrintsTest*",
         )
     }
 }

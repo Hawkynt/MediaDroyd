@@ -534,6 +534,98 @@ JNIEXPORT jshortArray JNICALL Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_n
   return result;
 }
 
+// Gray pictures of the main video stream from startUs up to endUs, one every stepUs: for each step the first
+// picture decoded at or after its time (the same one again for steps no picture came between), area-averaged to
+// width x height. count * width * height bytes, the steps in order; null without pictures. Pictures nothing else
+// refers to are not decoded (AVDISCARD_NONREF), which a sampling this sparse does not miss. Moves the read position:
+// meant for a demuxer opened just for this.
+JNIEXPORT jbyteArray JNICALL Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nPictures(
+    JNIEnv* env, jclass clazz, jlong handle, jlong startUs, jlong endUs, jlong stepUs, jint width, jint height) {
+  Demuxer* d = demuxerOf(env, handle);
+  if (!d || endUs <= startUs || stepUs <= 0 || width <= 0 || height <= 0) return nullptr;
+  const int index = av_find_best_stream(d->format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+  if (index < 0) return nullptr;
+  AVStream* stream = d->format->streams[index];
+  const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+  if (!codec) return nullptr;
+  AVCodecContext* context = avcodec_alloc_context3(codec);
+  AVFrame* frame = av_frame_alloc();
+  AVPacket* packet = av_packet_alloc();
+  SwsContext* scaler = nullptr;
+  const size_t size = (size_t)width * height;
+  const int64_t steps = (endUs - startUs + stepUs - 1) / stepUs;
+  std::vector<uint8_t> out;
+  std::vector<uint8_t> gray(size);
+  int64_t taken = 0;
+  const int64_t offset = d->format->start_time != AV_NOPTS_VALUE ? d->format->start_time : 0;
+  // Takes every picture the decoder has ready; false once the steps are all taken.
+  auto drain = [&]() {
+    while (avcodec_receive_frame(context, frame) == 0) {
+      const int64_t pts = frame->best_effort_timestamp;
+      if (pts == AV_NOPTS_VALUE || frame->width <= 0 || frame->height <= 0) continue;
+      const int64_t timeUs = toUs(pts, stream->time_base) - offset;
+      if (timeUs < startUs + taken * stepUs) continue;
+      scaler = sws_getCachedContext(scaler, frame->width, frame->height, (AVPixelFormat)frame->format, width, height,
+                                    AV_PIX_FMT_GRAY8, SWS_AREA, nullptr, nullptr, nullptr);
+      if (!scaler) return false;
+      int* inverse = nullptr;
+      int* table = nullptr;
+      int sourceRange = 0, targetRange = 0, brightness = 0, contrast = 0, saturation = 0;
+      if (sws_getColorspaceDetails(scaler, &inverse, &sourceRange, &table, &targetRange, &brightness, &contrast,
+                                   &saturation) >= 0) {
+        sws_setColorspaceDetails(scaler, inverse, frame->color_range == AVCOL_RANGE_JPEG ? 1 : sourceRange, table,
+                                 targetRange, brightness, contrast, saturation);
+      }
+      uint8_t* planes[4] = {gray.data(), nullptr, nullptr, nullptr};
+      int strides[4] = {width, 0, 0, 0};
+      sws_scale(scaler, frame->data, frame->linesize, 0, frame->height, planes, strides);
+      while (taken < steps && startUs + taken * stepUs <= timeUs) {
+        out.insert(out.end(), gray.begin(), gray.end());
+        taken++;
+      }
+      if (taken >= steps) return false;
+    }
+    return true;
+  };
+  if (context && frame && packet && avcodec_parameters_to_context(context, stream->codecpar) >= 0) {
+    context->pkt_timebase = stream->time_base;
+    context->skip_frame = AVDISCARD_NONREF;
+    context->thread_count = 0;
+    if (avcodec_open2(context, codec, nullptr) >= 0) {
+      if (startUs > 0) {
+        const int64_t target = startUs + offset;
+        if (avformat_seek_file(d->format, -1, INT64_MIN, target, target, 0) < 0) {
+          Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nSeek(env, clazz, handle, startUs);
+        }
+      }
+      for (unsigned i = 0; i < d->format->nb_streams; i++) {
+        if ((int)i != index) d->format->streams[i]->discard = AVDISCARD_ALL;
+      }
+      bool more = true;
+      while (more) {
+        if (av_read_frame(d->format, packet) < 0) {
+          avcodec_send_packet(context, nullptr);
+          drain();
+          break;
+        }
+        if (packet->stream_index == index && avcodec_send_packet(context, packet) >= 0) more = drain();
+        av_packet_unref(packet);
+      }
+      for (unsigned i = 0; i < d->format->nb_streams; i++) d->format->streams[i]->discard = AVDISCARD_DEFAULT;
+    }
+  }
+  jbyteArray result = nullptr;
+  if (!out.empty()) {
+    result = env->NewByteArray((jsize)out.size());
+    if (result) env->SetByteArrayRegion(result, 0, (jsize)out.size(), reinterpret_cast<const jbyte*>(out.data()));
+  }
+  sws_freeContext(scaler);
+  av_packet_free(&packet);
+  av_frame_free(&frame);
+  avcodec_free_context(&context);
+  return result;
+}
+
 JNIEXPORT void JNICALL Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nClose(
     JNIEnv* env, jclass, jlong handle) {
   Demuxer* d = demuxerOf(env, handle);

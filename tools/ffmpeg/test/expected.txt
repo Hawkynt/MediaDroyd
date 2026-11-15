@@ -6,6 +6,7 @@ sample-144.rm format=rm streams=2
   #1 packets=101 keyframes=101
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  pictures 8 of 32x18
   sound 22271 samples from 0us
   sound from 1000ms to 1500ms: none
 sample-full.y4m format=yuv4mpegpipe streams=1
@@ -13,6 +14,7 @@ sample-full.y4m format=yuv4mpegpipe streams=1
   #0 packets=50 keyframes=50
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  pictures 8 of 32x18
   sound none
 sample.asf format=asf streams=2
   #0 kind=0 codec=msmpeg4v3 decoder=msmpeg4 format=yuv420p 320x240 0Hz 0ch params=48B
@@ -21,6 +23,7 @@ sample.asf format=asf streams=2
   #1 packets=44 keyframes=44
   seek 1046ms ok=true next=510ms key=true
   frame 160x120 at 1046000us
+  pictures 8 of 32x18
   sound 22016 samples from 92000us
   sound from 1000ms to 1500ms: 5512 samples from 975ms
 sample.avi format=avi streams=2
@@ -30,6 +33,7 @@ sample.avi format=avi streams=2
   #1 packets=77 keyframes=77
   seek 1005ms ok=true next=960ms key=true
   frame 160x120 at 1005714us
+  pictures 8 of 32x18
   sound 22176 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 992ms
 sample.dv format=dv streams=2
@@ -39,6 +43,7 @@ sample.dv format=dv streams=2
   #1 packets=50 keyframes=50
   seek 1000ms ok=true next=1000ms key=true
   frame 160x120 at 1000000us
+  pictures 8 of 32x18
   sound 22050 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 1000ms
 sample.flv format=flv streams=2
@@ -48,6 +53,7 @@ sample.flv format=flv streams=2
   #1 packets=50 keyframes=5
   seek 1011ms ok=true next=960ms key=true
   frame 160x120 at 1011500us
+  pictures 8 of 32x18
   sound 22528 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 998ms
 sample.m2v format=mpegvideo streams=1
@@ -55,6 +61,7 @@ sample.m2v format=mpegvideo streams=1
   #0 packets=50 keyframes=5
   duration unknown: not seekable
   frame 160x120 at 0us
+  pictures 8 of 32x18
   sound none
 sample.mkv format=matroska,webm streams=2
   #0 kind=0 codec=mpeg4 decoder=mpeg4 format=yuv420p 320x240 0Hz 0ch params=94B
@@ -63,6 +70,7 @@ sample.mkv format=matroska,webm streams=2
   #1 packets=63 keyframes=63
   seek 1008ms ok=true next=960ms key=true
   frame 160x120 at 1008000us
+  pictures 8 of 32x18
   sound 22227 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 992ms
 sample.mp4 format=mov,mp4,m4a,3gp,3g2,mj2 streams=2
@@ -72,6 +80,7 @@ sample.mp4 format=mov,mp4,m4a,3gp,3g2,mj2 streams=2
   #1 packets=95 keyframes=95
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  pictures 8 of 32x18
   sound 22109 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 981ms
 sample.mxf format=mxf streams=2
@@ -81,6 +90,7 @@ sample.mxf format=mxf streams=2
   #1 packets=50 keyframes=50
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  pictures 8 of 32x18
   sound 22050 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 1000ms
 sample.nut format=nut streams=2
@@ -90,6 +100,7 @@ sample.nut format=nut streams=2
   #1 packets=84 keyframes=84
   seek 996ms ok=true next=960ms key=true
   frame 160x120 at 996000us
+  pictures 8 of 32x18
   sound 22227 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 984ms
 sample.oga format=ogg streams=1
@@ -97,6 +108,7 @@ sample.oga format=ogg streams=1
   #0 packets=20 keyframes=20
   seek 1000ms ok=true next=0ms key=true
   frame none
+  pictures none
   sound 22050 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 940ms
 sample.rm format=rm streams=2
@@ -106,6 +118,7 @@ sample.rm format=rm streams=2
   #1 packets=63 keyframes=63
   seek 1008ms ok=true next=960ms key=true
   frame 160x120 at 1008000us
+  pictures 8 of 32x18
   sound 22227 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 992ms
 sample.ts format=mpegts streams=2
@@ -115,6 +128,7 @@ sample.ts format=mpegts streams=2
   #1 packets=84 keyframes=84
   seek 1005ms ok=true next=960ms key=true
   frame 160x120 at 1005011us
+  pictures 8 of 32x18
   sound 22227 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 984ms
 sample.vob format=mpeg streams=2
@@ -124,6 +138,7 @@ sample.vob format=mpeg streams=2
   #1 packets=84 keyframes=84
   seek 1008ms ok=true next=1000ms key=false
   frame 160x120 at 1008000us
+  pictures 8 of 32x18
   sound 22227 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 984ms
 sample.wav format=wav streams=1
@@ -131,6 +146,7 @@ sample.wav format=wav streams=1
   #0 packets=22 keyframes=22
   seek 1000ms ok=true next=1000ms key=true
   frame none
+  pictures none
   sound 22050 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 1000ms
 sample.wmv format=asf streams=2
@@ -140,6 +156,7 @@ sample.wmv format=asf streams=2
   #1 packets=44 keyframes=44
   seek 1046ms ok=true next=418ms key=true
   frame 160x120 at 1046000us
+  pictures 8 of 32x18
   sound 22016 samples from 92000us
   sound from 1000ms to 1500ms: 5512 samples from 975ms
 sample.wtv format=wtv streams=2
@@ -149,6 +166,7 @@ sample.wtv format=wtv streams=2
   #1 packets=84 keyframes=84
   seek 1016ms ok=true next=0ms key=true
   frame 160x120 at 1016000us
+  pictures 8 of 32x18
   sound 22227 samples from 0us
   sound from 1000ms to 1500ms: 5512 samples from 984ms
 sample.y4m format=yuv4mpegpipe streams=1
@@ -156,6 +174,7 @@ sample.y4m format=yuv4mpegpipe streams=1
   #0 packets=50 keyframes=50
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  pictures 8 of 32x18
   sound none
 == ffprobe packet counts (oracle)
 sample-144.rm 0,rv10,yuv420p,50 1,ra_144,s16,101 
@@ -217,6 +236,26 @@ sample.wav sound is ffmpeg's
 sample.wmv sound is ffmpeg's
 sample.wtv sound is ffmpeg's
 sample.y4m no sound
+== pictures: each of FfmpegDemuxer.pictures one of ffmpeg's own frames at 32x18 gray (oracle), byte for byte
+sample-144.rm pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample-full.y4m pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.asf pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.avi pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.dv pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.flv pictures are ffmpeg's frames 0 7 13 20 26 32 38 45
+sample.m2v pictures are ffmpeg's frames 0 6 12 18 24 31 37 43
+sample.mkv pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.mp4 pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.mxf pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.nut pictures are ffmpeg's frames 0 6 13 19 25 31 38 44
+sample.oga no pictures
+sample.rm pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.ts pictures are ffmpeg's frames 0 6 13 19 25 31 38 44
+sample.vob pictures are ffmpeg's frames 0 6 13 19 25 31 38 44
+sample.wav no pictures
+sample.wmv pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
+sample.wtv pictures are ffmpeg's frames 0 6 13 19 25 31 38 44
+sample.y4m pictures are ffmpeg's frames 0 7 13 19 25 32 38 44
 == codecpar_check (decoding from the blob alone)
 sample-144.rm #0 ffmpeg rv10 frames=50 320x240 0Hz 0ch
 sample-144.rm #1 ffmpeg ra_144 frames=101 0x0 8000Hz 1ch

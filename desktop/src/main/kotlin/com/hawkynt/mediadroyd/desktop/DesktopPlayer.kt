@@ -640,6 +640,10 @@ fun DesktopPlayer(
         override fun soundPrint(location: String, closing: Boolean) =
             com.hawkynt.mediadroyd.engine.desktop.SoundPrints.of(location, places.remoteFile(location), closing)
 
+        // And by their pictures where the sound does not tell: FFmpeg's pictures, shrunk to gray (PicturePrints).
+        override fun pictures(location: String, closing: Boolean) =
+            com.hawkynt.mediadroyd.engine.desktop.PicturePrints.of(location, places.remoteFile(location), closing)
+
         override val commands = PlayerCommand.entries.toSet()
         override val subtitlesByTrack = true
         override val controlsVisible = controlsShown

@@ -97,6 +97,28 @@ FILES=$(ls "$S"/* | LC_ALL=C sort)
       echo "$name no sound"
     fi
   done
+  echo "== pictures: each of FfmpegDemuxer.pictures one of ffmpeg's own frames at 32x18 gray (oracle), byte for byte"
+  for f in $FILES; do
+    name="$(basename "$f")"
+    if [ -f "$OUT/frames/$name.gray" ]; then
+      rm -rf "$OUT/frames/$name.gd" "$OUT/frames/$name.od"; mkdir -p "$OUT/frames/$name.gd" "$OUT/frames/$name.od"
+      "$P/bin/ffmpeg" -v error -y -i "$f" -an -vf "scale=32:18:flags=area" -pix_fmt gray -f rawvideo \
+        "$OUT/frames/$name.ograw"
+      split -a 4 -d -b 576 "$OUT/frames/$name.gray" "$OUT/frames/$name.gd/"
+      split -a 4 -d -b 576 "$OUT/frames/$name.ograw" "$OUT/frames/$name.od/"
+      found=""
+      for part in "$OUT/frames/$name.gd"/*; do
+        hit=none
+        for frame in "$OUT/frames/$name.od"/*; do
+          if cmp -s "$part" "$frame"; then hit="$((10#$(basename "$frame")))"; break; fi
+        done
+        found="$found $hit"
+      done
+      echo "$name pictures are ffmpeg's frames$found"
+    else
+      echo "$name no pictures"
+    fi
+  done
   echo "== codecpar_check (decoding from the blob alone)"
   "$OUT/codecpar_check" $FILES
 } > "$OUT/report.txt"
