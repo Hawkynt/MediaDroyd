@@ -1,0 +1,1 @@
+Plays your Kodi-style movie & show folders from phone, NAS or cloud. No server.
