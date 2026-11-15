@@ -1,40 +1,20 @@
 package com.hawkynt.mediadroyd.data
 
 import android.media.MediaDataSource
+import com.hawkynt.mediadroyd.library.BlockReader
 import com.hawkynt.mediadroyd.library.FsFile
-import java.io.BufferedInputStream
-import java.io.InputStream
 
 /**
- * A file on any source for Android's MediaMetadataRetriever, which reads at random positions: a
- * stream is kept open while the reads follow on, and opened again where they jump.
+ * A file on any source for Android's MediaMetadataRetriever and MediaExtractor, which read at random positions: read in
+ * blocks, the last ones kept (BlockReader, #484), so the jumps between a video's sound and pictures come from memory.
  */
 class FsMediaDataSource(private val file: FsFile) : MediaDataSource() {
-    private var stream: InputStream? = null
-    private var position = -1L
+    private val reader = BlockReader(file)
 
-    @Synchronized
-    override fun readAt(at: Long, buffer: ByteArray, offset: Int, size: Int): Int {
-        if (size == 0) return 0
-        if (at != position || stream == null) {
-            stream?.close()
-            stream = BufferedInputStream(file.open(at), BUFFER)
-            position = at
-        }
-        val read = stream!!.read(buffer, offset, size)
-        if (read > 0) position += read
-        return read
-    }
+    override fun readAt(at: Long, buffer: ByteArray, offset: Int, size: Int): Int =
+        reader.read(at, buffer, offset, size)
 
     override fun getSize(): Long = file.length().takeIf { it > 0 } ?: -1
 
-    @Synchronized
-    override fun close() {
-        stream?.close()
-        stream = null
-    }
-
-    private companion object {
-        const val BUFFER = 128 * 1024
-    }
+    override fun close() = reader.close()
 }
