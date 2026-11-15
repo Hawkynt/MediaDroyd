@@ -77,7 +77,7 @@ class IntroCreditsTest {
     // [seconds] of steady sound — rain, hum, room tone, noise — whose items all resemble one another: a common pattern
     // with a few bits of its own each.
     private fun steady(seconds: Double, seed: Int) = Random(seed).let { r ->
-        IntArray(items(seconds)) { 0x5a3c96e1 xor (1 shl r.nextInt(32)) xor (1 shl r.nextInt(32)) xor (1 shl r.nextInt(32)) }
+        IntArray(items(seconds)) { 0x5a3c96e1 xor List(3) { 1 shl r.nextInt(32) }.reduce(Int::xor) }
     }
 
     @Test

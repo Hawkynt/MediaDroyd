@@ -61,8 +61,8 @@ object PrintMatcher {
 
     /**
      * Whether [piece] of [a] and [b] matches only where it lines up, as a stretch both hold does: shifted along [b] by
-     * one of [SHIFTS] items either way, its mean bit error comes to [threshold] or more. Steady sound — rain, hum, noise
-     * — or a run of look-alike pictures resembles itself wherever it is lined up and is held by neither (#492).
+     * one of [SHIFTS] items either way, its mean bit error comes to [threshold] or more. Steady sound — rain, hum,
+     * noise — or a run of look-alike pictures resembles itself wherever it is lined up and is held by neither (#492).
      */
     fun linedUp(a: IntArray, b: IntArray, piece: Shared, threshold: Double = MATCH_THRESHOLD): Boolean {
         for (shift in SHIFTS) {

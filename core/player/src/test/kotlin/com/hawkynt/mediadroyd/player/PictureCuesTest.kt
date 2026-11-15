@@ -156,7 +156,9 @@ class PictureCuesTest {
         while (out.size < seconds * perSecond) {
             val background = 60 + random.nextInt(60)
             val blocks = List(1 + random.nextInt(2)) { random.nextInt(w * PictureCues.HASH_HEIGHT) }
-            val shot = ByteArray(w * PictureCues.HASH_HEIGHT) { if (it in blocks) (background + 80).toByte() else background.toByte() }
+            val shot = ByteArray(w * PictureCues.HASH_HEIGHT) {
+                (if (it in blocks) background + 80 else background).toByte()
+            }
             repeat((2 + random.nextInt(3)) * perSecond) { out += shot }
         }
         return out.take(seconds * perSecond)
