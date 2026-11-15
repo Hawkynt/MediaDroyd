@@ -1,14 +1,13 @@
 package com.hawkynt.mediadroyd.player
 
 import com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer
+import com.hawkynt.mediadroyd.library.BlockReader
 import com.hawkynt.mediadroyd.library.FsFile
-import java.io.BufferedInputStream
-import java.io.InputStream
 import java.io.RandomAccessFile
 
 /**
- * Files as FFmpeg's demuxers read them: a local file at random, a network file as a stream that is
- * opened again further in when FFmpeg seeks.
+ * Files as FFmpeg's demuxers read them: a local file at random, a network file in blocks, the last ones kept
+ * (BlockReader), so reading one stream of an interleaved file does not open it again at every jump (#491).
  */
 object FfmpegInputs {
 
@@ -24,27 +23,20 @@ object FfmpegInputs {
     }
 
     fun remote(file: FsFile): FfmpegDemuxer.Input = object : FfmpegDemuxer.Input {
-        private var stream: InputStream? = null
+        private val reader = BlockReader(file)
         private var position = 0L
 
         override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            val current = stream ?: BufferedInputStream(file.open(position), REMOTE_BUFFER).also { stream = it }
-            val read = current.read(buffer, offset, length)
+            val read = reader.read(position, buffer, offset, length)
             if (read > 0) position += read
             return read
         }
 
         override fun seek(position: Long): Long {
-            if (position != this.position) {
-                stream?.close()
-                stream = null
-                this.position = position
-            }
+            this.position = position
             return position
         }
 
         override fun length(): Long = file.length().takeIf { it > 0 } ?: -1
     }
-
-    private const val REMOTE_BUFFER = 256 * 1024
 }

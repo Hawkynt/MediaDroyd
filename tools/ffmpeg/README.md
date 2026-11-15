@@ -13,6 +13,10 @@ decoders and Media3's own extractors cannot do:
   MXF, WTV, NuppelVideo, raw MPEG video, H.264 and HEVC streams, Y4M and IVF. The app's
   `FfmpegExtractor` sits last in Media3's extractor list and takes a file only when none of Media3's
   own recognised it.
+- **Sound for finding intros and credits** — `FfmpegDemuxer.sound`: the main audio stream of any common
+  container (MP4/MOV, Matroska/WebM, AVI, MPEG-TS/PS, Ogg, FLV, WAV beside the ones above) decoded and
+  mixed to one channel of 16-bit samples by libswresample, the input of the app's audio fingerprints.
+  Playback still leaves those containers to Media3.
 
 It is built from these and nothing else (attribution: `app/THIRD-PARTY-NOTICE.ffmpeg.txt`):
 
@@ -26,6 +30,7 @@ It is built from these and nothing else (attribution: `app/THIRD-PARTY-NOTICE.ff
   `mediadroid/jni/mediadroid_range.h` (a full-range frame — MJPEG's — squeezed into the limited range
   the decoder's output is read as),
   the thumbnail picture (libavcodec and libswscale, after FFmpeg's `doc/examples/decode_video.c`),
+  the sound (libavcodec and libswresample, after FFmpeg's `doc/examples/decode_audio.c` and `resample_audio.c`),
   `mediadroid/java/…/FfmpegDemuxer.java`, and `patches/0002-*.patch` — FFmpeg linked statically into
   one library, libyuv static, our two ABIs, and decoders found by name for `audio/x-ffmpeg-<decoder>` /
   `video/x-ffmpeg-<decoder>` tracks;
@@ -68,8 +73,11 @@ picture of every sample (`FfmpegDemuxer.frame`, from a demuxer opened just for i
 finds it among the frames of ffmpeg's own decode at the same size, byte for byte. `test/expected.txt` is
 the reviewed result: packet counts equal ffprobe's, both decodes give the same frames, and every
 thumbnail is one of ffmpeg's frames from the keyframe before the middle (the first frame where the
-container cannot seek: WTV here, and raw MPEG-2, which has no duration). The script fails on any
-difference.
+container cannot seek: WTV here, and raw MPEG-2, which has no duration). It also reads every sample's
+sound (`FfmpegDemuxer.sound`), the common containers' among them, which must be byte for byte what
+`ffmpeg -vn -ac 1 -ar 11025 -f s16le` gives, and from one second in, which starts at the packet before
+(RealAudio 14.4, whose packets all carry time 0, cannot be read from there, as ffmpeg's `-ss` cannot).
+The script fails on any difference.
 
 ## Optional: the non-LGPL switch
 

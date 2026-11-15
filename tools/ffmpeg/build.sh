@@ -14,8 +14,10 @@ MEDIA_TAG=1.11.1
 FFMPEG_VERSION=6.0
 LIBYUV_COMMIT=2dd4257364d39c38d79465c4ddc4b93137fe729b
 
-# The containers Media3 has no extractor for, and the parsers their raw streams need.
-DEMUXERS="asf rm dv nut mxf wtv nuv mpegvideo h264 hevc yuv4mpegpipe ivf"
+# The containers Media3 has no extractor for, and the parsers their raw streams need; then the common ones,
+# which playback leaves to Media3, for reading a file's sound to find its intro and credits (FfmpegDemuxer.sound).
+DEMUXERS="asf rm dv nut mxf wtv nuv mpegvideo h264 hevc yuv4mpegpipe ivf
+  mov matroska avi mpegts mpegps ogg flv wav"
 PARSERS="h264 hevc mpegvideo mpeg4video vc1 h263 rv30 rv40 ac3 dca aac mpegaudio vp9"
 # Audio the devices often lack, and what the demuxed containers carry.
 AUDIO="ac3 eac3 dca truehd mlp alac vorbis opus flac aac mp3 mp2 mp1 amrnb amrwb

@@ -1,7 +1,7 @@
 // MediaDroid — LGPL-3.0-or-later.
 //
-// FFmpeg's demuxers for the containers Media3 cannot read (ASF/WMV, RealMedia, DV, NUT, MXF, …),
-// behind the JNI of com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer. The file is read through a custom
+// FFmpeg's demuxers for the containers Media3 cannot read (ASF/WMV, RealMedia, DV, NUT, MXF, …) —
+// and, for finding intros and credits by their sound, every common one — behind the JNI of com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer. The file is read through a custom
 // AVIOContext whose read and seek callbacks call the Java Input the demuxer was opened with, the
 // pattern of FFmpeg's own doc/examples/avio_read_callback.c. FFmpeg calls back only from inside the
 // JNI calls below, on the calling thread, so the JNIEnv of the current call is the one to use.
@@ -18,7 +18,9 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/display.h>
 #include <libavutil/mathematics.h>
+#include <libavutil/channel_layout.h>
 #include <libavutil/pixdesc.h>
+#include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
 
@@ -417,6 +419,119 @@ JNIEXPORT jintArray JNICALL Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nFr
   av_frame_free(&frame);
   avcodec_free_context(&context);
   return pixels;
+}
+
+// The sound of the main audio stream from startUs (decoded from the packet at or before it) up to endUs,
+// mixed to one channel of 16-bit samples at rate — what an audio fingerprint is taken from. first[0]
+// receives the time of the first sample in microseconds. Null without sound or a decoder for it. Moves
+// the read position: meant for a demuxer opened just for this.
+JNIEXPORT jshortArray JNICALL Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nSound(
+    JNIEnv* env, jclass clazz, jlong handle, jlong startUs, jlong endUs, jint rate, jlongArray first) {
+  Demuxer* d = demuxerOf(env, handle);
+  if (!d || rate <= 0 || endUs <= startUs) return nullptr;
+  const int index = av_find_best_stream(d->format, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+  if (index < 0) return nullptr;
+  AVStream* stream = d->format->streams[index];
+  const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
+  if (!codec) return nullptr;
+  AVCodecContext* context = avcodec_alloc_context3(codec);
+  AVFrame* frame = av_frame_alloc();
+  AVPacket* packet = av_packet_alloc();
+  SwrContext* resampler = nullptr;
+  int inputRate = 0;
+  int inputFormat = -1;
+  std::vector<int16_t> samples;
+  int64_t firstUs = INT64_MIN;
+  const int64_t offset = d->format->start_time != AV_NOPTS_VALUE ? d->format->start_time : 0;
+  const int64_t wanted = (endUs - startUs) * rate / 1000000;
+  bool done = false;
+  // Takes every frame the decoder has ready; false once the sound runs past endUs or cannot be read on.
+  auto drain = [&]() {
+    while (avcodec_receive_frame(context, frame) == 0) {
+      const int64_t pts = frame->best_effort_timestamp;
+      const int64_t timeUs = pts == AV_NOPTS_VALUE ? INT64_MIN : toUs(pts, stream->time_base) - offset;
+      const int64_t lengthUs = frame->sample_rate > 0 ? frame->nb_samples * 1000000LL / frame->sample_rate : 0;
+      if (timeUs != INT64_MIN && timeUs + lengthUs <= startUs) continue;
+      if ((timeUs != INT64_MIN && timeUs >= endUs) || (int64_t)samples.size() >= wanted) return false;
+      if (!resampler) {
+        if (frame->ch_layout.order == AV_CHANNEL_ORDER_UNSPEC) {
+          const int channels = frame->ch_layout.nb_channels;
+          av_channel_layout_uninit(&frame->ch_layout);
+          av_channel_layout_default(&frame->ch_layout, channels);
+        }
+        AVChannelLayout mono = AV_CHANNEL_LAYOUT_MONO;
+        if (swr_alloc_set_opts2(&resampler, &mono, AV_SAMPLE_FMT_S16, rate, &frame->ch_layout,
+                                (AVSampleFormat)frame->format, frame->sample_rate, 0, nullptr) < 0 ||
+            swr_init(resampler) < 0) {
+          return false;
+        }
+        inputRate = frame->sample_rate;
+        inputFormat = frame->format;
+      } else if (frame->sample_rate != inputRate || frame->format != inputFormat) {
+        // The sound changed its shape midway: what was read so far is kept.
+        return false;
+      }
+      if (firstUs == INT64_MIN) firstUs = timeUs == INT64_MIN ? startUs : timeUs;
+      const int room = swr_get_out_samples(resampler, frame->nb_samples);
+      if (room <= 0) continue;
+      const size_t before = samples.size();
+      samples.resize(before + room);
+      uint8_t* out = reinterpret_cast<uint8_t*>(samples.data() + before);
+      const int got = swr_convert(resampler, &out, room, (const uint8_t**)frame->extended_data, frame->nb_samples);
+      samples.resize(before + (got > 0 ? got : 0));
+    }
+    return true;
+  };
+  if (context && frame && packet && avcodec_parameters_to_context(context, stream->codecpar) >= 0) {
+    context->pkt_timebase = stream->time_base;
+    if (avcodec_open2(context, codec, nullptr) >= 0) {
+      if (startUs > 0) {
+        const int64_t target = startUs + offset;
+        if (avformat_seek_file(d->format, -1, INT64_MIN, target, target, 0) < 0) {
+          Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nSeek(env, clazz, handle, startUs);
+        }
+      }
+      // Only the sound is wanted: the demuxer skips the other streams' packets where it can.
+      for (unsigned i = 0; i < d->format->nb_streams; i++) {
+        if ((int)i != index) d->format->streams[i]->discard = AVDISCARD_ALL;
+      }
+      while (!done) {
+        if (av_read_frame(d->format, packet) < 0) {
+          // The end of the file: what the decoder and the resampler still hold belongs to the sound.
+          avcodec_send_packet(context, nullptr);
+          if (drain() && resampler) {
+            const int room = swr_get_out_samples(resampler, 0);
+            if (room > 0) {
+              const size_t before = samples.size();
+              samples.resize(before + room);
+              uint8_t* out = reinterpret_cast<uint8_t*>(samples.data() + before);
+              const int got = swr_convert(resampler, &out, room, nullptr, 0);
+              samples.resize(before + (got > 0 ? got : 0));
+            }
+          }
+          break;
+        }
+        if (packet->stream_index == index && avcodec_send_packet(context, packet) >= 0) done = !drain();
+        av_packet_unref(packet);
+      }
+      for (unsigned i = 0; i < d->format->nb_streams; i++) d->format->streams[i]->discard = AVDISCARD_DEFAULT;
+    }
+  }
+  jshortArray result = nullptr;
+  if (!samples.empty()) {
+    if ((int64_t)samples.size() > wanted) samples.resize(wanted);
+    result = env->NewShortArray((jsize)samples.size());
+    if (result) {
+      env->SetShortArrayRegion(result, 0, (jsize)samples.size(), reinterpret_cast<const jshort*>(samples.data()));
+      const jlong at[1] = {firstUs};
+      env->SetLongArrayRegion(first, 0, 1, at);
+    }
+  }
+  swr_free(&resampler);
+  av_packet_free(&packet);
+  av_frame_free(&frame);
+  avcodec_free_context(&context);
+  return result;
 }
 
 JNIEXPORT void JNICALL Java_com_hawkynt_mediadroid_ffmpeg_FfmpegDemuxer_nClose(

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Checks MediaDroid's FFmpeg demuxer and codec-parameter handover on the host, against ffprobe:
+# Checks MediaDroid's FFmpeg demuxer, codec-parameter handover and sound on the host, against ffprobe and ffmpeg:
 #
 #   tools/ffmpeg/test/check.sh <host-ffmpeg-6.0-prefix> <out-dir>
 #
@@ -27,6 +27,16 @@ $F $A -c:v mpeg4 -c:a mp2 -ar 48000 "$S/sample.nut"
 $F $A -c:v mpeg2video -c:a mp2 -ar 48000 "$S/sample.wtv"
 $F -c:v mpeg2video -f mpeg2video "$S/sample.m2v"
 $F -pix_fmt yuv420p "$S/sample.y4m"
+# The common containers playback leaves to Media3: only their sound is read through FFmpeg (#491).
+$F $A -c:v mpeg4 -c:a aac -ar 48000 "$S/sample.mp4"
+$F -f lavfi -i "sine=frequency=440:duration=2" -f lavfi -i "sine=frequency=660:duration=2" \
+  -filter_complex "[1:a][2:a]amerge=inputs=2[a]" -map 0:v -map "[a]" -c:v mpeg4 -c:a ac3 -ar 48000 "$S/sample.mkv"
+$F $A -c:v mpeg4 -c:a mp2 -ar 44100 "$S/sample.avi"
+$F $A -c:v mpeg2video -c:a mp2 -ar 48000 "$S/sample.ts"
+$F $A -c:v mpeg2video -c:a mp2 -ar 48000 -f vob "$S/sample.vob"
+$P/bin/ffmpeg -v error -y $A -c:a flac -ar 44100 "$S/sample.oga"
+$F $A -c:v flv -c:a aac -ar 44100 "$S/sample.flv"
+$P/bin/ffmpeg -v error -y $A -c:a pcm_s16le -ar 22050 "$S/sample.wav"
 # Full range (0..255) in plain yuv420p, not MJPEG's yuvj: the thumbnail must take the range from the frame.
 $F -vf scale=out_range=pc -pix_fmt yuv420p -color_range pc "$S/sample-full.y4m"
 
@@ -71,6 +81,21 @@ FILES=$(ls "$S"/* | LC_ALL=C sort)
         echo "$name $dims is decoded frame $found" ;;
       *) echo "$name no frame" ;;
     esac
+  done
+  echo "== sound: FfmpegDemuxer.sound against ffmpeg's own mono 16-bit 11025 Hz decode (oracle), byte for byte"
+  for f in $FILES; do
+    name="$(basename "$f")"
+    if [ -f "$OUT/frames/$name.s16" ]; then
+      "$P/bin/ffmpeg" -v error -y -i "$f" -vn -ac 1 -ar 11025 -f s16le "$OUT/frames/$name.oracle.s16"
+      if cmp -s "$OUT/frames/$name.s16" "$OUT/frames/$name.oracle.s16"; then
+        echo "$name sound is ffmpeg's"
+      else
+        echo "$name sound differs: $(stat -c %s "$OUT/frames/$name.s16") bytes against" \
+          "$(stat -c %s "$OUT/frames/$name.oracle.s16")"
+      fi
+    else
+      echo "$name no sound"
+    fi
   done
   echo "== codecpar_check (decoding from the blob alone)"
   "$OUT/codecpar_check" $FILES
