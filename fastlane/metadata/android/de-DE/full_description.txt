@@ -8,6 +8,7 @@ Deine Filme und Serien sind längst geordnet: Ordner mit .nfo-Dateien und Covern
 
 <b>Einfach genug für alle zu Hause</b>
 • Große Cover, ein Tipp zum Abspielen, die nächste Folge kommt von selbst
+• Vorspann und Abspann übersprungen — auch ohne Kapitel oder Schnittdateien, am Ton der Folgen erkannt
 • Kindersperre: Berührungen wirken erst, wenn das Schloss gehalten wird
 • Altersfreigabe aus den NFOs (FSK, MPAA, TV-Ratings), Eltern-Einstellungen hinter einer PIN in Worten
 • Wischen für Helligkeit und Lautstärke — über 100 %, wenn ein leiser Film mehr braucht

@@ -8,6 +8,7 @@ Your movies and shows are already organized: folders with .nfo files and cover a
 
 <b>Simple enough for everyone at home</b>
 • Big covers, one tap to play, the next episode queued by itself
+• Intros and credits skipped — even without chapters or cut files, found by their sound across the episodes
 • Child lock: touches do nothing until the lock is held
 • An age limit read from the NFOs (FSK, MPAA, TV ratings), parent settings behind a PIN shown as words
 • Swipe for brightness and volume — past 100 % when a quiet film needs more
