@@ -29,6 +29,9 @@ dependencies {
     implementation(project(":core:sources"))
     implementation(project(":engine:desktop"))
     implementation(project(":ui"))
+    // Dispatchers.Main on Swing's window thread (#506): what asks for it — a dialog's lifecycle in Compose, among
+    // others — failed without it, and the window stopped taking input.
+    implementation(libs.coroutines.swing)
     // The settings file, settings.json (DesktopStore).
     implementation(libs.serialization.json)
     // SMB servers announced on the local network (mDNS), SmbDiscovery.
