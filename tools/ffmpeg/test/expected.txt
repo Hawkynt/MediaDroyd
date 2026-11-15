@@ -6,11 +6,14 @@ sample-144.rm format=rm streams=2
   #1 packets=101 keyframes=101
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  sound 22271 samples from 0us
+  sound from 1000ms to 1500ms: none
 sample-full.y4m format=yuv4mpegpipe streams=1
   #0 kind=0 codec=rawvideo decoder=rawvideo format=yuv420p 320x240 0Hz 0ch params=48B
   #0 packets=50 keyframes=50
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  sound none
 sample.asf format=asf streams=2
   #0 kind=0 codec=msmpeg4v3 decoder=msmpeg4 format=yuv420p 320x240 0Hz 0ch params=48B
   #1 kind=1 codec=wmav1 decoder=wmav1 format=fltp 0x0 44100Hz 1ch params=52B
@@ -18,6 +21,17 @@ sample.asf format=asf streams=2
   #1 packets=44 keyframes=44
   seek 1046ms ok=true next=510ms key=true
   frame 160x120 at 1046000us
+  sound 22016 samples from 92000us
+  sound from 1000ms to 1500ms: 5512 samples from 975ms
+sample.avi format=avi streams=2
+  #0 kind=0 codec=mpeg4 decoder=mpeg4 format=yuv420p 320x240 0Hz 0ch params=94B
+  #1 kind=1 codec=mp2 decoder=mp2 format=s16p 0x0 44100Hz 1ch params=70B
+  #0 packets=50 keyframes=5
+  #1 packets=77 keyframes=77
+  seek 1005ms ok=true next=960ms key=true
+  frame 160x120 at 1005714us
+  sound 22176 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 992ms
 sample.dv format=dv streams=2
   #0 kind=0 codec=dvvideo decoder=dvvideo format=yuv420p 720x576 0Hz 0ch params=48B pixel=1.0667
   #1 kind=1 codec=pcm_s16le decoder=pcm_s16le format=s16 0x0 48000Hz 2ch params=48B
@@ -25,11 +39,41 @@ sample.dv format=dv streams=2
   #1 packets=50 keyframes=50
   seek 1000ms ok=true next=1000ms key=true
   frame 160x120 at 1000000us
+  sound 22050 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 1000ms
+sample.flv format=flv streams=2
+  #0 kind=1 codec=aac decoder=aac format=fltp 0x0 44100Hz 1ch params=53B
+  #1 kind=0 codec=flv1 decoder=flv format=yuv420p 320x240 0Hz 0ch params=48B
+  #0 packets=88 keyframes=88
+  #1 packets=50 keyframes=5
+  seek 1011ms ok=true next=960ms key=true
+  frame 160x120 at 1011500us
+  sound 22528 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 998ms
 sample.m2v format=mpegvideo streams=1
   #0 kind=0 codec=mpeg2video decoder=mpeg2video format=yuv420p 320x240 0Hz 0ch params=70B
   #0 packets=50 keyframes=5
   duration unknown: not seekable
   frame 160x120 at 0us
+  sound none
+sample.mkv format=matroska,webm streams=2
+  #0 kind=0 codec=mpeg4 decoder=mpeg4 format=yuv420p 320x240 0Hz 0ch params=94B
+  #1 kind=1 codec=ac3 decoder=ac3 format=fltp 0x0 48000Hz 2ch params=48B
+  #0 packets=50 keyframes=5
+  #1 packets=63 keyframes=63
+  seek 1008ms ok=true next=960ms key=true
+  frame 160x120 at 1008000us
+  sound 22227 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 992ms
+sample.mp4 format=mov,mp4,m4a,3gp,3g2,mj2 streams=2
+  #0 kind=0 codec=mpeg4 decoder=mpeg4 format=yuv420p 320x240 0Hz 0ch params=94B
+  #1 kind=1 codec=aac decoder=aac format=fltp 0x0 48000Hz 1ch params=53B
+  #0 packets=50 keyframes=5
+  #1 packets=95 keyframes=95
+  seek 1000ms ok=true next=960ms key=true
+  frame 160x120 at 1000000us
+  sound 22109 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 981ms
 sample.mxf format=mxf streams=2
   #0 kind=0 codec=mpeg2video decoder=mpeg2video format=yuv420p 320x240 0Hz 0ch params=70B
   #1 kind=1 codec=pcm_s16le decoder=pcm_s16le format=s16 0x0 48000Hz 1ch params=48B
@@ -37,6 +81,8 @@ sample.mxf format=mxf streams=2
   #1 packets=50 keyframes=50
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  sound 22050 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 1000ms
 sample.nut format=nut streams=2
   #0 kind=0 codec=mpeg4 decoder=mpeg4 format=yuv420p 320x240 0Hz 0ch params=94B
   #1 kind=1 codec=mp2 decoder=mp2 format=s16p 0x0 48000Hz 1ch params=48B
@@ -44,6 +90,15 @@ sample.nut format=nut streams=2
   #1 packets=84 keyframes=84
   seek 996ms ok=true next=960ms key=true
   frame 160x120 at 996000us
+  sound 22227 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 984ms
+sample.oga format=ogg streams=1
+  #0 kind=1 codec=flac decoder=flac format=s16 0x0 44100Hz 1ch params=82B
+  #0 packets=20 keyframes=20
+  seek 1000ms ok=true next=0ms key=true
+  frame none
+  sound 22050 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 940ms
 sample.rm format=rm streams=2
   #0 kind=0 codec=rv20 decoder=rv20 format=yuv420p 320x240 0Hz 0ch params=56B
   #1 kind=1 codec=ac3 decoder=ac3 format=fltp 0x0 48000Hz 1ch params=48B
@@ -51,6 +106,33 @@ sample.rm format=rm streams=2
   #1 packets=63 keyframes=63
   seek 1008ms ok=true next=960ms key=true
   frame 160x120 at 1008000us
+  sound 22227 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 992ms
+sample.ts format=mpegts streams=2
+  #0 kind=0 codec=mpeg2video decoder=mpeg2video format=yuv420p 320x240 0Hz 0ch params=70B
+  #1 kind=1 codec=mp2 decoder=mp2 format=fltp 0x0 48000Hz 1ch params=48B
+  #0 packets=50 keyframes=5
+  #1 packets=84 keyframes=84
+  seek 1005ms ok=true next=960ms key=true
+  frame 160x120 at 1005011us
+  sound 22227 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 984ms
+sample.vob format=mpeg streams=2
+  #0 kind=0 codec=mpeg2video decoder=mpeg2video format=yuv420p 320x240 0Hz 0ch params=70B
+  #1 kind=1 codec=mp2 decoder=mp2 format=s16p 0x0 48000Hz 1ch params=48B
+  #0 packets=50 keyframes=5
+  #1 packets=84 keyframes=84
+  seek 1008ms ok=true next=1000ms key=false
+  frame 160x120 at 1008000us
+  sound 22227 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 984ms
+sample.wav format=wav streams=1
+  #0 kind=1 codec=pcm_s16le decoder=pcm_s16le format=s16 0x0 22050Hz 1ch params=48B
+  #0 packets=22 keyframes=22
+  seek 1000ms ok=true next=1000ms key=true
+  frame none
+  sound 22050 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 1000ms
 sample.wmv format=asf streams=2
   #0 kind=0 codec=wmv2 decoder=wmv2 format=yuv420p 320x240 0Hz 0ch params=52B
   #1 kind=1 codec=wmav2 decoder=wmav2 format=fltp 0x0 44100Hz 1ch params=58B
@@ -58,6 +140,8 @@ sample.wmv format=asf streams=2
   #1 packets=44 keyframes=44
   seek 1046ms ok=true next=418ms key=true
   frame 160x120 at 1046000us
+  sound 22016 samples from 92000us
+  sound from 1000ms to 1500ms: 5512 samples from 975ms
 sample.wtv format=wtv streams=2
   #0 kind=0 codec=mpeg2video decoder=mpeg2video format=yuv420p 320x240 0Hz 0ch params=70B
   #1 kind=1 codec=mp2 decoder=mp2 format=s16p 0x0 48000Hz 1ch params=70B
@@ -65,20 +149,31 @@ sample.wtv format=wtv streams=2
   #1 packets=84 keyframes=84
   seek 1016ms ok=true next=0ms key=true
   frame 160x120 at 1016000us
+  sound 22227 samples from 0us
+  sound from 1000ms to 1500ms: 5512 samples from 984ms
 sample.y4m format=yuv4mpegpipe streams=1
   #0 kind=0 codec=rawvideo decoder=rawvideo format=yuv420p 320x240 0Hz 0ch params=48B
   #0 packets=50 keyframes=50
   seek 1000ms ok=true next=960ms key=true
   frame 160x120 at 1000000us
+  sound none
 == ffprobe packet counts (oracle)
 sample-144.rm 0,rv10,yuv420p,50 1,ra_144,s16,101 
 sample-full.y4m 0,rawvideo,yuv420p,50 
 sample.asf 0,msmpeg4v3,yuv420p,50 1,wmav1,fltp,44 
+sample.avi 0,mpeg4,yuv420p,50 1,mp2,s16p,77 
 sample.dv 0,dvvideo,yuv420p,50 1,pcm_s16le,s16,50 
+sample.flv 0,aac,fltp,88 1,flv1,yuv420p,50 
 sample.m2v 0,mpeg2video,yuv420p,50,  
+sample.mkv 0,mpeg4,yuv420p,50 1,ac3,fltp,63 
+sample.mp4 0,mpeg4,yuv420p,50 1,aac,fltp,95 
 sample.mxf 0,mpeg2video,yuv420p,50,  1,pcm_s16le,s16,50 
 sample.nut 0,mpeg4,yuv420p,50 1,mp2,s16p,84 
+sample.oga 0,flac,s16,20 
 sample.rm 0,rv20,yuv420p,50 1,ac3,fltp,63 
+sample.ts 0,mpeg2video,yuv420p,50,  1,mp2,fltp,84  0,mpeg2video,yuv420p,50,  1,mp2,fltp,84 
+sample.vob 0,mpeg2video,yuv420p,50,  1,mp2,s16p,84 
+sample.wav 0,pcm_s16le,s16,22 
 sample.wmv 0,wmv2,yuv420p,50 1,wmav2,fltp,44 
 sample.wtv 0,mpeg2video,yuv420p,50,  1,mp2,s16p,84 
 sample.y4m 0,rawvideo,yuv420p,50 
@@ -86,14 +181,42 @@ sample.y4m 0,rawvideo,yuv420p,50
 sample-144.rm 160x120 is decoded frame 24
 sample-full.y4m 160x120 is decoded frame 24
 sample.asf 160x120 is decoded frame 13
+sample.avi 160x120 is decoded frame 24
 sample.dv 160x120 is decoded frame 25
+sample.flv 160x120 is decoded frame 25
 sample.m2v 160x120 is decoded frame 0
+sample.mkv 160x120 is decoded frame 24
+sample.mp4 160x120 is decoded frame 24
 sample.mxf 160x120 is decoded frame 24
 sample.nut 160x120 is decoded frame 24
+sample.oga no frame
 sample.rm 160x120 is decoded frame 24
+sample.ts 160x120 is decoded frame 36
+sample.vob 160x120 is decoded frame 36
+sample.wav no frame
 sample.wmv 160x120 is decoded frame 13
 sample.wtv 160x120 is decoded frame 0
 sample.y4m 160x120 is decoded frame 24
+== sound: FfmpegDemuxer.sound against ffmpeg's own mono 16-bit 11025 Hz decode (oracle), byte for byte
+sample-144.rm sound is ffmpeg's
+sample-full.y4m no sound
+sample.asf sound is ffmpeg's
+sample.avi sound is ffmpeg's
+sample.dv sound is ffmpeg's
+sample.flv sound is ffmpeg's
+sample.m2v no sound
+sample.mkv sound is ffmpeg's
+sample.mp4 sound is ffmpeg's
+sample.mxf sound is ffmpeg's
+sample.nut sound is ffmpeg's
+sample.oga sound is ffmpeg's
+sample.rm sound is ffmpeg's
+sample.ts sound is ffmpeg's
+sample.vob sound is ffmpeg's
+sample.wav sound is ffmpeg's
+sample.wmv sound is ffmpeg's
+sample.wtv sound is ffmpeg's
+sample.y4m no sound
 == codecpar_check (decoding from the blob alone)
 sample-144.rm #0 ffmpeg rv10 frames=50 320x240 0Hz 0ch
 sample-144.rm #1 ffmpeg ra_144 frames=101 0x0 8000Hz 1ch
@@ -105,12 +228,28 @@ sample.asf #0 ffmpeg msmpeg4v3 frames=50 320x240 0Hz 0ch
 sample.asf #1 ffmpeg wmav1 frames=43 0x0 44100Hz 1ch
 sample.asf #0 blob msmpeg4v3 frames=50 320x240 0Hz 0ch
 sample.asf #1 blob wmav1 frames=43 0x0 44100Hz 1ch
+sample.avi #0 ffmpeg mpeg4 frames=50 320x240 0Hz 0ch
+sample.avi #1 ffmpeg mp2 frames=77 0x0 44100Hz 1ch
+sample.avi #0 blob mpeg4 frames=50 320x240 0Hz 0ch
+sample.avi #1 blob mp2 frames=77 0x0 44100Hz 1ch
 sample.dv #0 ffmpeg dvvideo frames=50 720x576 0Hz 0ch
 sample.dv #1 ffmpeg pcm_s16le frames=50 0x0 48000Hz 2ch
 sample.dv #0 blob dvvideo frames=50 720x576 0Hz 0ch
 sample.dv #1 blob pcm_s16le frames=50 0x0 48000Hz 2ch
+sample.flv #0 ffmpeg aac frames=88 0x0 44100Hz 1ch
+sample.flv #1 ffmpeg flv1 frames=50 320x240 0Hz 0ch
+sample.flv #0 blob aac frames=88 0x0 44100Hz 1ch
+sample.flv #1 blob flv1 frames=50 320x240 0Hz 0ch
 sample.m2v #0 ffmpeg mpeg2video frames=50 320x240 0Hz 0ch
 sample.m2v #0 blob mpeg2video frames=50 320x240 0Hz 0ch
+sample.mkv #0 ffmpeg mpeg4 frames=50 320x240 0Hz 0ch
+sample.mkv #1 ffmpeg ac3 frames=63 0x0 48000Hz 2ch
+sample.mkv #0 blob mpeg4 frames=50 320x240 0Hz 0ch
+sample.mkv #1 blob ac3 frames=63 0x0 48000Hz 2ch
+sample.mp4 #0 ffmpeg mpeg4 frames=50 320x240 0Hz 0ch
+sample.mp4 #1 ffmpeg aac frames=94 0x0 48000Hz 1ch
+sample.mp4 #0 blob mpeg4 frames=50 320x240 0Hz 0ch
+sample.mp4 #1 blob aac frames=94 0x0 48000Hz 1ch
 sample.mxf #0 ffmpeg mpeg2video frames=50 320x240 0Hz 0ch
 sample.mxf #1 ffmpeg pcm_s16le frames=50 0x0 48000Hz 1ch
 sample.mxf #0 blob mpeg2video frames=50 320x240 0Hz 0ch
@@ -119,10 +258,22 @@ sample.nut #0 ffmpeg mpeg4 frames=50 320x240 0Hz 0ch
 sample.nut #1 ffmpeg mp2 frames=84 0x0 48000Hz 1ch
 sample.nut #0 blob mpeg4 frames=50 320x240 0Hz 0ch
 sample.nut #1 blob mp2 frames=84 0x0 48000Hz 1ch
+sample.oga #0 ffmpeg flac frames=20 0x0 44100Hz 1ch
+sample.oga #0 blob flac frames=20 0x0 44100Hz 1ch
 sample.rm #0 ffmpeg rv20 frames=50 320x240 0Hz 0ch
 sample.rm #1 ffmpeg ac3 frames=63 0x0 48000Hz 1ch
 sample.rm #0 blob rv20 frames=50 320x240 0Hz 0ch
 sample.rm #1 blob ac3 frames=63 0x0 48000Hz 1ch
+sample.ts #0 ffmpeg mpeg2video frames=50 320x240 0Hz 0ch
+sample.ts #1 ffmpeg mp2 frames=84 0x0 48000Hz 1ch
+sample.ts #0 blob mpeg2video frames=50 320x240 0Hz 0ch
+sample.ts #1 blob mp2 frames=84 0x0 48000Hz 1ch
+sample.vob #0 ffmpeg mpeg2video frames=50 320x240 0Hz 0ch
+sample.vob #1 ffmpeg mp2 frames=84 0x0 48000Hz 1ch
+sample.vob #0 blob mpeg2video frames=50 320x240 0Hz 0ch
+sample.vob #1 blob mp2 frames=84 0x0 48000Hz 1ch
+sample.wav #0 ffmpeg pcm_s16le frames=22 0x0 22050Hz 1ch
+sample.wav #0 blob pcm_s16le frames=22 0x0 22050Hz 1ch
 sample.wmv #0 ffmpeg wmv2 frames=50 320x240 0Hz 0ch
 sample.wmv #1 ffmpeg wmav2 frames=43 0x0 44100Hz 1ch
 sample.wmv #0 blob wmv2 frames=50 320x240 0Hz 0ch

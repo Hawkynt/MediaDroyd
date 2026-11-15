@@ -4,18 +4,22 @@ import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer
 import com.hawkynt.mediadroyd.player.AndroidNeural
+import com.hawkynt.mediadroyd.player.FfmpegInputs
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.NativeFingerprint
 import java.io.ByteArrayOutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteOrder
 
 /**
- * A video's sound fingerprinted on Android for finding its intro and credits (PlayerPlatform.soundPrint): its first
- * audio track decoded by the device's own decoder (MediaExtractor and MediaCodec; a file on a network source read
- * through FsMediaDataSource) to 16-bit PCM, and fingerprinted by Chromaprint inside the app's native library
- * (NativeFingerprint). A track the device cannot decode (DTS on many phones) gives no print, and the episode is left to
- * its chapters and cut files.
+ * A video's sound fingerprinted on Android for finding its intro and credits (PlayerPlatform.soundPrint): its main
+ * audio track demuxed and decoded by the app's own FFmpeg (FfmpegDemuxer.sound: every container and codec the
+ * extension holds — DTS, TrueHD, WMA and RealAudio included — mixed to one channel at Chromaprint's rate; #491), else,
+ * where the extension is missing or cannot read it, by the device's own decoder (MediaExtractor and MediaCodec), a file on a network
+ * source read through FfmpegInputs.remote and FsMediaDataSource; then fingerprinted by Chromaprint inside the app's
+ * native library (NativeFingerprint).
  */
 object SoundPrints {
     private const val TIMEOUT_US = 10_000L
@@ -26,6 +30,41 @@ object SoundPrints {
      */
     fun of(context: Context, location: String, closing: Boolean): IntroCredits.SoundPrint? {
         if (!AndroidNeural.loaded) return null
+        val ffmpeg = if (FfmpegDemuxer.isAvailable()) byFfmpeg(context, location, closing) else null
+        return ffmpeg ?: byDevice(context, location, closing)
+    }
+
+    // The sound through the app's own FFmpeg: its demuxers and decoders, resampled to one channel.
+    private fun byFfmpeg(context: Context, location: String, closing: Boolean): IntroCredits.SoundPrint? {
+        val local = if (location.startsWith("/")) runCatching { RandomAccessFile(location, "r") }.getOrNull() else null
+        return try {
+            val input = when {
+                local != null -> FfmpegInputs.local(local)
+                location.startsWith("/") -> return null
+                else -> FfmpegInputs.remote(SourceAccess.resolve(context, location) ?: return null)
+            }
+            val demuxer = FfmpegDemuxer.open(input) ?: return null
+            try {
+                val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 }
+                if (closing && durationUs == null) return null
+                val startUs = if (closing) (durationUs!! - IntroCredits.CLOSING_MS * 1000).coerceAtLeast(0) else 0L
+                val endUs = startUs + (if (closing) IntroCredits.CLOSING_MS else IntroCredits.OPENING_MS) * 1000
+                val first = LongArray(1)
+                val pcm = demuxer.sound(startUs, endUs, NativeFingerprint.SAMPLE_RATE, first) ?: return null
+                NativeFingerprint.fingerprint(pcm, NativeFingerprint.SAMPLE_RATE, 1)
+                    ?.let { IntroCredits.SoundPrint(it, first[0] / 1000) }
+            } finally {
+                demuxer.close()
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { local?.close() }
+        }
+    }
+
+    // The sound through the device's own decoders, where the FFmpeg extension is missing.
+    private fun byDevice(context: Context, location: String, closing: Boolean): IntroCredits.SoundPrint? {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         return try {

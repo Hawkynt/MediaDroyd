@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 
 /**
  * FFmpeg's demuxers over a random-access {@link Input}, for the containers Media3 has no extractor
- * for. A thin binding of {@code mediadroid_demux.cc} in the FFmpeg extension's native library; one
+ * for, and the sound of any common file for finding intros and credits by it. A thin binding of {@code mediadroid_demux.cc} in the FFmpeg extension's native library; one
  * instance is used from one thread at a time.
  */
 public final class FfmpegDemuxer implements AutoCloseable {
@@ -195,6 +195,17 @@ public final class FfmpegDemuxer implements AutoCloseable {
     return nFrame(handle, timeUs, maxWidth, size);
   }
 
+  /**
+   * The sound of the main audio stream from {@code startUs} up to {@code endUs}, mixed to one channel of
+   * 16-bit samples at {@code sampleRate} — what an audio fingerprint is taken from; {@code first} receives
+   * the time of its first sample in microseconds. Null without sound or a decoder for it. Moves the read
+   * position: meant for a demuxer opened just for this.
+   */
+  @Nullable
+  public short[] sound(long startUs, long endUs, int sampleRate, long[] first) {
+    return nSound(handle, startUs, endUs, sampleRate, first);
+  }
+
   @Override
   public void close() {
     nClose(handle);
@@ -223,6 +234,8 @@ public final class FfmpegDemuxer implements AutoCloseable {
   private static native boolean nSeek(long handle, long timeUs);
 
   private static native int[] nFrame(long handle, long timeUs, int maxWidth, int[] size);
+
+  private static native short[] nSound(long handle, long startUs, long endUs, int rate, long[] first);
 
   private static native void nClose(long handle);
 }

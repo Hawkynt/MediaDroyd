@@ -90,6 +90,27 @@ public final class DemuxCheck {
               java.nio.file.Paths.get(System.getProperty("frames.dir"), name + ".bgra"), raw.array());
         }
         demuxer.close();
+        // The sound, mono 16-bit at 11025 Hz as the fingerprints take it, from demuxers opened just for it:
+        // the whole file, written raw for the oracle, and from the middle on.
+        demuxer = open(file);
+        long[] first = new long[1];
+        short[] sound = demuxer.sound(0, 3_600_000_000L, 11025, first);
+        if (sound == null) {
+          System.out.println("  sound none");
+        } else {
+          System.out.println("  sound " + sound.length + " samples from " + first[0] + "us");
+          ByteBuffer raw = ByteBuffer.allocate(sound.length * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+          raw.asShortBuffer().put(sound);
+          java.nio.file.Files.write(
+              java.nio.file.Paths.get(System.getProperty("frames.dir"), name + ".s16"), raw.array());
+          demuxer.close();
+          demuxer = open(file);
+          short[] later = demuxer.sound(1_000_000, 1_500_000, 11025, first);
+          System.out.println(
+              "  sound from 1000ms to 1500ms: "
+                  + (later == null ? "none" : later.length + " samples from " + first[0] / 1000 + "ms"));
+        }
+        demuxer.close();
       }
     }
   }
