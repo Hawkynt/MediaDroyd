@@ -385,6 +385,15 @@ the neural networks and ASS subtitles run on, with the OpenMP runtime it needs (
 The AppImage runs on Linux with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later); the graphics card
 needs OpenGL 4.3.
 
+To have it in the start menu without installing system-wide, run the script from this repository: `./install.sh` on
+Linux unpacks the newest published AppImage into `~/.local/opt/MediaDroyd`, adds a desktop entry with its icon to
+`~/.local/share/applications` — every start menu that reads those (GNOME, KDE, Xfce, TileWin, …) offers MediaDroyd and
+can open videos with it — and puts `mediadroyd` into `~/.local/bin`; `install.bat` on Windows puts the newest portable
+zip into `%LOCALAPPDATA%\Programs\MediaDroyd` with a Start menu shortcut. Both take `--stable` / `/stable` for the newest
+stable release only, `--build` / `/build` to build the app from the checkout instead (`--full` / `/full` with it for
+FFmpeg's GPL build — for your own machine, never to be passed on) and `--uninstall` / `/uninstall`. Settings stay where
+the app keeps them, `~/.local/share/MediaDroyd` and `%APPDATA%\MediaDroyd`, through every update and uninstall.
+
 ## 🚀 Quick start
 
 ```bash

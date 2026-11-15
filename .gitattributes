@@ -3,3 +3,5 @@
 *.param -text
 *.bin binary
 *.grey binary
+# Windows batch files keep their CRLF line endings byte for byte (install.bat; cmd misreads labels without them).
+*.bat -text
