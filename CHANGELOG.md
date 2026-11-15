@@ -37,6 +37,9 @@
 - resume points: none for a short look, removable, a show resumes at its first unwatched episode (#423) (#424) (cc5de7f)
 
 ### Fixed
+- the desktop window froze with "Module with the Main dispatcher is missing" after picking GSR (#506) (#507) (e87d76d)
+- on TileWin the desktop's folder picker turned "(Not Responding)" after a few seconds (#504) (#505) (a861dd8)
+- on TileWin the desktop window turned "(Not Responding)" after a few seconds (#502) (#503) (a26ee08)
 - the nightly ran out of memory packaging the release APK and bundle (#499) (#500) (324c5cc)
 - Settings said intros and credits are skipped only where chapters or an .edl mark them (#489) (#490) (b945805)
 - picked folders and network sources reopened the file on every jump of a decoder (#484) (#485) (8448867)
