@@ -33,10 +33,34 @@ object X11Ping {
     fun isPing(messageType: Long, first: Long, wmProtocols: Long, netWmPing: Long): Boolean =
         messageType == wmProtocols && first == netWmPing
 
-    /** Makes [window] offer and answer `_NET_WM_PING` on X11, once it is shown; whether it could. */
+    // The windows answering already, each only once; and whether every window opening is made to.
+    private val installed = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Window, Boolean>())
+    private var watching = false
+
+    /**
+     * Makes every window of the app offer and answer `_NET_WM_PING` on X11 (#504) — those open now and each one opened
+     * later, the pickers' dialogs among them, which are X11 windows of their own and pinged as well. A modal picker
+     * holds the window thread, but the answer comes from AWT's X11 thread, which it does not hold. On the window
+     * thread.
+     */
+    fun everywhere() {
+        if (watching || Toolkit.getDefaultToolkit().javaClass.name != "sun.awt.X11.XToolkit") return
+        watching = true
+        Toolkit.getDefaultToolkit().addAWTEventListener(
+            { event -> if (event.id == java.awt.event.WindowEvent.WINDOW_OPENED) install(event.source as Window) },
+            java.awt.AWTEvent.WINDOW_EVENT_MASK,
+        )
+        Window.getWindows().filter { it.isDisplayable }.forEach(::install)
+    }
+
+    /**
+     * Makes [window] offer and answer `_NET_WM_PING` on X11, once it is shown; whether it did now — false off X11 and
+     * for a window that answers already.
+     */
     fun install(window: Window): Boolean = runCatching {
         val toolkit = Toolkit.getDefaultToolkit()
         if (toolkit.javaClass.name != "sun.awt.X11.XToolkit") return false
+        synchronized(installed) { if (window in installed) return false }
         val x11 = X11(toolkit.javaClass)
         val peer = Component::class.java.getDeclaredField("peer").apply { isAccessible = true }.get(window)
             ?: return false
@@ -49,6 +73,7 @@ object X11Ping {
             null
         }
         x11.addDispatcher.invoke(null, xid, dispatcher)
+        synchronized(installed) { installed += window }
         true
     }.getOrDefault(false)
 

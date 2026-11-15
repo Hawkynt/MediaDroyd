@@ -32,14 +32,42 @@ class X11PingTest {
             var installed = false
             var offered = false
             SwingUtilities.invokeAndWait {
-                assertFalse(X11Ping.offers(frame))
-                installed = X11Ping.install(frame)
+                // Installed now, or already as it opened where every window is watched (X11Ping.everywhere).
+                installed = X11Ping.install(frame) || X11Ping.offers(frame)
                 offered = X11Ping.offers(frame)
             }
             assertTrue("not installed: are java.desktop's packages opened to the app?", installed)
             assertTrue(offered)
         } finally {
             SwingUtilities.invokeAndWait { frame.dispose() }
+        }
+    }
+
+    @Test
+    fun `every window opened afterwards answers too, a picker's dialog included, and each once`() {
+        assumeTrue("needs an X11 display", !GraphicsEnvironment.isHeadless())
+        assumeTrue("needs AWT on X11", Toolkit.getDefaultToolkit().javaClass.name == "sun.awt.X11.XToolkit")
+        SwingUtilities.invokeAndWait { X11Ping.everywhere() }
+        lateinit var dialog: javax.swing.JDialog
+        SwingUtilities.invokeAndWait {
+            dialog = javax.swing.JDialog(null as Frame?, "Choose a folder").apply {
+                setSize(200, 100)
+                isVisible = true
+            }
+        }
+        try {
+            var offered = false
+            for (attempt in 0 until 50) {
+                SwingUtilities.invokeAndWait { offered = X11Ping.offers(dialog) }
+                if (offered) break
+                Thread.sleep(50)
+            }
+            assertTrue("the dialog does not offer _NET_WM_PING", offered)
+            var again = true
+            SwingUtilities.invokeAndWait { again = X11Ping.install(dialog) }
+            assertFalse("installed twice", again)
+        } finally {
+            SwingUtilities.invokeAndWait { dialog.dispose() }
         }
     }
 }
