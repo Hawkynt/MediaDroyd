@@ -23,7 +23,9 @@ externalNativeBuild and for the desktop by `:native:desktopLibrary`, against ncn
 `app/THIRD-PARTY-NOTICE.ncnn.txt`. Beside them, `native/ass`: libass with FreeType, FriBidi and HarfBuzz, built from
 their release sources (fetched and checked the same way) to draw ASS/SSA subtitles as authored; the attribution is in
 `app/THIRD-PARTY-NOTICE.libass.txt`. And `native/chromaprint`: Chromaprint's audio fingerprints (intros and credits
-found by their sound), from its source fetched and checked the same way; `app/THIRD-PARTY-NOTICE.Chromaprint.txt`. The
+found by their sound), from its source fetched and checked the same way; `app/THIRD-PARTY-NOTICE.Chromaprint.txt`.
+Text in the closing's frames is read by PaddleOCR's PP-OCRv5 on ncnn (`native/src/reader.cpp`, the models carried in
+`app/src/main/assets/models/ppocrv5-latin`); `app/THIRD-PARTY-NOTICE.PaddleOCR.txt`. The
 cores carry no Android dependency on purpose: the parsing, search and binge logic are pure and unit-tested without a
 device, and the screens sit on top of them. The bar is a household where nobody has to be taught the app — usable by a
 six-year-old and a grandparent, instant even on cheap hardware.

@@ -644,6 +644,10 @@ fun DesktopPlayer(
         override fun pictures(location: String, closing: Boolean) =
             com.hawkynt.mediadroyd.engine.desktop.PicturePrints.of(location, places.remoteFile(location), closing)
 
+        // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
+        override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
+            com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)
+
         override val commands = PlayerCommand.entries.toSet()
         override val subtitlesByTrack = true
         override val controlsVisible = controlsShown

@@ -43,7 +43,7 @@ endif()
 
 add_library(mediadroyd_networks STATIC
     src/networks.cpp src/shaders.cpp src/warp_layer.cpp src/dain_layers.cpp src/xvfi.cpp src/enlarger.cpp
-    src/flavr.cpp src/pair_networks.cpp src/colorizer.cpp)
+    src/flavr.cpp src/pair_networks.cpp src/colorizer.cpp src/reader.cpp)
 set_target_properties(mediadroyd_networks PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(mediadroyd_networks PUBLIC src)
 target_link_libraries(mediadroyd_networks PUBLIC ncnn)
@@ -70,7 +70,7 @@ add_subdirectory(chromaprint)
 if(ANDROID)
     # The name the app loads (NeuralInterpolator.kt).
     add_library(mediadroyd_neural SHARED
-        jni/interpolator.cpp jni/platform_android.cpp jni/subtitles.cpp jni/fingerprint.cpp)
+        jni/interpolator.cpp jni/platform_android.cpp jni/subtitles.cpp jni/fingerprint.cpp jni/text.cpp)
     target_link_libraries(mediadroyd_neural
         mediadroyd_networks mediadroyd_subtitles mediadroyd_chromaprint android -fopenmp -static-openmp)
     # 16 KB pages, as Android 15 devices may use.
@@ -78,7 +78,8 @@ if(ANDROID)
 else()
     find_package(JNI REQUIRED)
     add_library(mediadroyd SHARED
-        jni/interpolator.cpp jni/platform_desktop.cpp jni/desktop.cpp jni/subtitles.cpp jni/fingerprint.cpp)
+        jni/interpolator.cpp jni/platform_desktop.cpp jni/desktop.cpp jni/subtitles.cpp jni/fingerprint.cpp
+        jni/text.cpp)
     target_include_directories(mediadroyd PRIVATE ${JNI_INCLUDE_DIRS})
     target_link_libraries(mediadroyd PRIVATE mediadroyd_networks mediadroyd_subtitles mediadroyd_chromaprint)
     # Only the JNI entries (JNIEXPORT) are exported.

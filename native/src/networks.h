@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <net.h>
 
@@ -111,6 +112,27 @@ std::unique_ptr<Interpolator> openIfrnet(const Loader& load, bool gpu);
 // FLAVR (its "body", the 3D part written as 2D layers over the four frames, and its "head"; see flavr.cpp), on the
 // GPU or the CPU; null where it does not load.
 std::unique_ptr<Interpolator> openFlavr(const Loader& load, bool gpu);
+
+// A line of text found in a picture: its box in the picture's pixels and the ids its recogniser read (greedy CTC:
+// blanks and repeats already dropped; 1.. the model's alphabet, the id after it a space).
+struct TextLine {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+    std::vector<int> ids;
+};
+
+// A network pair that reads the text in a grey picture: PaddleOCR's PP-OCRv5 (see reader.cpp).
+struct TextReader {
+    virtual ~TextReader() = default;
+    // The lines in [grey] (w x h, a byte a pixel, rows as stored), top to bottom, left to right.
+    virtual std::vector<TextLine> read(const unsigned char* grey, int w, int h) = 0;
+};
+
+// PP-OCRv5's mobile detection (its "det") and Latin recognition (its "rec"), on the GPU or the CPU; null where they
+// do not load.
+std::unique_ptr<TextReader> openPpOcr(const Loader& load, bool gpu);
 
 // [net]'s options for the GPU or the CPU: on the GPU half floats to store, full floats to compute with; on the CPU
 // full floats — half floats to store and compute with where [halfOnCpu] and the processor has ARMv8.2's half-float

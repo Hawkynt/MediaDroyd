@@ -1,5 +1,6 @@
 package com.hawkynt.mediadroyd.state
 
+import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.NativeFingerprint
 import com.hawkynt.mediadroyd.player.PictureCues
@@ -141,5 +142,37 @@ class SkipFinderTest {
         decoded.clear()
         finder(StateStore(Memory())) { location, _ -> null.also { decoded += location } }.around(episodes, 0)
         assertTrue("pictures decoded though the sound found it: $decoded", decoded.isEmpty())
+    }
+
+    @Test
+    fun `credits over a scene are read by their text where neither sound nor black frames tell`() {
+        val store = StateStore(Memory())
+        val w = PictureCues.LOOK_WIDTH
+        val h = PictureCues.LOOK_HEIGHT
+        val scene = ByteArray(w * h) { (80 + it % w / 2).toByte() }
+        val asked = ArrayList<Long>()
+        val finder = SkipFinder(
+            store,
+            pictures = { _, closing ->
+                val frames = List(480) { scene }
+                if (closing) PictureCues.Frames(w, h, 2_000_000, PictureCues.CLOSING_STEP_MS, frames) else null
+            },
+            text = { _, at ->
+                // Credits over the scene from 2 401 s to the end at 2 480 s.
+                at(2_480_000).map { time ->
+                    asked += time
+                    val credit = CreditText.Line(100, 100, 300, 30, "Directed by")
+                    time to if (time >= 2_401_000) listOf(credit) else emptyList()
+                }
+            },
+            print = { location, closing ->
+                IntroCredits.SoundPrint(noise(600.0, location.hashCode() + if (closing) 1 else 0), 0)
+            },
+        )
+        val step = finder.steps(episodes, 0).first { it.part == SkipFinder.Part.CREDITS }
+        finder.keep(step, requireNotNull(finder.find(step)))
+        assertEquals(2_401_000L, store.foundSkipFor(episodes[0])?.creditsStartMs)
+        // Every five seconds, then every second just before the first credits read.
+        assertTrue(asked.count { it % 5000 == 0L } >= 90 && 2_401_000L in asked)
     }
 }
