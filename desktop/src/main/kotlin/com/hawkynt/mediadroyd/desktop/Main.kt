@@ -109,6 +109,8 @@ fun main(args: Array<String>) = application {
         exitApplication()
     }
     Window(onCloseRequest = close, title = "MediaDroyd", state = state, icon = icon) {
+        // The window manager's "are you still there?" answered on X11, so a pinging one never greys it out (#502).
+        androidx.compose.runtime.LaunchedEffect(Unit) { X11Ping.install(window) }
         System.getenv("MEDIADROYD_SNAPSHOT")?.let { target ->
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 kotlinx.coroutines.delay(System.getenv("MEDIADROYD_SNAPSHOT_MS")?.toLongOrNull() ?: 4_000)
