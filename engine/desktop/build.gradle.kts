@@ -50,7 +50,7 @@ dependencies {
 // classpath under models/: DesktopNeural unpacks them into the app-data folder on first use, digest-checked there.
 val carriedModels = tasks.register<Sync>("carriedModels") {
     from(rootProject.file("app/src/main/assets/models")) {
-        include("rife-4.25-lite/**", "ifrnet-s/**", "waifu2x-cunet/**", "realcugan-se/**")
+        include("rife-4.25-lite/**", "ifrnet-s/**", "waifu2x-cunet/**", "realcugan-se/**", "ppocrv5-latin/**")
     }
     into(layout.buildDirectory.dir("generated/carried/models"))
 }
@@ -74,7 +74,7 @@ tasks.test {
     } else {
         exclude(
             "**/NativeNetworksTest*", "**/NativeNeuralTest*", "**/LibAssTest*", "**/LibAssEngineTest*",
-            "**/FingerprintTest*", "**/SoundPrintsTest*", "**/PicturePrintsTest*",
+            "**/FingerprintTest*", "**/SoundPrintsTest*", "**/PicturePrintsTest*", "**/NativeTextTest*",
         )
     }
 }

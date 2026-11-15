@@ -1085,6 +1085,10 @@ fun PhonePlayer(
         override fun pictures(location: String, closing: Boolean) =
             com.hawkynt.mediadroyd.data.PicturePrints.of(context, location, closing)
 
+        // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
+        override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
+            com.hawkynt.mediadroyd.data.CreditReads.read(context, location, at)
+
         // Media3's own controls take play, pause and seeking; a remote's keys reach them.
         override val commands = PHONE_COMMANDS
         override val subtitlesByTrack = false

@@ -37,6 +37,7 @@ import com.hawkynt.mediadroyd.library.Chapters
 import com.hawkynt.mediadroyd.library.FsFile
 import com.hawkynt.mediadroyd.library.Sidecars
 import com.hawkynt.mediadroyd.player.ChapterSteps
+import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.player.PictureCues
@@ -73,6 +74,14 @@ interface PlayerPlatform {
      * platform cannot read them. Blocks: called off the main thread.
      */
     fun pictures(location: String, closing: Boolean): PictureCues.Frames? = null
+
+    /**
+     * [location]'s frames read for their text, for credits recognised by it (CreditText, SkipFinder): at each time [at]
+     * gives from its length, the lines the platform's text recogniser read there; null where it cannot read them.
+     * Blocks: called off the main thread.
+     */
+    fun readText(location: String, at: (durationMs: Long) -> List<Long>): List<Pair<Long, List<CreditText.Line>>>? =
+        null
 
     /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
@@ -227,7 +236,12 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
     // binge-watching meets its intro known. Cut files and chapters still come first.
     LaunchedEffect(session.index) {
         if (!session.skipping || state.demo) return@LaunchedEffect
-        val finder = SkipFinder(state.store, pictures = platform::pictures, print = platform::soundPrint)
+        val finder = SkipFinder(
+            state.store,
+            pictures = platform::pictures,
+            text = platform::readText,
+            print = platform::soundPrint,
+        )
         for (step in finder.steps(session.queue.map { it.videoPath }, session.index)) {
             val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() } ?: continue
             finder.keep(step, found)

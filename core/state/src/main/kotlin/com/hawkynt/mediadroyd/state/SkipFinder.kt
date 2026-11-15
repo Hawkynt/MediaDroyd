@@ -1,8 +1,10 @@
 package com.hawkynt.mediadroyd.state
 
 import com.hawkynt.mediadroyd.nfo.TimeRange
+import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.PictureCues
+import com.hawkynt.mediadroyd.player.TextReads
 
 /**
  * Looks at the sound of the episodes around the one playing for their intros and credits (IntroCredits, #480), two
@@ -12,13 +14,15 @@ import com.hawkynt.mediadroyd.player.PictureCues
  * credits, then the next episode's. [print] fingerprints a video's opening (IntroCredits.openingMs from its start)
  * or, where `closing`, its last IntroCredits.CLOSING_MS; null where its sound cannot be read, and the video is then
  * left to be looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
- * (PictureCues, #492): both openings' frames for a shared intro, each closing's own frames for its credits; they are
- * decoded only then. Each print and each video's frames are made once while this finder lives. Finding blocks: not on
- * the main thread; keeping touches the store: on its thread.
+ * (PictureCues, #492): both openings' frames for a shared intro, each closing's own frames for its credits — and where
+ * those show no black and text frames, the closing's [text] (CreditText, #493): frames read every few seconds by the
+ * platform's text recogniser. They are decoded only then. Each print and each video's frames are made once while this
+ * finder lives. Finding blocks: not on the main thread; keeping touches the store: on its thread.
  */
 class SkipFinder(
     private val store: StateStore,
     private val pictures: (location: String, closing: Boolean) -> PictureCues.Frames? = { _, _ -> null },
+    private val text: TextReads = { _, _ -> null },
     private val print: (location: String, closing: Boolean) -> IntroCredits.SoundPrint?,
 ) {
     /** What one step looks for. */
@@ -86,9 +90,13 @@ class SkipFinder(
             val seenA = if (heard == null) framesOf(step.a, true) else null
             val seenB = if (heard == null) framesOf(step.b, true) else null
             if (!heardBoth && seenA == null && seenB == null) return null
+            // Then their text, where the pictures could be read but showed no black and text frames.
+            fun read(location: String, seen: PictureCues.Frames?) = seen?.let {
+                PictureCues.creditsStartMs(it) ?: CreditText.find { at -> text(location, at) }
+            }
             mapOf(
-                step.a to Found(null, heard?.first ?: seenA?.let(PictureCues::creditsStartMs)),
-                step.b to Found(null, heard?.second ?: seenB?.let(PictureCues::creditsStartMs)),
+                step.a to Found(null, heard?.first ?: read(step.a, seenA)),
+                step.b to Found(null, heard?.second ?: read(step.b, seenB)),
             )
         } else {
             val heard = if (heardBoth) {

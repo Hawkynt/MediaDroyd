@@ -134,6 +134,20 @@ object NeuralModels {
         ),
     )
 
+    /**
+     * PaddleOCR's PP-OCRv5 mobile text detection ("det") and Latin recognition ("rec") (Apache-2.0), converted for ncnn
+     * with paddle2onnx and pnnx: carried in the app, for credits recognised by their text (CreditText, NativeText).
+     */
+    val PPOCR = Download(
+        "ppocrv5-latin",
+        listOf(
+            File("det.param", 23_530, "e8edfc052be45735978adb8b7da9a03b1bac01bb8a6653a36993a402f6b38922"),
+            File("det.bin", 2_357_216, "6ac1844ccec3a93922bf7aa5126e940cfa9ea11e53e38b2ad169166e3ebf50bc"),
+            File("rec.param", 19_352, "f2e815efc778054ea6d495350906bd636d95ff9fd8ed82cd3a75f601f862f3ab"),
+            File("rec.bin", 3_995_900, "0ffebbebf4cec1b54b0b0fa08a64c85683be0a8bae5a24920382155bf88f92ed"),
+        ),
+    )
+
     /** IFRNet's S model as ifrnet-ncnn-vulkan runs it (MIT): carried in the app. */
     val IFRNET = Download(
         "ifrnet-s",
@@ -312,7 +326,7 @@ object NeuralModels {
      * The networks the app carries itself, by folder: on Android its assets, on the desktop resources unpacked into
      * the app-data folder on first use, every file checked against its digest there (see ModelFolder.unpack).
      */
-    val CARRIED = listOf(RIFE, IFRNET, WAIFU2X, REALCUGAN)
+    val CARRIED = listOf(RIFE, IFRNET, WAIFU2X, REALCUGAN, PPOCR)
 
     /** The files [network] runs from: carried or downloaded; null for one that is no network. */
     fun files(network: PictureAdjustment.Interpolation): Download? = when (network) {

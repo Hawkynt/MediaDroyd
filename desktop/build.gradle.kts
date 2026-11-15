@@ -157,7 +157,7 @@ val notices = tasks.register<Sync>("notices") {
         ).forEach { include("THIRD-PARTY-NOTICE.$it.txt") }
         // ncnn and the networks the desktop carries (DesktopNeural.CARRIED); libass, FreeType, FriBidi, HarfBuzz and
         // Chromaprint, inside the native library with ncnn.
-        listOf("ncnn", "RIFE", "IFRNet", "waifu2x", "Real-CUGAN", "libass", "Chromaprint")
+        listOf("ncnn", "RIFE", "IFRNet", "waifu2x", "Real-CUGAN", "PaddleOCR", "libass", "Chromaprint")
             .forEach { include("THIRD-PARTY-NOTICE.$it.txt") }
     }
     // The OpenMP runtime beside the native library (:native:desktopRuntime): GCC's on Linux, Visual C++'s on Windows.
