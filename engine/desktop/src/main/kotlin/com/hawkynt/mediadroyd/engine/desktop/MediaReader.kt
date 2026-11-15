@@ -42,6 +42,8 @@ class MediaReader(
     path: String,
     from: FsFile? = null,
     private val decoders: List<HardwareDecoding.Device> = HardwareDecoding.candidates(softwareFirst = false),
+    /** Whether the pictures are decoded at all: not where only the sound is wanted (SoundPrints). */
+    pictures: Boolean = true,
 ) : AutoCloseable {
 
     /**
@@ -284,7 +286,7 @@ class MediaReader(
                 ),
             )
         }.flatten()
-        if (videoIndex >= 0) video = openVideoDecoder(decoders)
+        if (videoIndex >= 0 && pictures) video = openVideoDecoder(decoders)
         if (audioIndex >= 0) audio = openDecoder(audioIndex)
         // Read now: the decoders' contexts go with the reader, from another thread.
         videoDecoder = video?.codec()?.name()?.string
@@ -753,6 +755,12 @@ class MediaReader(
         avutil.av_frame_unref(soundFrame)
         avutil.av_channel_layout_default(soundFrame.ch_layout(), 2)
         soundFrame.sample_rate(SAMPLE_RATE).format(avutil.AV_SAMPLE_FMT_S16)
+        // A layout of unspecified order (PCM in WAV, some raw streams) is the default one for its channel count:
+        // swr_convert_frame compares it with the one it was set up from on every frame, and an unspecified one never
+        // compares equal, so every frame after the first was refused (AVERROR_INPUT_CHANGED) and the sound fell silent.
+        if (frame.ch_layout().order() == avutil.AV_CHANNEL_ORDER_UNSPEC) {
+            avutil.av_channel_layout_default(frame.ch_layout(), frame.ch_layout().nb_channels())
+        }
         if (swresample.swr_convert_frame(resampler, soundFrame, frame) < 0) return null
         val samples = soundFrame.nb_samples()
         if (samples <= 0) return null
