@@ -39,6 +39,7 @@ import com.hawkynt.mediadroyd.library.Sidecars
 import com.hawkynt.mediadroyd.player.ChapterSteps
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.PictureAdjustment
+import com.hawkynt.mediadroyd.player.PictureCues
 import com.hawkynt.mediadroyd.player.PictureFit
 import com.hawkynt.mediadroyd.player.PlaybackChain
 import com.hawkynt.mediadroyd.player.PlaybackMath
@@ -59,11 +60,19 @@ interface PlayerPlatform {
     val commands: Set<PlayerCommand>
 
     /**
-     * A fingerprint of [location]'s sound for finding its intro and credits (IntroCredits, SkipFinder): its first
-     * IntroCredits.OPENING_MS, or where [closing] its last IntroCredits.CLOSING_MS; null where the platform cannot
+     * A fingerprint of [location]'s sound for finding its intro and credits (IntroCredits, SkipFinder): its opening
+     * (IntroCredits.openingMs), or where [closing] its last IntroCredits.CLOSING_MS; null where the platform cannot
      * read or fingerprint it. Blocks: called off the main thread.
      */
     fun soundPrint(location: String, closing: Boolean): IntroCredits.SoundPrint? = null
+
+    /**
+     * Gray frames of [location] for finding its intro and credits by their pictures where the sound does not
+     * (PictureCues, SkipFinder): its opening (IntroCredits.openingMs) at PictureCues' hash size every OPENING_STEP_MS, or
+     * where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS; null where the platform
+     * cannot read them. Blocks: called off the main thread.
+     */
+    fun pictures(location: String, closing: Boolean): PictureCues.Frames? = null
 
     /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
@@ -218,7 +227,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
     // binge-watching meets its intro known. Cut files and chapters still come first.
     LaunchedEffect(session.index) {
         if (!session.skipping || state.demo) return@LaunchedEffect
-        val finder = SkipFinder(state.store, platform::soundPrint)
+        val finder = SkipFinder(state.store, pictures = platform::pictures, print = platform::soundPrint)
         for (step in finder.steps(session.queue.map { it.videoPath }, session.index)) {
             val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() } ?: continue
             finder.keep(step, found)

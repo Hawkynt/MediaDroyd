@@ -2,6 +2,7 @@ package com.hawkynt.mediadroyd.state
 
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.NativeFingerprint
+import com.hawkynt.mediadroyd.player.PictureCues
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -30,11 +31,18 @@ class SkipFinderTest {
 
     private val asked = ArrayList<String>()
     private val episodes = (1..4).map { "/show/e$it.mkv" }
-    private fun finder(store: StateStore) = SkipFinder(store) { location, closing ->
-        asked += "$location ${if (closing) "closing" else "opening"}"
-        val n = episodes.indexOf(location) + 1
-        if (closing) IntroCredits.SoundPrint(closing(n), 2_000_000) else IntroCredits.SoundPrint(opening(n), 0)
-    }
+    private fun finder(
+        store: StateStore,
+        pictures: (String, Boolean) -> PictureCues.Frames? = { _, _ -> null },
+    ) = SkipFinder(
+        store,
+        print = { location, closing ->
+            asked += "$location ${if (closing) "closing" else "opening"}"
+            val n = episodes.indexOf(location) + 1
+            if (closing) IntroCredits.SoundPrint(closing(n), 2_000_000) else IntroCredits.SoundPrint(opening(n), 0)
+        },
+        pictures = pictures,
+    )
 
     @Test
     fun `the episode playing and the next are looked at, each intro and credits kept in its own time`() {
@@ -86,5 +94,52 @@ class SkipFinderTest {
     fun `each opening and closing is decoded once, however many pairs it is in`() {
         finder(StateStore(Memory())).around(episodes, 1)
         assertEquals(asked.size, asked.toSet().size)
+    }
+
+    // Openings at the hash size whose pictures share an intro (the same shots from 20 s + 5 s * n for 40 s) while their
+    // sound shares nothing; closings whose last minute is black with white strokes.
+    private fun shots(seconds: Int, seed: Int): List<ByteArray> {
+        val perSecond = (1000 / PictureCues.OPENING_STEP_MS).toInt()
+        val random = Random(seed)
+        val size = PictureCues.HASH_WIDTH * PictureCues.HASH_HEIGHT
+        return List(seconds) { ByteArray(size) { (40 + random.nextInt(180)).toByte() } }
+            .flatMap { shot -> List(perSecond) { shot } }
+    }
+
+    private fun pictureOpening(n: Int) = PictureCues.Frames(
+        PictureCues.HASH_WIDTH, PictureCues.HASH_HEIGHT, 0, PictureCues.OPENING_STEP_MS,
+        shots(20 + 5 * n, 500 + n) + shots(40, 7) + shots(200, 600 + n),
+    )
+
+    private fun pictureClosing(): PictureCues.Frames {
+        val w = PictureCues.LOOK_WIDTH
+        val h = PictureCues.LOOK_HEIGHT
+        val scene = ByteArray(w * h) { (80 + it % w / 2).toByte() }
+        val text = ByteArray(w * h) { if (it / w % 9 < 4 && it % 3 == 0 && it % w in 30..130) 230.toByte() else 14 }
+        return PictureCues.Frames(w, h, 2_000_000, PictureCues.CLOSING_STEP_MS, List(400) { scene } + List(80) { text })
+    }
+
+    @Test
+    fun `where the sound shares nothing the pictures are looked at, and only then`() {
+        val store = StateStore(Memory())
+        val decoded = ArrayList<String>()
+        val finder = SkipFinder(
+            store,
+            print = { location, closing ->
+                IntroCredits.SoundPrint(noise(600.0, location.hashCode() + if (closing) 1 else 0), 0)
+            },
+            pictures = { location, closing ->
+                decoded += location
+                if (closing) pictureClosing() else pictureOpening(episodes.indexOf(location) + 1)
+            },
+        )
+        finder.around(episodes, 0)
+        val found = requireNotNull(store.foundSkipFor(episodes[0]))
+        assertEquals(26_000.0, found.introStartMs!!.toDouble(), 2500.0)
+        assertEquals(2_400_000L, found.creditsStartMs)
+        assertTrue(decoded.isNotEmpty())
+        decoded.clear()
+        finder(StateStore(Memory())) { location, _ -> null.also { decoded += location } }.around(episodes, 0)
+        assertTrue("pictures decoded though the sound found it: $decoded", decoded.isEmpty())
     }
 }

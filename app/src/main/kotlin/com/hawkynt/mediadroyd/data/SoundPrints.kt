@@ -15,18 +15,18 @@ import java.nio.ByteOrder
 
 /**
  * A video's sound fingerprinted on Android for finding its intro and credits (PlayerPlatform.soundPrint): its main
- * audio track demuxed and decoded by the app's own FFmpeg (FfmpegDemuxer.sound: every container and codec the
- * extension holds — DTS, TrueHD, WMA and RealAudio included — mixed to one channel at Chromaprint's rate; #491), else,
- * where the extension is missing or cannot read it, by the device's own decoder (MediaExtractor and MediaCodec), a file on a network
- * source read through FfmpegInputs.remote and FsMediaDataSource; then fingerprinted by Chromaprint inside the app's
- * native library (NativeFingerprint).
+ * audio track demuxed and decoded by the app's own FFmpeg (FfmpegDemuxer.sound: every container and codec the extension
+ * holds — DTS, TrueHD, WMA and RealAudio included — mixed to one channel at Chromaprint's rate; #491), else, where the
+ * extension is missing or cannot read it, by the device's own decoder (MediaExtractor and MediaCodec), a file on a
+ * network source read through FfmpegInputs.remote and FsMediaDataSource; then fingerprinted by Chromaprint inside the
+ * app's native library (NativeFingerprint).
  */
 object SoundPrints {
     private const val TIMEOUT_US = 10_000L
 
     /**
-     * The video at [location]: its first IntroCredits.OPENING_MS, or where [closing] its last IntroCredits.CLOSING_MS;
-     * null where its sound cannot be read or decoded here.
+     * The video at [location]: its opening (IntroCredits.openingMs), or where [closing] its last
+     * IntroCredits.CLOSING_MS; null where its sound cannot be read or decoded here.
      */
     fun of(context: Context, location: String, closing: Boolean): IntroCredits.SoundPrint? {
         if (!AndroidNeural.loaded) return null
@@ -48,7 +48,8 @@ object SoundPrints {
                 val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 }
                 if (closing && durationUs == null) return null
                 val startUs = if (closing) (durationUs!! - IntroCredits.CLOSING_MS * 1000).coerceAtLeast(0) else 0L
-                val endUs = startUs + (if (closing) IntroCredits.CLOSING_MS else IntroCredits.OPENING_MS) * 1000
+                val openingMs = IntroCredits.openingMs((durationUs ?: 0) / 1000)
+                val endUs = startUs + (if (closing) IntroCredits.CLOSING_MS else openingMs) * 1000
                 val first = LongArray(1)
                 val pcm = demuxer.sound(startUs, endUs, NativeFingerprint.SAMPLE_RATE, first) ?: return null
                 NativeFingerprint.fingerprint(pcm, NativeFingerprint.SAMPLE_RATE, 1)
@@ -85,7 +86,7 @@ object SoundPrints {
                 0L
             }
             val startMs = if (closing) (durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0) else 0L
-            val endMs = startMs + if (closing) IntroCredits.CLOSING_MS else IntroCredits.OPENING_MS
+            val endMs = startMs + if (closing) IntroCredits.CLOSING_MS else IntroCredits.openingMs(durationMs)
             if (startMs > 0) extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!).also { codec = it }
             decoder.configure(format, null, null, 0)

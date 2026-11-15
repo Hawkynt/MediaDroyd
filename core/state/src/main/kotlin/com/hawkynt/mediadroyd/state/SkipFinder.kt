@@ -2,19 +2,23 @@ package com.hawkynt.mediadroyd.state
 
 import com.hawkynt.mediadroyd.nfo.TimeRange
 import com.hawkynt.mediadroyd.player.IntroCredits
+import com.hawkynt.mediadroyd.player.PictureCues
 
 /**
  * Looks at the sound of the episodes around the one playing for their intros and credits (IntroCredits, #480), two
  * neighbours at a time, and keeps what it finds in the [store] (StateStore.saveFoundSkip) — found or not, so no video
  * is looked at twice. The episode playing comes first and its intro before anything else, from the two openings alone,
  * so it can still be skipped once it starts (or jumped out of at once, should it be playing already); then its
- * credits, then the next episode's. [print] fingerprints a video's opening (IntroCredits.OPENING_MS from its start)
+ * credits, then the next episode's. [print] fingerprints a video's opening (IntroCredits.openingMs from its start)
  * or, where `closing`, its last IntroCredits.CLOSING_MS; null where its sound cannot be read, and the video is then
- * left to be looked at another time. Each print is made once while this finder lives. Finding blocks: not on the main
- * thread; keeping touches the store: on its thread.
+ * left to be looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
+ * (PictureCues, #492): both openings' frames for a shared intro, each closing's own frames for its credits; they are
+ * decoded only then. Each print and each video's frames are made once while this finder lives. Finding blocks: not on
+ * the main thread; keeping touches the store: on its thread.
  */
 class SkipFinder(
     private val store: StateStore,
+    private val pictures: (location: String, closing: Boolean) -> PictureCues.Frames? = { _, _ -> null },
     private val print: (location: String, closing: Boolean) -> IntroCredits.SoundPrint?,
 ) {
     /** What one step looks for. */
@@ -37,6 +41,17 @@ class SkipFinder(
         synchronized(prints) { prints[location to closing] }
             ?: print(location, closing)?.also { made -> synchronized(prints) { prints[location to closing] = made } }
 
+    // The frames decoded, by location and opening or closing: fewer, a closing's are some megabytes.
+    private val frames = object : LinkedHashMap<Pair<String, Boolean>, PictureCues.Frames>(4, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<Pair<String, Boolean>, PictureCues.Frames>,
+        ) = size > CACHED_FRAMES
+    }
+
+    private fun framesOf(location: String, closing: Boolean): PictureCues.Frames? =
+        synchronized(frames) { frames[location to closing] }
+            ?: pictures(location, closing)?.also { made -> synchronized(frames) { frames[location to closing] = made } }
+
     /**
      * Around [index] of the [queue] (video locations in playing order), the steps still to take, in order: the video
      * itself with its next (else its previous) — its intro, then its credits — then the next one with the one after it
@@ -56,20 +71,36 @@ class SkipFinder(
         Part.CREDITS -> store.hasLookedForCredits(location)
     }
 
-    /** What [step] finds for each of its two videos; null where either one's sound cannot be read. Blocks. */
+    /**
+     * What [step] finds for each of its two videos, by their sound, else by their pictures; null where neither the
+     * sound nor the pictures of both can be read. Blocks.
+     */
     fun find(step: Step): Map<String, Found>? {
         val closing = step.part == Part.CREDITS
-        val a = printOf(step.a, closing) ?: return null
-        val b = printOf(step.b, closing) ?: return null
+        val a = printOf(step.a, closing)
+        val b = if (a != null) printOf(step.b, closing) else null
+        val heardBoth = a != null && b != null
         return if (closing) {
-            val credits = IntroCredits.credits(a.items, a.startMs, b.items, b.startMs)
-            mapOf(step.a to Found(null, credits?.first), step.b to Found(null, credits?.second))
-        } else {
-            val intro = IntroCredits.intro(a.items, b.items)
+            val heard = if (heardBoth) IntroCredits.credits(a.items, a.startMs, b.items, b.startMs) else null
+            // Each closing's own pictures where the sound gave no credits: they need no neighbour.
+            val seenA = if (heard == null) framesOf(step.a, true) else null
+            val seenB = if (heard == null) framesOf(step.b, true) else null
+            if (!heardBoth && seenA == null && seenB == null) return null
             mapOf(
-                step.a to Found(intro?.first?.shift(a.startMs), null),
-                step.b to Found(intro?.second?.shift(b.startMs), null),
+                step.a to Found(null, heard?.first ?: seenA?.let(PictureCues::creditsStartMs)),
+                step.b to Found(null, heard?.second ?: seenB?.let(PictureCues::creditsStartMs)),
             )
+        } else {
+            val heard = if (heardBoth) {
+                IntroCredits.intro(a.items, b.items)?.let { (x, y) -> x.shift(a.startMs) to y.shift(b.startMs) }
+            } else {
+                null
+            }
+            val seenA = if (heard == null) framesOf(step.a, false) else null
+            val seenB = if (seenA != null) framesOf(step.b, false) else null
+            if (!heardBoth && (seenA == null || seenB == null)) return null
+            val intro = heard ?: if (seenA != null && seenB != null) PictureCues.intro(seenA, seenB) else null
+            mapOf(step.a to Found(intro?.first, null), step.b to Found(intro?.second, null))
         }
     }
 
@@ -98,5 +129,8 @@ class SkipFinder(
     private companion object {
         // Prints kept: the four the steps around one episode use, and the next pair's.
         const val CACHED = 6
+
+        // Frames kept: the two openings or closings of one step and the next one's.
+        const val CACHED_FRAMES = 4
     }
 }
