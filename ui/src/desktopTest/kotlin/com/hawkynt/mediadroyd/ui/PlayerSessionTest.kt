@@ -98,7 +98,12 @@ class PlayerSessionTest {
         engine.advance(1_000)
         assertEquals(30_000L, s.tick())
         engine.seekTo(560_000)
-        assertEquals(600_000L, s.tick())
+        // The credits end the video at once: watched, the next episode on, nothing played on towards the end (#509).
+        val before = engine.commands.size
+        assertNull(s.tick())
+        assertEquals(1, s.index)
+        assertTrue(store.isWatched("/show/e1.mkv"))
+        assertTrue(engine.commands.drop(before).none { it.startsWith("seek") })
         val off = session(skipping = false)
         engine.open(MediaRequest(off.current.videoPath, startMs = 0))
         off.begin(chapters)
@@ -108,6 +113,18 @@ class PlayerSessionTest {
         engine.seekTo(560_000)
         off.saveProgress()
         assertTrue(store.isWatched("/show/e1.mkv"))
+    }
+
+    @Test
+    fun `the credits of the last video end the queue and stop the sound there, no credits playing on behind it`() {
+        val chapters = listOf(Chapter(0, 550_000, "Episode"), Chapter(550_000, 600_000, "Credits"))
+        val s = session(autoAdvance = false)
+        engine.open(MediaRequest(s.current.videoPath, startMs = 0))
+        s.begin(chapters)
+        engine.seekTo(560_000)
+        s.tick()
+        assertTrue(s.finished)
+        assertFalse(engine.isPlaying)
     }
 
     @Test
