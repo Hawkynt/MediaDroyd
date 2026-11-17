@@ -703,7 +703,13 @@ fun PhonePlayer(
             Side.RIGHT -> {
                 volume = PlaybackMath.boostedLevel(volume, upFraction)
                 loudnessBoostDb = PlaybackMath.boostDb(volume)
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, (volume.coerceAtMost(1f) * maxVolume).roundToInt(), 0)
+                // Below zero the device stays at its lowest audible step and the app's gain goes on down (#511).
+                val step = if (PlaybackMath.isBelowZero(volume)) {
+                    1
+                } else {
+                    (volume.coerceAtMost(1f) * maxVolume).roundToInt()
+                }
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, step, 0)
                 state.showLevel("Volume ${PlaybackMath.percent(volume)} %", volume, side)
             }
         }

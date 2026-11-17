@@ -80,7 +80,42 @@ class PlaybackMathTest {
     fun `a swipe runs on past the device maximum for a second full stretch`() {
         assertEquals(1.5f, PlaybackMath.boostedLevel(1f, dragUpFraction = 0.5f), 1e-6f)
         assertEquals(2f, PlaybackMath.boostedLevel(1.8f, dragUpFraction = 0.5f), 1e-6f)
-        assertEquals(0f, PlaybackMath.boostedLevel(0.2f, dragUpFraction = -0.5f), 1e-6f)
+        // Below the device's lowest it runs on into the stretch below zero, down to -1 (#511).
+        assertEquals(-0.3f, PlaybackMath.boostedLevel(0.2f, dragUpFraction = -0.5f), 1e-6f)
+        assertEquals(-1f, PlaybackMath.boostedLevel(-0.8f, dragUpFraction = -0.5f), 1e-6f)
+    }
+
+    @Test
+    fun `below zero the level counts down to minus 100 percent`() {
+        assertEquals(0, PlaybackMath.percent(0f))
+        assertEquals(-50, PlaybackMath.percent(-0.5f))
+        assertEquals(-100, PlaybackMath.percent(-1f))
+        assertTrue(PlaybackMath.isBelowZero(-0.01f))
+        assertFalse(PlaybackMath.isBelowZero(0f))
+    }
+
+    @Test
+    fun `volume below zero turns the sound down further, silent at the bottom`() {
+        assertEquals(0f, PlaybackMath.boostDb(0f), 1e-6f)
+        assertEquals(-9.0309f, PlaybackMath.boostDb(-0.5f), 1e-3f)
+        assertEquals(-18.0618f, PlaybackMath.boostDb(-0.999f), 0.05f)
+        assertEquals(0f, LoudnessCurve.factorFor(PlaybackMath.boostDb(-1f)), 1e-4f)
+    }
+
+    @Test
+    fun `brightness below zero darkens the picture by its gamma, never to black`() {
+        assertEquals(1f, PlaybackMath.gammaBoost(0f), 1e-6f)
+        assertEquals(0.5946f, PlaybackMath.gammaBoost(-0.5f), 1e-3f)
+        assertEquals(0.3536f, PlaybackMath.gammaBoost(-1f), 1e-3f)
+    }
+
+    @Test
+    fun `the level bar keeps 100 percent in its middle, below zero in its lowest quarter`() {
+        assertEquals(PlaybackMath.LevelFill(0.25f, 0f, below = false), PlaybackMath.levelFill(0f))
+        assertEquals(PlaybackMath.LevelFill(0.5f, 0f, below = false), PlaybackMath.levelFill(1f))
+        assertEquals(PlaybackMath.LevelFill(0.5f, 0.25f, below = false), PlaybackMath.levelFill(1.5f))
+        assertEquals(PlaybackMath.LevelFill(0.125f, 0f, below = true), PlaybackMath.levelFill(-0.5f))
+        assertEquals(PlaybackMath.LevelFill(0f, 0f, below = true), PlaybackMath.levelFill(-1f))
     }
 
     @Test
@@ -308,8 +343,9 @@ class PlaybackMathTest {
 
     @Test
     fun `the level bar has 100 percent in its middle, the boost filling its upper half`() {
-        assertEquals(PlaybackMath.LevelFill(0f, 0f), PlaybackMath.levelFill(0f))
-        assertEquals(PlaybackMath.LevelFill(0.25f, 0f), PlaybackMath.levelFill(0.5f))
+        // Zero a quarter up: the lowest quarter is the stretch below zero (#511).
+        assertEquals(PlaybackMath.LevelFill(0.25f, 0f), PlaybackMath.levelFill(0f))
+        assertEquals(PlaybackMath.LevelFill(0.375f, 0f), PlaybackMath.levelFill(0.5f))
         assertEquals(PlaybackMath.LevelFill(0.5f, 0f), PlaybackMath.levelFill(1f))
         assertEquals(PlaybackMath.LevelFill(0.5f, 0.25f), PlaybackMath.levelFill(1.5f))
         assertEquals(PlaybackMath.LevelFill(0.5f, 0.5f), PlaybackMath.levelFill(2f))
