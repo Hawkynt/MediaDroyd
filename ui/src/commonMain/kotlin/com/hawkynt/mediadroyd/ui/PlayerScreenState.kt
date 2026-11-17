@@ -33,11 +33,14 @@ class PlayerScreenState(
     val demo: Boolean = false,
     panelAtStart: Boolean = false,
     infoAtStart: Boolean = false,
+    /** More to play once the queue runs out (random movies, #512); null for a queue that ends. */
+    more: (() -> List<Playable>)? = null,
 ) {
     private val settings get() = store.data.settings
 
     /** The queue, where each video starts and what comes after it (PlayerSession). */
-    val session = PlayerSession(queue, startIndex, store, engine, autoAdvance, skipping = settings.skipIntroCredits)
+    val session =
+        PlayerSession(queue, startIndex, store, engine, autoAdvance, skipping = settings.skipIntroCredits, more = more)
 
     private val video get() = session.current.videoPath
 

@@ -67,12 +67,16 @@ specification.
 - A sidebar for Movies, TV Shows, Genres, Years, Files, Search, Filters and Settings; each section's home reads like a
   streaming app — a hero, *Continue watching*, more rows, the poster wall.
 - Walls as posters, a compact list or a details list; sorting, filters, decades, facet counts and an A–Z rail.
+- *Random* on the Movies wall plays its movies in random order, one after the other, without end — every one once
+  before any comes again — for children and evenings in the background.
 - Badges probed from the file itself: resolution, HDR, video format, audio format and channels, language flags.
 - A Files browser showing storage as it really is, NFOs and art still counted.
 - Touch, mouse and TV remote alike; big targets and high contrast.
 
 <details>
 <summary>Browsing in detail</summary>
+
+- *Random*, beside the Movies wall's count, plays the movies that wall shows — its filters and the age limit applied — in random order without end: each round is every one of them once in a fresh order (a round never starts with the movie the last one ended with), a movie's parts in order, and when a round runs out the next one joins the queue, so Next always has another movie; leaving the player ends it.
 
 - The bottom of the sidebar shows the last thing played — its picture, title, episode and how far in — and one tap resumes it from any screen; collapsed, it is a play button over the picture.
 - A sidebar on the left switches between Movies and TV Shows (plus Search, Filters and Settings); the content side shows only that selection. One tap collapses it to an icon rail and expands it again, and it remembers how you left it.

@@ -117,6 +117,8 @@ fun DesktopPlayer(
     /** The next video starts when one ends: a film's parts always, episodes with binge-watching on. */
     autoAdvance: Boolean,
     fullScreen: Boolean,
+    /** More to play once the queue runs out (random movies, #512). */
+    more: (() -> List<Playable>)? = null,
     onFullScreen: () -> Unit,
     onExit: () -> Unit,
     screen: () -> OutputScreen = { OutputScreen.Unknown },
@@ -150,6 +152,7 @@ fun DesktopPlayer(
             queue, startIndex, store.state, engine, autoAdvance,
             panelAtStart = System.getenv("MEDIADROYD_SHOW") == "panel",
             infoAtStart = System.getenv("MEDIADROYD_SHOW") == "info",
+            more = more,
         )
     }
     val session = state.session

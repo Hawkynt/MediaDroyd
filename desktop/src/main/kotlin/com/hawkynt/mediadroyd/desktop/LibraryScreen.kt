@@ -63,7 +63,7 @@ fun LibraryScreen(
     settings: SettingsPlatform,
     library: Library?,
     onLibrary: (Library) -> Unit,
-    onPlay: (List<Playable>, Int, Boolean) -> Unit,
+    onPlay: (com.hawkynt.mediadroyd.ui.Screen.Player) -> Unit,
 ) {
     CompositionLocalProvider(
         LocalMediaArt provides art,
@@ -81,7 +81,7 @@ private fun Library(
     places: DesktopLibrary,
     library: Library?,
     onLibrary: (Library) -> Unit,
-    onPlay: (List<Playable>, Int, Boolean) -> Unit,
+    onPlay: (com.hawkynt.mediadroyd.ui.Screen.Player) -> Unit,
 ) {
     var folder by remember { mutableStateOf(store.libraryFolder) }
     var scanning by remember { mutableStateOf(false) }
@@ -146,7 +146,7 @@ private fun Library(
                 rootPath = store.libraryFolder ?: places.networkSources.joinToString { it.name },
                 roots = DesktopMediaFiles.roots(store),
                 onRefresh = { generation++ },
-                onPlay = { onPlay(it.queue, it.startIndex, it.autoAdvance) },
+                onPlay = onPlay,
                 onChangeFolder = changeFolder,
                 onAddDeviceFolder = { addDeviceFolder(store) { generation++ } },
                 settingsUnlockedAtStart = settingsShown,
