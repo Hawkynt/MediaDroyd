@@ -18,7 +18,8 @@ import kotlin.math.min
  * not. Later on, a narrower crop needs [NARROW_SAMPLES] agreeing samples. The picture widens much sooner: as soon as
  * [WIDEN_SAMPLES] samples in a row show picture beyond the crop — subtitles burnt into the bar, an IMAX sequence — it
  * grows to take them in, and from then on it narrows again only after [RENARROW_SAMPLES] agreeing samples, so lines
- * of subtitles coming and going never make the picture jump. Changes of a line or so are not worth a jump either.
+ * of subtitles coming and going never make the picture jump. Changes of a line or so are not worth a jump either. All
+ * of this happens in the first [LOOK_MS] of playing; after that the shape holds (#510).
  *
  * The idea of cropping in steps — few detections to widen, many to narrow — comes from DScaler's AutoAspect, taken as a
  * description only (GPL-2.0); the numbers are this player's, for a sample every half second.
@@ -35,6 +36,9 @@ class AutoCrop {
     private val beyond = ArrayList<BlackBars.Extent>()
     private val agreeing = ArrayDeque<BlackBars.Extent>()
 
+    // Samples taken since the start: past [LOOK_MS] of them the shape holds.
+    private var looked = 0
+
     /** Forgets everything seen: the whole frame again, decided afresh. */
     fun restart() {
         shown = null
@@ -42,6 +46,7 @@ class AutoCrop {
         widened = false
         beyond.clear()
         agreeing.clear()
+        looked = 0
     }
 
     /**
@@ -54,6 +59,8 @@ class AutoCrop {
             sampleWidth = luma.width
             sampleHeight = luma.height
         }
+        // The shape is a film's from its first minutes; later on a dark or framed scene would only re-frame it (#510).
+        if (++looked > LOOK_MS / SAMPLE_INTERVAL_MS) return false
         val seen = believable(luma) ?: return false
         val whole = BlackBars.Extent(0, 0, sampleWidth - 1, sampleHeight - 1)
         val current = shown ?: whole
@@ -163,6 +170,13 @@ class AutoCrop {
 
         /** How often the player samples the picture. */
         const val SAMPLE_INTERVAL_MS = 500L
+
+        /**
+         * How long a video's bars are looked for: its first five minutes of playing (from where it was started, a
+         * sample every [SAMPLE_INTERVAL_MS]). The shape found by then holds for the rest — a scene later on that looks
+         * framed (a dark one, letterboxed footage within the film) never re-frames it.
+         */
+        const val LOOK_MS = 5 * 60_000L
 
         /** Lines an edge may move without it counting. */
         private const val SLACK = 1
