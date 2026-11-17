@@ -246,6 +246,7 @@ class AndroidPlaybackEngine(
                                         { tuning.nightMode },
                                         { tuning.normalizeLoudness },
                                         { fileLoudness },
+                                        { tuning.voiceBoostDb },
                                     ),
                                 ),
                             )

@@ -457,6 +457,13 @@ class DesktopPlaybackEngineTest {
     }
 
     @Test
+    fun `clearer voices raise the clip's centred tone in the speech band on its way to the output`() {
+        val untouched = decodedPeak(clip)
+        val clearer = playedPeak(clip, PlaybackTuning.Mutable().apply { voiceBoostDb = 6f })
+        assertTrue("$clearer against $untouched", clearer > untouched * 16 / 10)
+    }
+
+    @Test
     fun `with even loudness a file plays at its ReplayGain`() {
         val tagged = fixture("replaygain.flac")
         val untouched = decodedPeak(tagged)

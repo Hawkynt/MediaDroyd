@@ -137,6 +137,22 @@ class AutoCropTest {
     }
 
     @Test
+    fun `the shape is found in the first five minutes only, a later scene never re-frames the film`() {
+        val crop = AutoCrop()
+        // Five minutes of the film without bars (half a second a sample).
+        val looking = (AutoCrop.LOOK_MS / AutoCrop.SAMPLE_INTERVAL_MS).toInt()
+        crop.feed(sample(), looking)
+        assertEquals(whole, crop.crop(1920, 1080))
+        // Then a long scene that looks letterboxed: the shape found stays.
+        assertFalse(crop.feed(letterbox, 200))
+        assertEquals(whole, crop.crop(1920, 1080))
+        // Within the first five minutes the same scene is cropped, as before.
+        val early = AutoCrop()
+        early.feed(sample(), looking - 10)
+        assertTrue(early.feed(letterbox, 10))
+    }
+
+    @Test
     fun `a picture that grows taller is shown whole at once`() {
         val crop = AutoCrop()
         crop.feed(letterbox, AutoCrop.FIRST_SAMPLES)

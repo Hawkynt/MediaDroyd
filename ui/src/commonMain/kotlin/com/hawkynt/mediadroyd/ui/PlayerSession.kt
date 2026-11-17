@@ -204,11 +204,11 @@ class PlayerSession(
         store.markWatched(current.videoPath)
         if (sleepAtEnd) {
             sleepAtEnd = false
-            finished = true
+            stop()
             return
         }
         when (val next = PlaybackMath.afterEnd(index, queue.size, autoAdvance, repeat)) {
-            null -> finished = true
+            null -> stop()
             index -> {
                 // The same video again: the index does not change, so it starts over by hand.
                 engine.seekTo(0)
@@ -218,10 +218,16 @@ class PlayerSession(
         }
     }
 
+    // The queue is over; the engine paused, as it may be ended at the credits rather than at its own end (#509).
+    private fun stop() {
+        finished = true
+        engine.pause()
+    }
+
     /**
      * Twice a second while it plays: inside a known intro it jumps to its end, once the credits have begun (with
-     * skipping on) to the video's end, which ends it; every third second the progress is kept. A part repeating is
-     * the viewer's choice: no jump takes it away. Returns where it jumped to, or null.
+     * skipping on) it ends the video there and then (finishCurrent); every third second the progress is kept. A part
+     * repeating is the viewer's choice: no jump takes it away. Returns where it jumped to, or null.
      */
     fun tick(): Long? {
         if (!engine.isPlaying) return null
@@ -236,7 +242,10 @@ class PlayerSession(
         }
         val credits = creditsStartMs
         if (skipping && credits != null && position >= credits) {
-            return engine.durationMs.takeIf { it > 0 }?.also { engine.seekTo(it) }
+            // Ended here and now, not by a seek to the end: the engine plays on from the keyframe before the end and
+            // reports it only once its clock gets there, seconds of credits later (#509).
+            finishCurrent()
+            return null
         }
         if (++ticks % 6 == 0) saveProgress(position)
         return null
