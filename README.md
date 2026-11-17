@@ -572,7 +572,8 @@ details, Files, Settings and the player — are shared (`:ui`, Compose Multiplat
 ## 🗺️ Roadmap
 
 What comes next lives in the [open issues](https://github.com/Hawkynt/MediaDroyd/issues), each a requirement of its
-own — among them more upscalers and interpolators ([#235](https://github.com/Hawkynt/MediaDroyd/issues/235)) and a Linux
+own — among them clearer voices, an equalizer and headphone surround for the sound, VHS clean-up, 3D LUTs and
+NNEDI3 for the picture, DVD and Blu-ray folders, UPnP/DLNA servers, backups through a Google account, and a Linux
 arm64 package.
 Considered and left out: online scraping, playlists, and IMDb/TMDb links — the metadata stays what is already in the
 folders. Prior art looked at: [Nova Video Player](https://github.com/nova-video-player/aos-Video), read as a user
