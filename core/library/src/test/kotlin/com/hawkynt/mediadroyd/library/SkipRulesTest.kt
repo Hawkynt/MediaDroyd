@@ -75,4 +75,34 @@ class SkipRulesTest {
     fun aColdOpenPlaysUntilTheIntroBegins() {
         assertEquals(null, SkipRules.skipTarget(0L, 70_000L..130_000L))
     }
+
+    // A film of 2 000 s: credits from 1 800 s to 1 900 s, a scene hidden after them, credits again to the end (#513).
+    private val split = listOf(
+        Chapter(0, 1_800_000, "Film"),
+        Chapter(1_800_000, 1_900_000, "End credits"),
+        Chapter(1_900_000, 1_950_000, "Post-credits scene"),
+        Chapter(1_950_000, 2_000_000, "Credits (continued)"),
+    )
+
+    @Test
+    fun creditsChaptersAreStretchesEachWithItsEnd() {
+        assertEquals(listOf(1_800_000L..1_900_000L, 1_950_000L..2_000_000L), SkipRules.creditsSpans(split, null))
+        // A credits chapter without an end runs to the end of the file.
+        assertEquals(listOf(120_000L..Long.MAX_VALUE), SkipRules.creditsSpans(chapters, null))
+        val nfo = TimeRange(1_180_000, 1_260_000)
+        assertEquals(listOf(1_180_000L..1_260_000L), SkipRules.creditsSpans(emptyList(), nfo))
+    }
+
+    @Test
+    fun creditsBeforeAHiddenSceneAreJumpedOverAndCreditsToTheEndEndTheVideo() {
+        val spans = SkipRules.creditsSpans(split, null)
+        assertEquals(SkipRules.Credits.Jump(1_900_000), SkipRules.creditsAction(1_800_500, spans, 2_000_000))
+        assertEquals(null, SkipRules.creditsAction(1_920_000, spans, 2_000_000))
+        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(1_950_500, spans, 2_000_000))
+        assertEquals(null, SkipRules.creditsAction(1_000_000, spans, 2_000_000))
+        // Credits that stop a few seconds short of the end leave nothing worth keeping: the video ends.
+        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(1_000, listOf(0L..1_995_000L), 2_000_000))
+        // A stretch whose end is unknown runs to the end.
+        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(130_000, listOf(120_000L..Long.MAX_VALUE), 0))
+    }
 }

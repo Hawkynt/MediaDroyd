@@ -137,6 +137,28 @@ class PlayerSessionTest {
     }
 
     @Test
+    fun `credits a scene is hidden after are jumped over, the scene plays, the credits after it end the video`() {
+        val chapters = listOf(
+            Chapter(0, 500_000, "Episode"),
+            Chapter(500_000, 560_000, "End credits"),
+            Chapter(560_000, 580_000, "Post-credits scene"),
+            Chapter(580_000, 600_000, "Credits"),
+        )
+        val s = session()
+        engine.open(MediaRequest(s.current.videoPath, startMs = 0))
+        s.begin(chapters)
+        engine.seekTo(500_500)
+        assertEquals(560_000L, s.tick())
+        assertEquals(0, s.index)
+        engine.seekTo(570_000)
+        assertNull(s.tick())
+        assertEquals(0, s.index)
+        engine.seekTo(580_500)
+        assertNull(s.tick())
+        assertEquals(1, s.index)
+    }
+
+    @Test
     fun `the credits of the last video end the queue and stop the sound there, no credits playing on behind it`() {
         val chapters = listOf(Chapter(0, 550_000, "Episode"), Chapter(550_000, 600_000, "Credits"))
         val s = session(autoAdvance = false)

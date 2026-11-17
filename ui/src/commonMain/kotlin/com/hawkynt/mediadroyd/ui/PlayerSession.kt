@@ -83,6 +83,10 @@ class PlayerSession(
     var creditsStartMs: Long? = null
         private set
 
+    /** Where the credits run, as stretches (SkipRules.creditsSpans, #513): a scene may be hidden between them. */
+    var creditsSpans: List<LongRange> = emptyList()
+        private set
+
     /** The sleep timer stops after this video: the queue ends with it. */
     var sleepAtEnd by mutableStateOf(false)
 
@@ -168,7 +172,8 @@ class PlayerSession(
     fun applySkips() {
         val found = store.foundSkipFor(current.videoPath)
         introSpanMs = if (skipping) SkipRules.introSpanMs(chapters, current.intro ?: found?.intro) else null
-        creditsStartMs = SkipRules.creditsStartMs(chapters, current.credits) ?: found?.creditsStartMs
+        creditsSpans = SkipRules.creditsSpans(chapters, current.credits).ifEmpty { found?.credits.orEmpty() }
+        creditsStartMs = creditsSpans.firstOrNull()?.first
     }
 
     /** [elapsedMs] of the clock went by at [speed]: counted as played while the engine plays. */
@@ -263,12 +268,21 @@ class PlayerSession(
             engine.seekTo(it)
             return it
         }
-        val credits = creditsStartMs
-        if (skipping && credits != null && position >= credits) {
-            // Ended here and now, not by a seek to the end: the engine plays on from the keyframe before the end and
-            // reports it only once its clock gets there, seconds of credits later (#509).
-            finishCurrent()
-            return null
+        if (skipping) {
+            when (val credits = SkipRules.creditsAction(position, creditsSpans, engine.durationMs)) {
+                // Ended here and now, not by a seek to the end: the engine plays on from the keyframe before the end
+                // and reports it only once its clock gets there, seconds of credits later (#509).
+                SkipRules.Credits.End -> {
+                    finishCurrent()
+                    return null
+                }
+                // Over credits a scene is hidden after (#513): the scene plays, the credits after it end the video.
+                is SkipRules.Credits.Jump -> {
+                    engine.seekTo(credits.toMs)
+                    return credits.toMs
+                }
+                null -> Unit
+            }
         }
         if (++ticks % 6 == 0) saveProgress(position)
         return null

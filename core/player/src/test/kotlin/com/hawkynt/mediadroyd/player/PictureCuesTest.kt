@@ -71,6 +71,28 @@ class PictureCuesTest {
     }
 
     @Test
+    fun `credits a scene is hidden after are a stretch with its end, split credits two stretches (#513)`() {
+        val after = closing(300 to { i -> scene(i) }, 60 to { i -> credits(i) }, 40 to { i -> scene(i) })
+        assertEquals(
+            listOf(com.hawkynt.mediadroyd.nfo.TimeRange(1_300_000, 1_360_000)),
+            PictureCues.creditsSpans(after),
+        )
+        val split = closing(
+            300 to { i -> scene(i) }, 60 to { i -> credits(i) }, 40 to { i -> scene(i) }, 30 to { i -> credits(i) },
+        )
+        assertEquals(
+            listOf(
+                com.hawkynt.mediadroyd.nfo.TimeRange(1_300_000, 1_360_000),
+                com.hawkynt.mediadroyd.nfo.TimeRange(1_400_000, 1_430_000),
+            ),
+            PictureCues.creditsSpans(split),
+        )
+        // Text in the story with minutes of story after it is no credits.
+        val story = closing(60 to { i -> credits(i) }, 300 to { i -> scene(i) })
+        assertEquals(emptyList<Any>(), PictureCues.creditsSpans(story))
+    }
+
+    @Test
     fun `a moment of text or a story to the end is no credits`() {
         assertNull(PictureCues.creditsStartMs(closing(300 to { i -> scene(i) })))
         assertNull(PictureCues.creditsStartMs(closing(290 to { i -> scene(i) }, 8 to { i -> credits(i) })))
