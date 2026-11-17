@@ -161,6 +161,8 @@ fun PhonePlayer(
     autoAdvance: Boolean,
     onExit: () -> Unit,
     demo: Boolean = false,
+    /** More to play once the queue runs out (random movies, #512). */
+    more: (() -> List<Playable>)? = null,
     modifier: Modifier = Modifier.fillMaxSize(),
     small: Boolean = false,
     onShrink: () -> Unit = onExit,
@@ -229,6 +231,7 @@ fun PhonePlayer(
             override val normalizeLoudness get() = settings.evenLoudness
             override val audioDelayMs get() = audioDelayMs
             override val subtitleDelayMs get() = shared[0]?.subtitleLook?.delayMs ?: 0
+            override val voiceBoostDb get() = settings.voices
         }
     }
     val engine = remember {
@@ -255,7 +258,8 @@ fun PhonePlayer(
     }
     // The queue, the video's picture and look, what is open over the player — the same on both platforms.
     val state = remember {
-        PlayerScreenState(queue, startIndex, store, engine, autoAdvance, demo = demo).also { shared[0] = it }
+        PlayerScreenState(queue, startIndex, store, engine, autoAdvance, demo = demo, more = more)
+            .also { shared[0] = it }
     }
     val session = state.session
     // The video's frame rate, for the sound's wait behind a filtered picture; kept current by the routing loop.
@@ -703,7 +707,13 @@ fun PhonePlayer(
             Side.RIGHT -> {
                 volume = PlaybackMath.boostedLevel(volume, upFraction)
                 loudnessBoostDb = PlaybackMath.boostDb(volume)
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, (volume.coerceAtMost(1f) * maxVolume).roundToInt(), 0)
+                // Below zero the device stays at its lowest audible step and the app's gain goes on down (#511).
+                val step = if (PlaybackMath.isBelowZero(volume)) {
+                    1
+                } else {
+                    (volume.coerceAtMost(1f) * maxVolume).roundToInt()
+                }
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, step, 0)
                 state.showLevel("Volume ${PlaybackMath.percent(volume)} %", volume, side)
             }
         }

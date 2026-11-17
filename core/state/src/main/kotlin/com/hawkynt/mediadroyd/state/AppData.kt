@@ -130,6 +130,7 @@ data class ScreenOverride(
 data class Settings(
     var defaultSpeed: Float = 1.0f,
     var loudness: Float = 0f,                 // dB, -12..12
+    var voices: Float = 0f,                   // dB the dialogue is raised by, 0..12 (VoiceBoost, #452)
     var evenLoudness: Boolean = false,        // every file at the same loudness: ReplayGain, else measured (R128)
     var matchRefreshRate: Boolean = false,    // TV boxes: switch the display to a multiple of the film's frame rate
     var audioPassthrough: Boolean = false,    // TV boxes: compressed surround untouched to an AV receiver

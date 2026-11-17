@@ -121,6 +121,20 @@ class ShellState(
         }
     }
 
+    /**
+     * Random movies from [items] (the wall's, its filters and age limit applied), one after the other without end
+     * (#512): each round every movie once in a fresh order ([RandomOrder]), its parts in order, the next round joining
+     * as the queue runs out. Null where there is no movie among them.
+     */
+    fun randomPlayer(items: List<MediaItem>): Screen.Player? {
+        val movies = items.filterIsInstance<Movie>().takeIf { it.isNotEmpty() } ?: return null
+        val order = com.hawkynt.mediadroyd.library.RandomOrder(movies)
+        fun round(): List<Playable> = order.nextRound().flatMap { movie ->
+            MovieVersions.toPlay(movie) { store.resumeFor(it) != null }.playQueue()
+        }
+        return Screen.Player(round(), 0, autoAdvance = true, more = ::round)
+    }
+
     /** The video played last, offered at the bottom of the sidebar; null when it is gone from [library] or none. */
     fun resumeSpot(library: Library, onPlay: (Screen.Player) -> Unit): ResumeSpot? {
         val path = store.data.lastPlayed.takeIf { it.isNotEmpty() } ?: return null
@@ -260,6 +274,7 @@ fun LibraryShell(
                         onPlay = ::play,
                         onClearFilter = { state.filter = BrowseFilter() },
                         onSeeAll = { state.navigate(Screen.Browse(s.section, it)) },
+                        onRandom = { items -> state.randomPlayer(items)?.let(onPlay) },
                     )
                     is Screen.Places -> PlacesScreen(
                         library = library,

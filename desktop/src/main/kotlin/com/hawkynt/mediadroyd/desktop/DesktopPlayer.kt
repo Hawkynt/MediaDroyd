@@ -117,6 +117,8 @@ fun DesktopPlayer(
     /** The next video starts when one ends: a film's parts always, episodes with binge-watching on. */
     autoAdvance: Boolean,
     fullScreen: Boolean,
+    /** More to play once the queue runs out (random movies, #512). */
+    more: (() -> List<Playable>)? = null,
     onFullScreen: () -> Unit,
     onExit: () -> Unit,
     screen: () -> OutputScreen = { OutputScreen.Unknown },
@@ -129,11 +131,17 @@ fun DesktopPlayer(
     var sound by remember { mutableStateOf(store.sound) }
     var nightMode by remember { mutableStateOf(false) }
     var softwareDecoding by remember { mutableStateOf(store.softwareDecoding) }
-    val tuning = remember { PlaybackTuning.Mutable() }
-    tuning.loudnessDb = sound.loudnessDb
-    tuning.normalizeLoudness = sound.evenLoudness
-    tuning.audioDelayMs = sound.audioDelayMs
-    tuning.nightMode = nightMode
+    val knobs = remember { PlaybackTuning.Mutable() }
+    knobs.loudnessDb = sound.loudnessDb
+    knobs.normalizeLoudness = sound.evenLoudness
+    knobs.audioDelayMs = sound.audioDelayMs
+    knobs.nightMode = nightMode
+    // The voices raised as Settings say right now (VoiceBoost, #452): Settings can be open beside the playing film.
+    val tuning = remember {
+        object : PlaybackTuning by knobs {
+            override val voiceBoostDb get() = store.state.data.settings.voices
+        }
+    }
     val engine = remember {
         DesktopPlaybackEngine(tuning, files = places::remoteFile).apply {
             // MEDIADROYD_MUTE=1: checks and documentation runs play silently.
@@ -150,13 +158,14 @@ fun DesktopPlayer(
             queue, startIndex, store.state, engine, autoAdvance,
             panelAtStart = System.getenv("MEDIADROYD_SHOW") == "panel",
             infoAtStart = System.getenv("MEDIADROYD_SHOW") == "info",
+            more = more,
         )
     }
     val session = state.session
     val index = session.index
     val playing = session.current
     val subtitleLook = state.subtitleLook
-    tuning.subtitleDelayMs = subtitleLook.delayMs
+    knobs.subtitleDelayMs = subtitleLook.delayMs
     val bitmap = remember { PictureBitmap() }
     // The picture stage (deinterlacing, upscalers, colour) on the graphics card, made once per player.
     val stage = remember { com.hawkynt.mediadroyd.engine.desktop.GlStage() }

@@ -152,13 +152,31 @@ fun LevelBar(level: Float, modifier: Modifier = Modifier) {
             }
             // The device's maximum: a mark across the middle.
             Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.8f)))
-            if (emptyDevice > 0f) androidx.compose.foundation.layout.Spacer(Modifier.weight(emptyDevice))
-            if (fill.device > 0f) Box(Modifier.fillMaxWidth().weight(fill.device).background(Color.White))
+            // Below zero (#511) the fill takes a colour of its own, as the boost does above: darker, quieter.
+            val deviceColour = if (fill.below) LEVEL_BELOW_ZERO else Color.White
+            if (fill.device > 0.25f) {
+                // The device's range above zero, then the zero mark, then the stretch below zero filled.
+                val emptyAbove = 0.5f - fill.device
+                if (emptyAbove > 0f) androidx.compose.foundation.layout.Spacer(Modifier.weight(emptyAbove))
+                Box(Modifier.fillMaxWidth().weight(fill.device - 0.25f).background(deviceColour))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.Black.copy(alpha = 0.6f)))
+                Box(Modifier.fillMaxWidth().weight(0.25f).background(deviceColour))
+            } else {
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(0.25f))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.5f)))
+                if (emptyDevice - 0.25f > 0f) {
+                    androidx.compose.foundation.layout.Spacer(Modifier.weight(emptyDevice - 0.25f))
+                }
+                if (fill.device > 0f) Box(Modifier.fillMaxWidth().weight(fill.device).background(deviceColour))
+            }
         }
     }
 }
 
 private val LEVEL_BAR_WIDTH = 14.dp
+
+// The fill's colour below zero: a cold blue against the boost's warm amber.
+private val LEVEL_BELOW_ZERO = Color(0xFF5B8CFF)
 private val LEVEL_BAR_HEIGHT = 220.dp
 
 /** `1:23:45` or `23:45` for a position in milliseconds. */

@@ -39,33 +39,62 @@ object PlaybackMath {
     const val MAX_BOOST = 8f
 
     /**
-     * A brightness or volume swipe position from 0 to 2: up to 1 is the device's own range, linear; the
-     * second stretch boosts past it on a logarithmic scale up to [MAX_BOOST] (see [boostFactor]).
+     * A brightness or volume swipe position from -1 to 2: 0 to 1 is the device's own range, linear; the stretch above
+     * boosts past it on a logarithmic scale up to [MAX_BOOST], the one below zero goes on past the device's lowest —
+     * a darker picture, a quieter sound — down to an eighth (see [boostFactor]; #511).
      */
-    fun boostedLevel(start: Float, dragUpFraction: Float): Float = (start + dragUpFraction).coerceIn(0f, 2f)
+    fun boostedLevel(start: Float, dragUpFraction: Float): Float = (start + dragUpFraction).coerceIn(-1f, 2f)
 
-    /** How many times the device maximum [level] stands for: 1 up to 1, then doubling every third of the stretch. */
-    fun boostFactor(level: Float): Float = if (level <= 1f) 1f else MAX_BOOST.pow(level - 1f)
+    /**
+     * How many times the device's own level [level] stands for: 1 within the device's range, then doubling every third
+     * of the stretch above it, halving every third of the one below zero.
+     */
+    fun boostFactor(level: Float): Float = when {
+        level > 1f -> MAX_BOOST.pow(level - 1f)
+        level < 0f -> MAX_BOOST.pow(level.coerceAtLeast(-1f))
+        else -> 1f
+    }
 
-    /** The level as the percentage shown while swiping: 0..100 on the device, up to 800 beyond it. */
-    fun percent(level: Float): Int = (if (level <= 1f) level * 100f else boostFactor(level) * 100f).roundToInt()
+    /** The level as the percentage shown while swiping: 0..100 on the device, up to 800 beyond, down to -100 below. */
+    fun percent(level: Float): Int = when {
+        level > 1f -> boostFactor(level) * 100f
+        else -> level.coerceAtLeast(-1f) * 100f
+    }.roundToInt()
 
-    /** Loudness gain for a volume level past the device maximum: the boost factor in dB (up to +18 dB). */
-    fun boostDb(level: Float): Float = 20f * log10(boostFactor(level))
+    /**
+     * Loudness gain for a volume [level] beyond the device's range: the boost factor in dB, up to +18 dB above it,
+     * down to -18 dB below zero — and at the very bottom ([MUTE_DB]) silent.
+     */
+    fun boostDb(level: Float): Float = if (level <= -1f) MUTE_DB else 20f * log10(boostFactor(level))
+
+    /** The gain that stands for silence at the bottom of the stretch below zero. */
+    const val MUTE_DB = -120f
 
     /** Whether [level] is past the device's own maximum (see [boostedLevel]). */
     fun isBoosted(level: Float): Boolean = level > 1f
 
-    /** How far the level bar is filled, each from its bottom: [device] up to its middle, [boost] the half above. */
-    data class LevelFill(val device: Float, val boost: Float)
+    /** Whether [level] is below the device's own lowest (see [boostedLevel]). */
+    fun isBelowZero(level: Float): Boolean = level < 0f
 
     /**
-     * The level bar for a swipe [level] (0 to 2): 100 % in its middle, so the boost's stretch above shows there is
-     * more to swipe for — the device's range filling the lower half, the boost the upper.
+     * How far the level bar is filled from its bottom: [device] up to its middle — the stretch below zero its lowest
+     * quarter, the device's range the one above — and [boost] the half above that; [below] while the level is below
+     * zero, so the bar can show it in a colour of its own as it shows the boost.
+     */
+    data class LevelFill(val device: Float, val boost: Float, val below: Boolean = false)
+
+    /**
+     * The level bar for a swipe [level] (-1 to 2): 100 % in its middle, so the boost's stretch above shows there is
+     * more to swipe for; 0 a quarter up, so the stretch below zero shows there is less.
      */
     fun levelFill(level: Float): LevelFill {
-        val at = level.coerceIn(0f, 2f) / 2f
-        return LevelFill(at.coerceAtMost(0.5f), (at - 0.5f).coerceAtLeast(0f))
+        val l = level.coerceIn(-1f, 2f)
+        val at = when {
+            l < 0f -> (l + 1f) / 4f
+            l <= 1f -> 0.25f + l / 4f
+            else -> 0.5f + (l - 1f) / 2f
+        }
+        return LevelFill(at.coerceAtMost(0.5f), (at - 0.5f).coerceAtLeast(0f), below = l < 0f)
     }
 
     /**
@@ -76,7 +105,10 @@ object PlaybackMath {
     fun startsLevelSwipe(x: Float, y: Float, width: Float, height: Float, sideBand: Float, endBand: Float): Boolean =
         x >= sideBand && x <= width - sideBand && y >= endBand && y <= height - endBand
 
-    /** Gamma factor for a brightness level past the device maximum: the square root of the boost, at most ≈2.8. */
+    /**
+     * Gamma factor for a brightness level beyond the device's range: the square root of the boost — at most ≈2.8 above
+     * it, at least ≈0.35 below zero, darker but never black.
+     */
     fun gammaBoost(level: Float): Float = sqrt(boostFactor(level))
 
     /** A brightness or volume level after a vertical swipe; a swipe over the whole height spans 0..1. */

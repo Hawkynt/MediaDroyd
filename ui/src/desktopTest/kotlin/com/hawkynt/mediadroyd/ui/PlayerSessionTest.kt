@@ -35,6 +35,27 @@ class PlayerSessionTest {
     }
 
     @Test
+    fun `random movies never run out, the next round joins the queue as one ends or Next is pressed`() {
+        val rounds = ArrayDeque(listOf(listOf("b", "a"), listOf("a", "b"), listOf("b", "a")))
+        val films = listOf("a", "b").map { Playable(it, null, "/films/$it.mkv", null) }
+        val s = PlayerSession(films, 0, store, engine, autoAdvance = true, skipping = true) {
+            rounds.removeFirst().map { name -> films.first { it.title == name } }
+        }
+        s.play()
+        s.finishCurrent()
+        assertEquals(1, s.index)
+        s.finishCurrent()
+        assertEquals(2, s.index)
+        assertEquals(4, s.queue.size)
+        assertFalse(s.finished)
+        assertEquals("b", s.current.title)
+        s.next()
+        s.next()
+        assertEquals(4, s.index)
+        assertEquals(6, s.queue.size)
+    }
+
+    @Test
     fun `binge-watching plays the next episode when one ends, without it the queue is over`() {
         val binge = session()
         binge.play()

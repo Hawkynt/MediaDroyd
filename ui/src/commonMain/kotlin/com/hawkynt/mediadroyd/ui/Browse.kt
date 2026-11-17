@@ -109,6 +109,8 @@ fun BrowseScreen(
     onClearFilter: () -> Unit,
     row: HomeRow? = null,
     onSeeAll: (HomeRow) -> Unit = {},
+    /** Random movies from those on the wall, one after the other, endlessly (#512); null hides the button. */
+    onRandom: ((List<MediaItem>) -> Unit)? = null,
 ) {
     val maxAge = store.data.settings.maxAgeYears
     val wall = LibraryQuery.browse(library.itemsIn(section), filter, maxAge, store.data.settings.hideUnrated)
@@ -229,6 +231,21 @@ fun BrowseScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp),
                     )
+                    if (onRandom != null && section == LibrarySection.MOVIES && items.isNotEmpty()) {
+                        Spacer(Modifier.width(16.dp))
+                        // The wall's movies — its filters and the age limit applied — in random order, on and on.
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = { onRandom(items) },
+                            modifier = Modifier.padding(top = 16.dp),
+                        ) {
+                            androidx.compose.material3.Icon(
+                                androidx.compose.material.icons.Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Random", fontSize = 16.sp)
+                        }
+                    }
                     if (filtered) {
                         Spacer(Modifier.width(16.dp))
                         AssistChip(
