@@ -22,6 +22,7 @@ class LoudnessAudioProcessor(
     private val nightMode: () -> Boolean = { false },
     private val normalize: () -> Boolean = { false },
     private val fileLoudness: () -> FileLoudness? = { null },
+    private val voiceBoostDb: () -> Float = { 0f },
 ) : BaseAudioProcessor() {
 
     private var channels = 1
@@ -45,7 +46,9 @@ class LoudnessAudioProcessor(
         if (samples.size < count) samples = ShortArray(count)
         inputBuffer.asShortBuffer().get(samples, 0, count)
         inputBuffer.position(inputBuffer.limit())
-        checkNotNull(chain).process(samples, 0, frames, gainDb(), nightMode(), normalize(), fileLoudness())
+        checkNotNull(chain).process(
+            samples, 0, frames, gainDb(), nightMode(), normalize(), fileLoudness(), voiceBoostDb(),
+        )
         val buffer = replaceOutputBuffer(count * 2)
         buffer.asShortBuffer().put(samples, 0, count)
         buffer.position(count * 2)

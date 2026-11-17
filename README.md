@@ -275,14 +275,16 @@ and denoised. How the networks are checked on a desktop:
 ### 🔊 Sound
 
 - AC3, E-AC3, DTS, TrueHD and more through the bundled FFmpeg; passthrough to an AV receiver over HDMI.
-- Night mode (a compressor after Giannoulis, Massberg & Reiss, JAES 2012), loudness boost up to 800 %, even loudness
-  from file to file (ReplayGain, else EBU R128 measured), audio delay remembered per output, spatial audio on Android 13+.
+- Night mode (a compressor after Giannoulis, Massberg & Reiss, JAES 2012), clearer voices, loudness boost up to
+  800 %, even loudness from file to file (ReplayGain, else EBU R128 measured), audio delay remembered per output,
+  spatial audio on Android 13+.
 
 <details>
 <summary>Sound in detail</summary>
 
 - AC3, E-AC3, DTS, TrueHD and other exotic audio tracks play through a bundled FFmpeg decoder, even on hardware without them.
 - Night mode in the gear compresses the dynamic range in the app's own audio stage — quiet dialogue comes up, explosions come down — for late evenings and thin walls; it combines with the loudness gain and the volume boost (soft-knee compressor after Giannoulis, Massberg & Reiss, JAES 2012).
+- Clearer voices in Settings, off up to +12 dB, raise the dialogue films mix for cinemas and bury on TV speakers and phones: the voices sit in the centre, so in stereo the mid (L + R) is band-passed to the speech band, 200 Hz to 4 kHz (second-order filters from Robert Bristow-Johnson's Audio EQ Cookbook), and added back to both channels — music and effects at the sides, the bass and the hiss stay as they were — and where a file's channels arrive unmixed (5.1, 7.1 on Android) the centre channel itself is raised; near full scale a soft knee bends the peaks instead of clipping. It comes before the loudness gain and night mode and works with both, on both platforms.
 - Even loudness in Settings plays every film and song about as loud as the last, beside the loudness gain and night mode: a file whose tags carry ReplayGain — `REPLAYGAIN_TRACK_GAIN` / `_PEAK` in Vorbis comments, ID3, iTunes atoms or an MP3's LAME header, Opus's `R128_TRACK_GAIN` — plays at its track gain from the first sample, held back so its peak stays within full scale; any other file is measured as it plays (EBU R128 / ITU-R BS.1770 integrated loudness: K-weighting, 400 ms blocks, the −70 LUFS and −10 LU gates — converted from libebur128 and agreeing with it and with FFmpeg's ebur128 filter) and turned towards ReplayGain's −18 LUFS, after its first three seconds, no faster than 2 dB a second, by at most +12 / −24 dB. The info graph names which of the two is at work.
 - Audio delay in the gear, −2.5 s … +2.5 s in 50 ms steps, fixes lip-sync; the gear says it in words — "sound 150 ms after the picture", "subtitles 2 s before the picture" — and its buttons are Sooner and Later, for the sound as for the subtitles; it is remembered per audio output — the phone's speaker, each Bluetooth headset, USB, HDMI — since each has its own latency, and follows the output when it changes.
 - Spatial audio: on Android 13+ devices with a spatializer, a remembered switch in the gear hands multichannel sound to it for headphones that support it. The player takes audio focus like any film player: other apps pause, a call pauses the film — on the phone's own screen; on a second screen or in picture-in-picture it plays on whatever other apps play.

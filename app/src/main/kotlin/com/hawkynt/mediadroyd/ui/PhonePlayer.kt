@@ -229,6 +229,7 @@ fun PhonePlayer(
             override val normalizeLoudness get() = settings.evenLoudness
             override val audioDelayMs get() = audioDelayMs
             override val subtitleDelayMs get() = shared[0]?.subtitleLook?.delayMs ?: 0
+            override val voiceBoostDb get() = settings.voices
         }
     }
     val engine = remember {
