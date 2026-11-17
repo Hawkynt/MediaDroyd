@@ -1,5 +1,7 @@
 package com.hawkynt.mediadroyd.player
 
+import com.hawkynt.mediadroyd.nfo.TimeRange
+
 /**
  * Frames of a video read for their text: handed the times to read at from the video's length, it gives each time with
  * the lines read there; null where the video cannot be read (CreditText.find, PlayerPlatform.readText).
@@ -133,54 +135,73 @@ object CreditText {
     private fun contains(words: List<String>, phrase: List<String>): Boolean =
         (0..words.size - phrase.size).any { at -> phrase.indices.all { words[at + it] == phrase[it] } }
 
-    // How long the story may go on after the credits, and how many frames read between may miss them.
-    private const val TAIL_MS = 30_000L
+    // How much of the story may follow credits for them to be the end credits (a scene hidden after them, #513), and
+    // how many frames read between may miss them.
+    private const val HIDDEN_MAX_MS = 180_000L
     private const val GAP_READS = 1
 
     /**
      * Where the credits begin, from [reads] (the times of frames read [stepMs] apart, each whether it read as
-     * credits): the first frame of the run of credit frames — one frame between may miss — that runs to within
-     * [TAIL_MS] of the last frame read and lasts IntroCredits.MIN_CREDITS_MS; null where there is none.
+     * credits): the start of the first of their stretches ([creditsSpans]); null where there is none.
      */
-    fun creditsStartMs(reads: List<Pair<Long, Boolean>>, stepMs: Long): Long? {
-        if (reads.isEmpty()) return null
-        val lastMs = reads.last().first
-        val end = reads.indices.lastOrNull { reads[it].second } ?: return null
-        if (lastMs - reads[end].first > TAIL_MS) return null
-        var start = end
-        var gap = 0
-        for (i in end - 1 downTo 0) {
-            if (reads[i].second) {
-                start = i
-                gap = 0
-            } else if (++gap > GAP_READS) {
-                break
-            }
-        }
-        if (reads[end].first - reads[start].first + stepMs < IntroCredits.MIN_CREDITS_MS) return null
-        return reads[start].first
-    }
+    fun creditsStartMs(reads: List<Pair<Long, Boolean>>, stepMs: Long): Long? =
+        creditsSpans(reads, stepMs).firstOrNull()?.startMs
 
     /**
-     * Where a video's credits begin by their text, read by [read]: it is handed the times to read frames at from the
+     * Where the credits run, from [reads] (the times of frames read [stepMs] apart, each whether it read as credits):
+     * each run of credit frames — one frame between may miss — that lasts IntroCredits.MIN_CREDITS_MS, with at most
+     * [HIDDEN_MAX_MS] of frames that are not credits after it: from its first frame to a step after its last (#513).
+     */
+    fun creditsSpans(reads: List<Pair<Long, Boolean>>, stepMs: Long): List<TimeRange> {
+        val runs = ArrayList<IntRange>()
+        var first = -1
+        var last = -1
+        var gap = 0
+        for (i in reads.indices) {
+            if (reads[i].second) {
+                if (first < 0) first = i
+                last = i
+                gap = 0
+            } else if (first >= 0 && ++gap > GAP_READS) {
+                runs += first..last
+                first = -1
+                gap = 0
+            }
+        }
+        if (first >= 0) runs += first..last
+        return runs
+            .filter { run ->
+                reads[run.last].first - reads[run.first].first + stepMs >= IntroCredits.MIN_CREDITS_MS &&
+                    (run.last + 1 until reads.size).count { !reads[it].second } * stepMs <= HIDDEN_MAX_MS
+            }
+            .map { run -> TimeRange(reads[run.first].first, reads[run.last].first + stepMs) }
+    }
+
+    /** Where a video's credits begin by their text: the start of the first stretch [findSpans] finds. */
+    fun find(read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?): Long? =
+        findSpans(read).firstOrNull()?.startMs
+
+    /**
+     * Where a video's credits run by their text, read by [read]: it is handed the times to read frames at from the
      * video's length (every [STEP_MS] across its closing, IntroCredits.CLOSING_MS; then every [FINE_STEP_MS] in the
      * five seconds before the first credits found) and gives each time with the lines read there, or null where the
-     * video cannot be read. The credits begin at the earliest second from which every frame read is credits; null
-     * where there are none or nothing could be read.
+     * video cannot be read. The stretches as [creditsSpans] finds them, the first beginning at the earliest second
+     * from which every frame read is credits; none where there are none or nothing could be read.
      */
-    fun find(read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?): Long? {
+    fun findSpans(read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?): List<TimeRange> {
         val coarse = read { durationMs ->
             val fromMs = (durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0)
             (fromMs until durationMs step STEP_MS).toList()
-        } ?: return null
-        val startMs = creditsStartMs(coarse.map { (time, lines) -> time to isCredits(lines) }, STEP_MS) ?: return null
+        } ?: return emptyList()
+        val spans = creditsSpans(coarse.map { (time, lines) -> time to isCredits(lines) }, STEP_MS)
+        val startMs = spans.firstOrNull()?.startMs ?: return emptyList()
         val fine = read { ((startMs - STEP_MS + FINE_STEP_MS) until startMs step FINE_STEP_MS).toList() }
-            ?: return startMs
+            ?: return spans
         var firstMs = startMs
         for ((time, lines) in fine.sortedByDescending { it.first }) {
             if (!isCredits(lines)) break
             firstMs = time
         }
-        return firstMs
+        return listOf(TimeRange(firstMs, spans.first().endMs)) + spans.drop(1)
     }
 }

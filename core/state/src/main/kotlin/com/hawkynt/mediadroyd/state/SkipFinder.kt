@@ -32,7 +32,10 @@ class SkipFinder(
     data class Step(val part: Part, val a: String, val b: String)
 
     /** What a step found for one video: its intro, or where its credits begin; either null where nothing was. */
-    class Found(val intro: TimeRange?, val creditsStartMs: Long?)
+    class Found(val intro: TimeRange?, val credits: List<TimeRange> = emptyList()) {
+        /** Where the credits begin, or null. */
+        val creditsStartMs: Long? get() = credits.firstOrNull()?.startMs
+    }
 
     // The prints made, by location and opening or closing: the four the steps around one episode use, and more.
     private val prints = object : LinkedHashMap<Pair<String, Boolean>, IntroCredits.SoundPrint>(8, 0.75f, true) {
@@ -85,18 +88,18 @@ class SkipFinder(
         val b = if (a != null) printOf(step.b, closing) else null
         val heardBoth = a != null && b != null
         return if (closing) {
-            val heard = if (heardBoth) IntroCredits.credits(a.items, a.startMs, b.items, b.startMs) else null
+            val heard = if (heardBoth) IntroCredits.creditsSpans(a.items, a.startMs, b.items, b.startMs) else null
             // Each closing's own pictures where the sound gave no credits: they need no neighbour.
             val seenA = if (heard == null) framesOf(step.a, true) else null
             val seenB = if (heard == null) framesOf(step.b, true) else null
             if (!heardBoth && seenA == null && seenB == null) return null
             // Then their text, where the pictures could be read but showed no black and text frames.
-            fun read(location: String, seen: PictureCues.Frames?) = seen?.let {
-                PictureCues.creditsStartMs(it) ?: CreditText.find { at -> text(location, at) }
-            }
+            fun read(location: String, seen: PictureCues.Frames?): List<TimeRange> = seen?.let {
+                PictureCues.creditsSpans(it).ifEmpty { CreditText.findSpans { at -> text(location, at) } }
+            }.orEmpty()
             mapOf(
-                step.a to Found(null, heard?.first ?: read(step.a, seenA)),
-                step.b to Found(null, heard?.second ?: read(step.b, seenB)),
+                step.a to Found(null, heard?.first?.let(::listOf) ?: read(step.a, seenA)),
+                step.b to Found(null, heard?.second?.let(::listOf) ?: read(step.b, seenB)),
             )
         } else {
             val heard = if (heardBoth) {
@@ -108,7 +111,7 @@ class SkipFinder(
             val seenB = if (seenA != null) framesOf(step.b, false) else null
             if (!heardBoth && (seenA == null || seenB == null)) return null
             val intro = heard ?: if (seenA != null && seenB != null) PictureCues.intro(seenA, seenB) else null
-            mapOf(step.a to Found(intro?.first, null), step.b to Found(intro?.second, null))
+            mapOf(step.a to Found(intro?.first), step.b to Found(intro?.second))
         }
     }
 
@@ -121,7 +124,13 @@ class SkipFinder(
                 location,
                 when (step.part) {
                     Part.INTRO -> before.copy(introStartMs = what.intro?.startMs, introEndMs = what.intro?.endMs)
-                    Part.CREDITS -> before.copy(creditsStartMs = what.creditsStartMs, creditsLooked = true)
+                    Part.CREDITS -> before.copy(
+                        creditsStartMs = what.credits.getOrNull(0)?.startMs,
+                        creditsEndMs = what.credits.getOrNull(0)?.endMs,
+                        moreCreditsStartMs = what.credits.getOrNull(1)?.startMs,
+                        moreCreditsEndMs = what.credits.getOrNull(1)?.endMs,
+                        creditsLooked = true,
+                    )
                 },
             )
         }

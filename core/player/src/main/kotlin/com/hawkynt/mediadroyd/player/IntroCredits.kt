@@ -89,11 +89,28 @@ object IntroCredits {
      * starting [ownStartMs] and [otherStartMs] into the episode): the start of the longest closing music they share,
      * [MARGIN_MS] later; null where they share none long enough.
      */
-    fun credits(own: IntArray, ownStartMs: Long, other: IntArray, otherStartMs: Long): Pair<Long, Long>? {
+    fun credits(own: IntArray, ownStartMs: Long, other: IntArray, otherStartMs: Long): Pair<Long, Long>? =
+        creditsSpans(own, ownStartMs, other, otherStartMs)?.let { (a, b) -> a.startMs to b.startMs }
+
+    /**
+     * Where the credits run in each episode, as [credits] finds them: from the start of the longest closing music
+     * they share, [MARGIN_MS] later, to where that music ends, [MARGIN_MS] before it — so a scene of each episode's
+     * own after the credits (#513) is not cut into; null where they share none long enough.
+     */
+    fun creditsSpans(
+        own: IntArray,
+        ownStartMs: Long,
+        other: IntArray,
+        otherStartMs: Long,
+    ): Pair<TimeRange, TimeRange>? {
         val piece = PrintMatcher.shared(own, other)
             .filter { SOUND.ms(it.length) >= MIN_CREDITS_MS }
             .filter { PrintMatcher.linedUp(own, other, it) }
             .maxByOrNull { it.length } ?: return null
-        return ownStartMs + SOUND.ms(piece.first1) + MARGIN_MS to otherStartMs + SOUND.ms(piece.first2) + MARGIN_MS
+        fun span(startMs: Long, first: Int) = TimeRange(
+            startMs + SOUND.ms(first) + MARGIN_MS,
+            startMs + SOUND.ms(first + piece.length) - MARGIN_MS,
+        )
+        return span(ownStartMs, piece.first1) to span(otherStartMs, piece.first2)
     }
 }

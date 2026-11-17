@@ -44,10 +44,19 @@ class CreditTextTest {
             625_000L to true, 630_000L to true)
         assertEquals(610_000L, CreditText.creditsStartMs(reads, stepMs = 5000))
         assertNull(CreditText.creditsStartMs(reads.map { it.first to false }, stepMs = 5000))
-        // Credits that stop long before the end are a scene's text, not the end credits.
+        // Text with minutes of the story after it is a scene's text, not the end credits.
         val early = listOf(600_000L to true, 605_000L to true, 610_000L to true) +
-            (1..10).map { 610_000L + it * 5000 to false }
+            (1..50).map { 610_000L + it * 5000 to false }
         assertNull(CreditText.creditsStartMs(early, stepMs = 5000))
+    }
+
+    @Test
+    fun `credits a scene is hidden after keep their end (#513)`() {
+        val reads = (0..9).map { 600_000L + it * 5000 to (it in 2..6) } // credits 610..630 s, a scene 635..645 s
+        assertEquals(
+            listOf(com.hawkynt.mediadroyd.nfo.TimeRange(610_000, 635_000)),
+            CreditText.creditsSpans(reads, stepMs = 5000),
+        )
     }
 
     @Test

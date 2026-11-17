@@ -40,4 +40,39 @@ object SkipRules {
     fun creditsStartMs(chapters: List<Chapter>, credits: TimeRange?): Long? =
         chapters.firstOrNull { CREDITS_TITLE.containsMatchIn(it.title) }?.startMs
             ?: credits?.startMs
+
+    /**
+     * Where the credits run, as stretches start to end in milliseconds (#513): each chapter named for credits, so
+     * credits split around a hidden scene are two stretches, else the edit decision list's or NFO's span. An end of
+     * [Long.MAX_VALUE] runs to the end of the file (a chapter without an end).
+     */
+    fun creditsSpans(chapters: List<Chapter>, credits: TimeRange?): List<LongRange> {
+        val named = chapters.filter { CREDITS_TITLE.containsMatchIn(it.title) }
+            .map { it.startMs..(if (it.endMs > it.startMs) it.endMs else Long.MAX_VALUE) }
+        return named.ifEmpty { listOfNotNull(credits?.let { it.startMs..it.endMs }) }
+    }
+
+    /** What the credits ask at a moment of playback (see [creditsAction]). */
+    sealed interface Credits {
+        /** The video is over here: nothing worth keeping follows. */
+        data object End : Credits
+
+        /** Over these credits to [toMs], where a scene hidden after them plays. */
+        data class Jump(val toMs: Long) : Credits
+    }
+
+    /** Credits ending this close to the file's end leave nothing worth keeping after them. */
+    const val HIDDEN_SCENE_MIN_MS = 10_000L
+
+    /**
+     * What to do at [positionMs] among the credits' [spans] in a video [durationMs] long (0: unknown): inside credits
+     * that run to its end — or to within [HIDDEN_SCENE_MIN_MS] of it — [Credits.End]; inside credits a scene follows,
+     * [Credits.Jump] to their end, so the scene plays; elsewhere null. The last second of a stretch is left alone, so a
+     * jump landing just short of its end cannot loop.
+     */
+    fun creditsAction(positionMs: Long, spans: List<LongRange>, durationMs: Long): Credits? {
+        val span = spans.firstOrNull { positionMs >= it.first && positionMs < it.last - 1000 } ?: return null
+        val toEnd = span.last == Long.MAX_VALUE || durationMs <= 0 || span.last >= durationMs - HIDDEN_SCENE_MIN_MS
+        return if (toEnd) Credits.End else Credits.Jump(span.last)
+    }
 }

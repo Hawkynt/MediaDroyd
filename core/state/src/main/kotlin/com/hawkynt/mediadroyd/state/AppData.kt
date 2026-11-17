@@ -31,7 +31,22 @@ data class FoundSkip(
     val introEndMs: Long? = null,
     val creditsStartMs: Long? = null,
     val creditsLooked: Boolean = false,
+    /** Where the credits end where a scene is hidden after them (#513); null: they run to the end. */
+    val creditsEndMs: Long? = null,
+    /** Credits again after a hidden scene (split credits), start and end; null where there are none. */
+    val moreCreditsStartMs: Long? = null,
+    val moreCreditsEndMs: Long? = null,
 ) {
+    /**
+     * The credits found as stretches, start to end; an end of [Long.MAX_VALUE] runs to the end of the video (as
+     * SkipRules.creditsSpans has them).
+     */
+    val credits: List<LongRange>
+        get() = listOfNotNull(
+            creditsStartMs?.let { it..(creditsEndMs ?: Long.MAX_VALUE) },
+            moreCreditsStartMs?.let { it..(moreCreditsEndMs ?: Long.MAX_VALUE) },
+        )
+
     /** The intro found, or null. */
     val intro: com.hawkynt.mediadroyd.nfo.TimeRange?
         get() = if (introStartMs != null && introEndMs != null) {

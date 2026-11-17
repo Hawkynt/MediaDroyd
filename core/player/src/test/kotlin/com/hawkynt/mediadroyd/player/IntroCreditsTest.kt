@@ -59,6 +59,18 @@ class IntroCreditsTest {
     }
 
     @Test
+    fun `the credits end where the shared closing music ends, a scene of each episode's own after it`() {
+        val credits = noise(70.0, 16)
+        val first = noise(400.0, 17) + credits + noise(10.0, 18)
+        val second = noise(380.0, 19) + reencoded(credits, 20) + noise(30.0, 21)
+        val (a, b) = requireNotNull(IntroCredits.creditsSpans(first, 1_000_000, second, 1_200_000))
+        near(1402.0, a.startMs)
+        near(1470.0, a.endMs)
+        near(1582.0, b.startMs)
+        near(1650.0, b.endMs)
+    }
+
+    @Test
     fun `an episode's intro is the longest any of its neighbours shares with it`() {
         val own = noise(30.0, 24) + intro + noise(300.0, 25)
         val neighbours = listOf(noise(400.0, 26), noise(10.0, 27) + reencoded(intro, 28) + noise(300.0, 29))

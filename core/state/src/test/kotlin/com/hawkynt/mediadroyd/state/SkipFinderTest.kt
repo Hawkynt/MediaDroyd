@@ -175,4 +175,29 @@ class SkipFinderTest {
         // Every five seconds, then every second just before the first credits read.
         assertTrue(asked.count { it % 5000 == 0L } >= 90 && 2_401_000L in asked)
     }
+
+    @Test
+    fun `credits with a scene hidden after them are kept with their end (#513)`() {
+        val store = StateStore(Memory())
+        val w = PictureCues.LOOK_WIDTH
+        val h = PictureCues.LOOK_HEIGHT
+        val scene = ByteArray(w * h) { (80 + it % w / 2).toByte() }
+        val text = ByteArray(w * h) { if (it / w % 9 < 4 && it % 3 == 0 && it % w in 30..130) 230.toByte() else 14 }
+        val finder = SkipFinder(
+            store,
+            pictures = { _, closing ->
+                val frames = List(400) { scene } + List(60) { text } + List(20) { scene }
+                if (closing) PictureCues.Frames(w, h, 2_000_000, PictureCues.CLOSING_STEP_MS, frames) else null
+            },
+            print = { location, closing ->
+                IntroCredits.SoundPrint(noise(600.0, location.hashCode() + if (closing) 1 else 0), 0)
+            },
+        )
+        val step = finder.steps(episodes, 0).first { it.part == SkipFinder.Part.CREDITS }
+        finder.keep(step, requireNotNull(finder.find(step)))
+        val found = requireNotNull(store.foundSkipFor(episodes[0]))
+        assertEquals(2_400_000L, found.creditsStartMs)
+        assertEquals(2_460_000L, found.creditsEndMs)
+        assertEquals(listOf(2_400_000L..2_460_000L), found.credits)
+    }
 }

@@ -54,7 +54,8 @@ object PictureCues {
     private const val CLEAR_STEPS = 8
 
     // How long the story may go on after the credits (a sting, a logo) and how many frames a credit may miss.
-    private const val TAIL_MS = 30_000L
+    // The most of the story after credits for them to be the end credits: a scene hidden after them, not the film.
+    private const val HIDDEN_MAX_MS = 180_000L
     private const val GAP_FRAMES = 3
     private const val MIN_TEXT_MS = 10_000L
 
@@ -128,28 +129,44 @@ object PictureCues {
     }
 
     /**
-     * Where the credits begin in [closing] (frames of the look size from a video's end): the first frame of the stretch
-     * of black and text frames — a credit missed for up to three frames — that runs to within [TAIL_MS] of the end,
-     * lasts IntroCredits.MIN_CREDITS_MS and holds ten seconds of text; null where there is none.
+     * Where the credits begin in [closing] (frames of the look size from a video's end): the first of its credits'
+     * stretches ([creditsSpans]); null where there is none.
      */
-    fun creditsStartMs(closing: Frames): Long? {
+    fun creditsStartMs(closing: Frames): Long? = creditsSpans(closing).firstOrNull()?.startMs
+
+    /**
+     * Where the credits run in [closing] (frames of the look size from a video's end), each stretch from its first
+     * frame to the end of its last (#513): a run of black and text frames — a credit missed for up to three frames —
+     * that lasts IntroCredits.MIN_CREDITS_MS and holds ten seconds of text, with at most [HIDDEN_MAX_MS] of other
+     * frames after it to the end: so credits a scene is hidden after keep their end, credits split around one are two
+     * stretches, and text in the story with minutes of story after it is none.
+     */
+    fun creditsSpans(closing: Frames): List<TimeRange> {
         val looks = closing.frames.map { look(it, closing.width, closing.height) }
-        val tail = (TAIL_MS / closing.stepMs).toInt()
-        val end = looks.indices.reversed().take(tail + 1).firstOrNull { looks[it] != Look.OTHER } ?: return null
-        var start = end
+        val step = closing.stepMs
+        val runs = ArrayList<IntRange>()
+        var first = -1
+        var last = -1
         var gap = 0
-        for (i in end - 1 downTo 0) {
+        for (i in looks.indices) {
             if (looks[i] != Look.OTHER) {
-                start = i
+                if (first < 0) first = i
+                last = i
                 gap = 0
-            } else if (++gap > GAP_FRAMES) {
-                break
+            } else if (first >= 0 && ++gap > GAP_FRAMES) {
+                runs += first..last
+                first = -1
+                gap = 0
             }
         }
-        val length = (end - start + 1) * closing.stepMs
-        val text = (start..end).count { looks[it] == Look.TEXT } * closing.stepMs
-        if (length < IntroCredits.MIN_CREDITS_MS || text < MIN_TEXT_MS) return null
-        return closing.startMs + start * closing.stepMs
+        if (first >= 0) runs += first..last
+        return runs
+            .filter { run ->
+                run.count() * step >= IntroCredits.MIN_CREDITS_MS &&
+                    run.count { looks[it] == Look.TEXT } * step >= MIN_TEXT_MS &&
+                    (run.last + 1 until looks.size).count { looks[it] == Look.OTHER } * step <= HIDDEN_MAX_MS
+            }
+            .map { run -> TimeRange(closing.startMs + run.first * step, closing.startMs + (run.last + 1) * step) }
     }
 
     /**
