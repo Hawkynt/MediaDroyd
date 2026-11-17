@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hawkynt.mediadroyd.player.VoiceBoost
 import com.hawkynt.mediadroyd.player.DecodedBuffer
 import com.hawkynt.mediadroyd.player.PictureSize
 import com.hawkynt.mediadroyd.state.Settings
@@ -314,6 +315,14 @@ fun SettingsScreen(
             range = -12f..12f,
             valueText = "${settings.loudness.toInt()} dB",
             onValueChange = { v -> update { it.loudness = v } },
+        )
+        // Clearer voices (VoiceBoost, #452): dialogue raised against music and effects, for TV speakers and phones.
+        SliderRow(
+            label = "Clearer voices",
+            value = settings.voices,
+            range = 0f..VoiceBoost.MAX_DB,
+            valueText = if (settings.voices < 0.5f) "off" else "+${kotlin.math.round(settings.voices).toInt()} dB",
+            onValueChange = { v -> update { it.voices = kotlin.math.round(v) } },
         )
         SwitchRow(
             label = "Even loudness",

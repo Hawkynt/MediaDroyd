@@ -352,13 +352,14 @@ class DesktopPlaybackEngine(
                         val pcm = tempo.process(item.pcm)
                         if (pcm.isNotEmpty()) {
                             val t = tuning
-                            if (t.loudnessDb != 0f || t.nightMode || t.normalizeLoudness) {
+                            if (t.loudnessDb != 0f || t.nightMode || t.normalizeLoudness || t.voiceBoostDb != 0f) {
                                 val count = pcm.size / 2
                                 if (samples.size < count) samples = ShortArray(count)
                                 val view = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
                                 view.get(samples, 0, count)
                                 chain.process(
                                     samples, 0, count / 2, t.loudnessDb, t.nightMode, t.normalizeLoudness, loudness,
+                                    t.voiceBoostDb,
                                 )
                                 view.clear()
                                 view.put(samples, 0, count)
