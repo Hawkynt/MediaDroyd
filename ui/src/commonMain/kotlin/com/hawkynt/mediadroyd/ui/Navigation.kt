@@ -40,6 +40,8 @@ sealed interface Screen {
         val startIndex: Int,
         val autoAdvance: Boolean,
         val returnTo: Screen? = null,
+        /** More to play once the queue runs out (random movies, #512; PlayerSession); null for a queue that ends. */
+        val more: (() -> List<Playable>)? = null,
     ) : Screen
 }
 

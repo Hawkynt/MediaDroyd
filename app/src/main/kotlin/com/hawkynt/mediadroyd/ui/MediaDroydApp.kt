@@ -392,6 +392,7 @@ private fun AppShell(store: StateStore, demo: Boolean) {
                     startIndex = player.startIndex,
                     store = store,
                     autoAdvance = player.autoAdvance,
+                    more = player.more,
                     onExit = {
                         playing = null
                         playingSmall = false

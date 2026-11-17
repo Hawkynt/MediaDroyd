@@ -29,6 +29,8 @@ sealed interface Screen {
         val queue: List<com.hawkynt.mediadroyd.ui.Playable>,
         val index: Int,
         val autoAdvance: Boolean = true,
+        /** More to play once the queue runs out (random movies, #512). */
+        val more: (() -> List<com.hawkynt.mediadroyd.ui.Playable>)? = null,
     ) : Screen
 }
 
@@ -130,7 +132,7 @@ fun main(args: Array<String>) = application {
                     settings = settings,
                     library = library,
                     onLibrary = { library = it },
-                    onPlay = { queue, index, autoAdvance -> screen = Screen.Player(queue, index, autoAdvance) },
+                    onPlay = { p -> screen = Screen.Player(p.queue, p.startIndex, p.autoAdvance, p.more) },
                 )
                 is Screen.Player -> {
                     val player = @androidx.compose.runtime.Composable { native: NativePicture? ->
@@ -141,6 +143,7 @@ fun main(args: Array<String>) = application {
                             queue = s.queue,
                             startIndex = s.index,
                             autoAdvance = s.autoAdvance,
+                            more = s.more,
                             fullScreen = state.placement == WindowPlacement.Fullscreen,
                             screen = { OutputScreen.of(window) },
                             onFullScreen = {

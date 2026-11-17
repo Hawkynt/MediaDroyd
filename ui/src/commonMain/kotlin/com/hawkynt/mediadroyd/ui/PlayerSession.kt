@@ -25,7 +25,7 @@ import com.hawkynt.mediadroyd.state.StateStore
  * language a video starts in until a track is picked by hand. The screens around it draw; this decides.
  */
 class PlayerSession(
-    val queue: List<Playable>,
+    first: List<Playable>,
     startIndex: Int,
     private val store: StateStore,
     private val engine: PlaybackEngine,
@@ -33,7 +33,25 @@ class PlayerSession(
     private val autoAdvance: Boolean,
     /** Intros jumped over and the credits ending a video (Settings → skip intros and credits). */
     val skipping: Boolean,
+    /**
+     * More to play once the queue runs out — random movies' next round (#512) — appended as the last one ends or Next
+     * is pressed on it, so the queue never ends; null for a queue that does.
+     */
+    private val more: (() -> List<Playable>)? = null,
 ) {
+    private val playing = androidx.compose.runtime.mutableStateListOf<Playable>().apply { addAll(first) }
+
+    /** What plays, in order: the queue it started with and, with [more], every round appended since. */
+    val queue: List<Playable> get() = playing
+
+    // With [more], the next round joined at the queue's end; whether there is a next video now.
+    private fun extended(): Boolean {
+        if (index + 1 < playing.size) return true
+        val round = more?.invoke().orEmpty()
+        playing.addAll(round)
+        return round.isNotEmpty()
+    }
+
     /** The video playing, as its place in [queue]. */
     var index by mutableIntStateOf(startIndex)
         private set
@@ -42,7 +60,7 @@ class PlayerSession(
     val current: Playable get() = queue[index]
 
     /** Whether there is a video after this one. */
-    val hasNext: Boolean get() = index + 1 < queue.size
+    val hasNext: Boolean get() = index + 1 < queue.size || more != null
 
     /** The queue is over: nothing plays after the last video, or the sleep timer ended it. */
     var finished by mutableStateOf(false)
@@ -173,7 +191,7 @@ class PlayerSession(
 
     /** The next video, its predecessor's progress kept; nothing after the last. */
     fun next() {
-        if (!hasNext) return
+        if (!hasNext || !extended()) return
         saveProgress()
         index++
     }
@@ -205,6 +223,11 @@ class PlayerSession(
         if (sleepAtEnd) {
             sleepAtEnd = false
             stop()
+            return
+        }
+        val atEnd = index + 1 >= playing.size && repeat == PlaybackMath.Repeat.OFF
+        if (atEnd && more != null && autoAdvance && extended()) {
+            index++
             return
         }
         when (val next = PlaybackMath.afterEnd(index, queue.size, autoAdvance, repeat)) {
