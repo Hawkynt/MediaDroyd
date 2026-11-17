@@ -5,7 +5,8 @@ import kotlin.math.abs
 /**
  * The household's sound settings on the decoded sound, one chain per playback and sound format: the loudness gain in
  * dB ([LoudnessCurve]), with even loudness the file's own correction on top ([LoudnessNormalization]: its ReplayGain
- * from [FileLoudness], else its loudness measured as it plays), and night mode ([NightModeCompressor], one gain per
+ * from [FileLoudness], else its loudness measured as it plays), clearer voices ([VoiceBoost]), and night mode
+ * ([NightModeCompressor], one gain per
  * frame from its loudest channel, so the stereo image stays put). The knobs are passed with every buffer, so a slider
  * takes effect mid-playback; a new [FileLoudness] — the next file, another audio track — starts the correction afresh.
  *
@@ -15,12 +16,14 @@ class LoudnessChain(private val sampleRate: Int, channels: Int) {
 
     private val channels = channels.coerceAtLeast(1)
     private val compressor = NightModeCompressor(sampleRate)
+    private val voices = VoiceBoost(sampleRate, channels)
     private var normalization: LoudnessNormalization? = null
     private var normalizationFor: FileLoudness? = null
 
     /**
-     * Applies the settings in place to [frames] frames of interleaved 16-bit samples from [offset]: the loudness
-     * [gainDb], [nightMode], and with [normalize] the correction for [file].
+     * Applies the settings in place to [frames] frames of interleaved 16-bit samples from [offset]: the voices raised
+     * by [voiceBoostDb] first ([VoiceBoost]), then the loudness [gainDb], [nightMode], and with [normalize] the
+     * correction for [file].
      */
     fun process(
         samples: ShortArray,
@@ -30,8 +33,10 @@ class LoudnessChain(private val sampleRate: Int, channels: Int) {
         nightMode: Boolean,
         normalize: Boolean,
         file: FileLoudness?,
+        voiceBoostDb: Float = 0f,
     ) {
         if (frames <= 0) return
+        voices.process(samples, offset, frames, voiceBoostDb)
         val factor = LoudnessCurve.factorFor(gainDb + normalizationDb(samples, offset, frames, normalize, file))
         val end = offset + frames * channels
         if (!nightMode) {
