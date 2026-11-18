@@ -229,6 +229,10 @@ fun SubtitleLookRows(
     look: com.hawkynt.mediadroyd.player.SubtitleLook,
     onLook: (com.hawkynt.mediadroyd.player.SubtitleLook) -> Unit,
     onReset: () -> Unit,
+    /** Moves a subtitle file's lines onto the speech (SubtitleSync); null where the track is not a file beside it. */
+    onSync: (() -> Unit)? = null,
+    /** What Sync is doing, or why it found nothing. */
+    syncing: String? = null,
 ) {
     PanelTitle("Subtitles")
     fun changeLook(changed: com.hawkynt.mediadroyd.player.SubtitleLook) = onLook(changed)
@@ -261,10 +265,26 @@ fun SubtitleLookRows(
     Text(
         com.hawkynt.mediadroyd.player.PlaybackMath.syncText("subtitles", look.delayMs)
             .replaceFirstChar { it.uppercase() } +
-            ". Later when a line shows before it is spoken, sooner when after.",
+            ". Later when a line shows before it is spoken, sooner when after." +
+            if (look.drift != 1.0) " Stretched to the film's speed by %.2f %%.".format((look.drift - 1) * 100) else "",
         fontSize = 14.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    if (onSync != null) {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onSync,
+            enabled = syncing == null || !syncing.endsWith("…"),
+            modifier = Modifier.padding(top = 6.dp),
+        ) {
+            Text("Sync to the speech", fontSize = 16.sp)
+        }
+        Text(
+            syncing ?: "Listens to the film and moves the lines onto what is said, and stretches them where the file " +
+                "was timed for another frame rate.",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     androidx.compose.foundation.layout.FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),

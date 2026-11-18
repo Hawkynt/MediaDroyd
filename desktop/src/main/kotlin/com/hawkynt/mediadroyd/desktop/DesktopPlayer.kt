@@ -141,9 +141,12 @@ fun DesktopPlayer(
     knobs.equalizerBandsDb = sound.equalizer.bandsDb
     knobs.nightMode = nightMode
     // The voices raised as Settings say right now (VoiceBoost, #452): Settings can be open beside the playing film.
+    // The player's state once made: the subtitle delay with its drift follows the position (SubtitleLook.delayAt).
+    val screenState = remember { arrayOfNulls<PlayerScreenState>(1) }
     val tuning = remember {
         object : PlaybackTuning by knobs {
             override val voiceBoostDb get() = store.state.data.settings.voices
+            override val subtitleDelayMs get() = screenState[0]?.subtitleDelayNow ?: knobs.subtitleDelayMs
         }
     }
     val engine = remember {
@@ -165,6 +168,7 @@ fun DesktopPlayer(
             more = more,
         )
     }
+    screenState[0] = state
     val session = state.session
     val index = session.index
     val playing = session.current
@@ -705,6 +709,10 @@ fun DesktopPlayer(
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)
+
+        // Where the sound speaks, for Sync: FFmpeg decoding the whole sound (SpeechReads).
+        override fun speech(location: String) =
+            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.of(location, places.remoteFile(location))
 
         override val commands = PlayerCommand.entries.toSet()
         override val subtitlesByTrack = true

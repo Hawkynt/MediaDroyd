@@ -18,6 +18,8 @@ data class SubtitleOverride(
     val size: String = "NORMAL",
     val raised: Boolean = false,
     val box: Boolean = false,
+    /** How much slower the cues run than the film, found by Sync (SubtitleLook.drift, #450). */
+    val drift: Double = 1.0,
 )
 
 /**
