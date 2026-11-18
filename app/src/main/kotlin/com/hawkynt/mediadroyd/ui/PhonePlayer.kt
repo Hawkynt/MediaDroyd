@@ -1108,6 +1108,10 @@ fun PhonePlayer(
         override fun recognise(gray: ByteArray) = com.hawkynt.mediadroyd.data.CreditReads.recognise(context, gray)
 
         // The film's sound read once for every analysis of it (FilmSound, #535): the app's FFmpeg at 16 kHz.
+        override fun log(message: String) {
+            android.util.Log.i("MediaDroyd.Measure", message)
+        }
+
         override fun openSound(location: String, fromMs: Long, near: Boolean) =
             com.hawkynt.mediadroyd.data.SpeechReads.open(context, location, fromMs, near)
 

@@ -112,6 +112,9 @@ interface PlayerPlatform {
      */
     fun openSound(location: String, fromMs: Long, near: Boolean): FilmSound.Stream? = null
 
+    /** A line for the platform's diagnostics log (how the hearing and the voice keep up); nowhere by default. */
+    fun log(message: String) {}
+
     /** The folder [download]'s files are kept in (models fetched when chosen); null where this build keeps none. */
     fun modelFolder(download: NeuralModels.Download): java.io.File? = null
 
@@ -340,9 +343,15 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         val captions = LiveCaptions(
             hear = hear@{ fromMs, toMs ->
                 val began = System.nanoTime()
+                val startedAt = state.positionMs
                 val pcm = sound.samples(fromMs, toMs) ?: return@hear null
-                fun whisper(translate: Boolean) =
-                    NativeWhisper.transcribe(handle, pcm, spoken ?: "auto", translate, threads)?.let(::heardOf)
+                val readMs = (System.nanoTime() - began) / 1_000_000
+                var whisperMs = 0L
+                fun whisper(translate: Boolean): LiveCaptions.Heard? {
+                    val t = System.nanoTime()
+                    return NativeWhisper.transcribe(handle, pcm, spoken ?: "auto", translate, threads)?.let(::heardOf)
+                        .also { whisperMs += (System.nanoTime() - t) / 1_000_000 }
+                }
                 // The language spoken from the first window, written as spoken; then by the route to the target.
                 var heard = if (spoken == null) whisper(false)?.also { spoken = it.language } else null
                 val route = CaptionRoute.of(target, spoken)
@@ -359,6 +368,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                         segment.copy(tone = Prosody.measure(pcm.copyOfRange(from, to), rate, letters))
                     },
                 )
+                val translated = System.nanoTime()
                 if (route.translator != null && translator != null) {
                     heard = heard.copy(
                         segments = heard.segments.map { segment ->
@@ -368,6 +378,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 }
                 tookMs = (System.nanoTime() - began) / 1_000_000
                 windowMs = toMs - fromMs
+                platform.log(
+                    "hearing ${fromMs / 1000}…${toMs / 1000} s: read ${readMs} ms, whisper ${whisperMs} ms, " +
+                        "translate ${(System.nanoTime() - translated) / 1_000_000} ms, " +
+                        "${heard.segments.size} lines, ${heard.segments.sumOf { it.text.split(' ').size }} words; " +
+                        "${(fromMs - startedAt) / 1000} s ahead when begun, " +
+                        "${(toMs - state.positionMs) / 1000} s at the end",
+                )
                 heard.copy(language = spoken ?: heard.language)
             },
             durationMs = engine.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE,
@@ -490,7 +507,15 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             } ?: fileLines
             Dub.align(raw, sound.speech())
         }
-        val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack)
+        val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack).apply {
+            onSpoken = { line, took, said ->
+                val lead = line.startMs - state.positionMs
+                platform.log(
+                    "voice ${line.startMs / 1000.0} s: ${if (said) "spoken" else "not spoken"} in $took ms, " +
+                        if (lead >= 0) "${lead / 1000.0} s before it is due" else "${-lead / 1000.0} s late",
+                )
+            }
+        }
         try {
             while (true) {
                 // A line that cannot be spoken says so in the gear; it never takes the player down.

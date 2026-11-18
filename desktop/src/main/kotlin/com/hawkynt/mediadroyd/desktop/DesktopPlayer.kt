@@ -718,6 +718,8 @@ fun DesktopPlayer(
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.recognise(neural, gray)
 
         // The film's sound read once for every analysis of it (FilmSound, #535): FFmpeg's sound at 16 kHz.
+        override fun log(message: String) = System.err.println("MediaDroyd.Measure: $message")
+
         override fun openSound(location: String, fromMs: Long, near: Boolean) =
             com.hawkynt.mediadroyd.engine.desktop.SpeechReads.open(location, places.remoteFile(location), fromMs, near)
 

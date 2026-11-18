@@ -257,6 +257,9 @@ object Dub {
 
         private val spoken = HashSet<Long>()
 
+        /** Told of each line as it is spoken: how long its voice took, and whether it could be spoken at all. */
+        var onSpoken: ((line: Line, tookMs: Long, spoken: Boolean) -> Unit)? = null
+
         /** Speaks what is due from [positionMs]; returns how many lines it spoke. Blocks. */
         fun ahead(positionMs: Long, voice: Int = 0): Int {
             var count = 0
@@ -265,7 +268,9 @@ object Dub {
                 if (line.endMs < positionMs || line.startMs in spoken) continue
                 if (line.startMs > positionMs + AHEAD_MS) break
                 val next = now.getOrNull(i + 1)?.startMs
+                val began = System.nanoTime()
                 val said = fit(line, speakerFor(line), next, voice)
+                onSpoken?.invoke(line, (System.nanoTime() - began) / 1_000_000, said != null)
                 spoken += line.startMs
                 if (said != null) {
                     val pcm = said.pcm
