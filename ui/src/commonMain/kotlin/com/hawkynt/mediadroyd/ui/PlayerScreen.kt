@@ -363,7 +363,11 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     }
                 }
                 while (true) {
-                    val heard = withContext(Dispatchers.Default) { captions.ahead(state.positionMs) }
+                    val heard = withContext(Dispatchers.Default) {
+                        runCatching { captions.ahead(state.positionMs) }
+                            .onFailure { state.captionStatus = "The speech could not be heard: ${it.message ?: it}" }
+                            .getOrDefault(false)
+                    }
                     if (heard) {
                         state.captionStatus = null
                         state.captionSpoken = spoken
@@ -453,7 +457,11 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     aligned = true
                     state.dubTrack.clear()
                 }
-                withContext(Dispatchers.Default) { speaking.ahead(state.positionMs) }
+                // A line that cannot be spoken says so in the gear; it never takes the player down.
+                withContext(Dispatchers.Default) {
+                    runCatching { speaking.ahead(state.positionMs) }
+                        .onFailure { state.dubStatus = "A line could not be spoken: ${it.message ?: it}" }
+                }
                 delay(DUB_PACE_MS)
             }
         } finally {

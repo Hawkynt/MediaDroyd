@@ -134,7 +134,8 @@ object Dub {
      * the delivery — songs (♪) not spoken; a line in capitals or ending in ! shouted, its capitals made sentence case.
      */
     fun clean(words: String): Cleaned {
-        var text = words.replace(Regex("""\{[^}]*}"""), "").replace(Regex("""<[^>]*>"""), "")
+        // Every brace escaped: Android's regular expressions (ICU) refuse a bare "}" the JVM's accept.
+        var text = words.replace(Regex("""\{[^}]*\}"""), "").replace(Regex("""<[^>]*>"""), "")
             .replace("\\N", " ").replace("\\n", " ")
         if ('♪' in text || '♫' in text) return Cleaned("")
         var delivery = Delivery()

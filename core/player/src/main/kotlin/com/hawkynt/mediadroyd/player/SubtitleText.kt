@@ -7,8 +7,9 @@ package com.hawkynt.mediadroyd.player
 object SubtitleText {
 
     private val fields = Regex("""^\d+,-?\d+,[^,]*,[^,]*,-?\d+,-?\d+,-?\d+,[^,]*,""")
-    private val drawing = Regex("""\{[^}]*\\p[1-9][^}]*}.*?(\{[^}]*\\p0[^}]*}|$)""")
-    private val tags = Regex("""\{[^}]*}""")
+    // Every brace escaped: Android's regular expressions (ICU) refuse a bare "}" the JVM's accept.
+    private val drawing = Regex("""\{[^}]*\\p[1-9][^}]*\}.*?(\{[^}]*\\p0[^}]*\}|$)""")
+    private val tags = Regex("""\{[^}]*\}""")
 
     /**
      * The text of [event]: its eight fields dropped, drawings (`\p1` … `\p0`) left out, override tags (`{…}`)
