@@ -329,7 +329,8 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             }
         }
         val video = session.current.videoPath
-        val threads = maxOf(1, Runtime.getRuntime().availableProcessors() - 1)
+        // The fast cores only: a phone's little ones slow ggml down (FastCores).
+        val threads = com.hawkynt.mediadroyd.player.FastCores.count()
         var spoken: String? = null
         // How long the last window took to hear, for telling the household when the model cannot keep up.
         var tookMs = 0L
@@ -705,11 +706,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 screens = { with(platform) { TopBarButtons() } },
             )
         }
-        // Subtitles made from the speech (#529), over the picture where the household reads subtitles.
-        state.captionText?.takeIf { !platform.pictureOnly }?.let { text ->
+        // Subtitles made from the speech (#529), over the picture where the household reads subtitles; while what plays
+        // is not heard yet, what the hearing is doing instead — listening, or running behind with a model too slow.
+        val captionShown = state.captionText ?: state.captionStatus?.takeIf { state.captioning && !state.panelOpen }
+        captionShown?.takeIf { !platform.pictureOnly }?.let { text ->
             Text(
                 text,
-                fontSize = 22.sp,
+                fontSize = if (state.captionText != null) 22.sp else 15.sp,
                 color = androidx.compose.ui.graphics.Color.White,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp, start = 32.dp, end = 32.dp)
