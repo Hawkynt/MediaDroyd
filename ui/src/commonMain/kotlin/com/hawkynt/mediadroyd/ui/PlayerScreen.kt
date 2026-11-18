@@ -87,10 +87,14 @@ interface PlayerPlatform {
     /**
      * Gray frames of [location] for finding its intro and credits by their pictures where the sound does not
      * (PictureCues, SkipFinder): its opening (IntroCredits.openingMs) at PictureCues' hash size every OPENING_STEP_MS,
-     * or where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS; null where the
-     * platform cannot read them. Blocks: called off the main thread.
+     * or where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS — decoded once, the
+     * text reader's frames kept (PictureCues.closing, #535) where [recognise] can read them; null where the platform
+     * cannot read them. Blocks: called off the main thread.
      */
     fun pictures(location: String, closing: Boolean): PictureCues.Frames? = null
+
+    /** The lines the platform's text recogniser reads in [gray] (CreditText's size); null where it cannot. Blocks. */
+    fun recognise(gray: ByteArray): List<CreditText.Line>? = null
 
     /**
      * [location]'s frames read for their text, for credits recognised by it (CreditText, SkipFinder): at each time [at]
@@ -282,6 +286,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             state.store,
             pictures = platform::pictures,
             text = platform::readText,
+            recognise = platform::recognise,
             print = platform::soundPrint,
         )
         for (step in finder.steps(session.queue.map { it.videoPath }, session.index)) {

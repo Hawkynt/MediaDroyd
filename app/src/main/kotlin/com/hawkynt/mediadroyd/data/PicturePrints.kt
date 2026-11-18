@@ -2,6 +2,8 @@ package com.hawkynt.mediadroyd.data
 
 import android.content.Context
 import com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer
+import com.hawkynt.mediadroyd.player.AndroidNeural
+import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.FfmpegInputs
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.PictureCues
@@ -35,12 +37,17 @@ object PicturePrints {
                 val openingMs = IntroCredits.openingMs((durationUs ?: 0) / 1000)
                 val endUs = startUs + (if (closing) IntroCredits.CLOSING_MS else openingMs) * 1000
                 val stepMs = if (closing) PictureCues.CLOSING_STEP_MS else PictureCues.OPENING_STEP_MS
-                val width = if (closing) PictureCues.LOOK_WIDTH else PictureCues.HASH_WIDTH
-                val height = if (closing) PictureCues.LOOK_HEIGHT else PictureCues.HASH_HEIGHT
+                // A closing at the text reader's size: decoded once for its pictures and its text (#535).
+                val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH
+                val height = if (closing) CreditText.HEIGHT else PictureCues.HASH_HEIGHT
                 val gray = demuxer.pictures(startUs, endUs, stepMs * 1000, width, height) ?: return null
                 val size = width * height
                 val frames = List(gray.size / size) { gray.copyOfRange(it * size, (it + 1) * size) }
-                if (frames.isEmpty()) null else PictureCues.Frames(width, height, startUs / 1000, stepMs, frames)
+                when {
+                    frames.isEmpty() -> null
+                    closing -> PictureCues.closing(startUs / 1000, durationUs!! / 1000, frames, AndroidNeural.loaded)
+                    else -> PictureCues.Frames(width, height, startUs / 1000, stepMs, frames)
+                }
             } finally {
                 demuxer.close()
             }

@@ -18,6 +18,14 @@ import java.io.RandomAccessFile
 object CreditReads {
     private var handle = 0L
 
+    /** The lines read in [gray] (CreditText's size), a frame decoded already (PictureCues.closing); null if not. */
+    fun recognise(context: Context, gray: ByteArray): List<CreditText.Line>? = synchronized(this) {
+        if (!AndroidNeural.loaded) return null
+        if (handle == 0L) handle = NativeText.open(context.assets, "models/${NeuralModels.PPOCR.folder}", false)
+        if (handle == 0L) return null
+        NativeText.read(handle, gray, CreditText.WIDTH, CreditText.HEIGHT)?.let(CreditText::lines)
+    }
+
     /** The video at [location]: at each time [at] gives from its length, the lines read there; null if unreadable. */
     fun read(
         context: Context,

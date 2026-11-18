@@ -1,6 +1,7 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
 import com.hawkynt.mediadroyd.library.FsFile
+import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
 import com.hawkynt.mediadroyd.player.PictureCues
 
@@ -16,13 +17,19 @@ object PicturePrints {
      * where [closing] its last IntroCredits.CLOSING_MS, as gray frames; null where it cannot be read or holds no
      * pictures.
      */
-    fun of(path: String, from: FsFile?, closing: Boolean): PictureCues.Frames? = runCatching {
+    fun of(
+        path: String,
+        from: FsFile?,
+        closing: Boolean,
+        keepText: Boolean = false,
+    ): PictureCues.Frames? = runCatching {
         MediaReader(path, from, decoders = emptyList()).use { reader ->
             val startMs = if (closing) (reader.durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0) else 0
             val endMs = startMs + if (closing) IntroCredits.CLOSING_MS else IntroCredits.openingMs(reader.durationMs)
             val stepMs = if (closing) PictureCues.CLOSING_STEP_MS else PictureCues.OPENING_STEP_MS
-            val width = if (closing) PictureCues.LOOK_WIDTH else PictureCues.HASH_WIDTH
-            val height = if (closing) PictureCues.LOOK_HEIGHT else PictureCues.HASH_HEIGHT
+            // A closing at the text reader's size: decoded once for its pictures and its text (#535).
+            val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH
+            val height = if (closing) CreditText.HEIGHT else PictureCues.HASH_HEIGHT
             if (startMs > 0) reader.seek(startMs)
             val frames = ArrayList<ByteArray>()
             var nextMs = startMs
@@ -36,7 +43,11 @@ object PicturePrints {
                     nextMs += stepMs
                 }
             }
-            if (frames.isEmpty()) null else PictureCues.Frames(width, height, startMs, stepMs, frames)
+            when {
+                frames.isEmpty() -> null
+                closing -> PictureCues.closing(startMs, reader.durationMs, frames, keepText)
+                else -> PictureCues.Frames(width, height, startMs, stepMs, frames)
+            }
         }
     }.getOrNull()
 }

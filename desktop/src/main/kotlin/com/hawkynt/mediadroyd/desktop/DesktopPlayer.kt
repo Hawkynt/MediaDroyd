@@ -684,11 +684,17 @@ fun DesktopPlayer(
 
         // And by their pictures where the sound does not tell: FFmpeg's pictures, shrunk to gray (PicturePrints).
         override fun pictures(location: String, closing: Boolean) =
-            com.hawkynt.mediadroyd.engine.desktop.PicturePrints.of(location, places.remoteFile(location), closing)
+            com.hawkynt.mediadroyd.engine.desktop.PicturePrints.of(
+                location, places.remoteFile(location), closing,
+                keepText = neural.loaded && neural.ready(com.hawkynt.mediadroyd.player.NeuralModels.PPOCR),
+            )
 
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)
+
+        override fun recognise(gray: ByteArray) =
+            com.hawkynt.mediadroyd.engine.desktop.CreditReads.recognise(neural, gray)
 
         // The film's sound read once for every analysis of it (FilmSound, #535): FFmpeg's sound at 16 kHz.
         override fun openSound(location: String, fromMs: Long) =
