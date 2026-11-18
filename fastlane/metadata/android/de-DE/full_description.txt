@@ -22,8 +22,13 @@ Deine Filme und Serien sind längst geordnet: Ordner mit .nfo-Dateien und Covern
 
 <b>Ton und Untertitel</b>
 • AC3, E-AC3, DTS und TrueHD mit eingebautem Decoder, wo das Gerät keinen hat
-• Nachtmodus, Tonversatz je Ausgang, räumlicher Klang
+• Nachtmodus, klarere Stimmen, 10-Band-Equalizer, Tonversatz je Ausgang, räumlicher Klang
 • ASS/SSA-Untertitel wie gestaltet, SRT, Videotext, eine zweite Untertitelzeile
+
+<b>Jeder Film in deiner Sprache</b>
+• Keine Untertitel? Sie entstehen beim Abspielen aus der Sprache — auf deinem Gerät, ohne Internet (Whisper)
+• Auf dem Gerät übersetzt: ins Deutsche, Englische, Französische, Spanische, Italienische, Niederländische oder Russische
+• Untertiteldateien, die zu früh, zu spät oder auseinanderlaufen, passen sich von selbst an die Sprache an
 
 <b>Auf dem großen Bildschirm</b>
 • Den Film auf Fernseher oder Beamer schicken, das Handy behält die Bedienung und wird dunkel

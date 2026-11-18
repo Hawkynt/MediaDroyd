@@ -164,7 +164,7 @@ fun GearPanel(
             TextButton(onClick = onForgetFolder) { Text("Forget the folder's picture", fontSize = 16.sp) }
         }
 
-        PanelTitle("Subtitles & sound")
+        PanelTitle("Language and sound")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Subtitles", fontSize = 17.sp, modifier = Modifier.weight(1f))
             Switch(checked = subtitlesOn, onCheckedChange = onSubtitles)
@@ -232,19 +232,8 @@ fun SubtitleLookRows(
     onSync: (() -> Unit)? = null,
     /** What Sync is doing, or why it found nothing. */
     syncing: String? = null,
-    /** The voices the subtitles can be spoken in (Dub); none: no such row. */
-    voices: List<com.hawkynt.mediadroyd.player.PiperVoices.Entry> = emptyList(),
-    voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry? = null,
-    dubbing: Boolean = false,
-    onDubbing: (Boolean) -> Unit = {},
-    onVoice: (com.hawkynt.mediadroyd.player.PiperVoices.Entry) -> Unit = {},
-    dubStatus: String? = null,
-    original: com.hawkynt.mediadroyd.player.Dub.Original = com.hawkynt.mediadroyd.player.Dub.Original.BAND,
-    /** Whether the sound has a dialogue channel of its own to remove (5.1 and the like). */
-    centreChannel: Boolean = false,
-    onOriginal: (com.hawkynt.mediadroyd.player.Dub.Original) -> Unit = {},
 ) {
-    PanelTitle("Subtitles")
+    PanelTitle("Subtitle look and timing")
     fun changeLook(changed: com.hawkynt.mediadroyd.player.SubtitleLook) = onLook(changed)
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     androidx.compose.foundation.layout.FlowRow(
@@ -294,62 +283,6 @@ fun SubtitleLookRows(
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-    if (voices.isNotEmpty()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("Speak the subtitles", fontSize = 16.sp)
-                Text(
-                    dubStatus ?: "A voice on this device reads the lines aloud, the film's dialogue stepping back.",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            androidx.compose.material3.Switch(checked = dubbing, onCheckedChange = onDubbing)
-        }
-        if (dubbing) {
-            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                voices.forEach { entry ->
-                    FilterChip(
-                        selected = entry == voice,
-                        onClick = { onVoice(entry) },
-                        label = { Text("${entry.label} · ${entry.language}", fontSize = 15.sp) },
-                    )
-                }
-            }
-            Text("The film's own voices while a line speaks", fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
-            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val choices = buildList {
-                    if (centreChannel) {
-                        add(com.hawkynt.mediadroyd.player.Dub.Original.CHANNEL to "Remove the dialogue channel")
-                    }
-                    add(com.hawkynt.mediadroyd.player.Dub.Original.BAND to "Suppress the voice band")
-                    add(com.hawkynt.mediadroyd.player.Dub.Original.MUTE to "Mute the sound")
-                }
-                // Removing the channel where there is none works as suppressing the band, and shows so.
-                val shown = if (original == com.hawkynt.mediadroyd.player.Dub.Original.CHANNEL && !centreChannel) {
-                    com.hawkynt.mediadroyd.player.Dub.Original.BAND
-                } else {
-                    original
-                }
-                choices.forEach { (choice, label) ->
-                    FilterChip(
-                        selected = shown == choice,
-                        onClick = { onOriginal(choice) },
-                        label = { Text(label, fontSize = 15.sp) },
-                    )
-                }
-            }
-            voice?.let {
-                Text(
-                    "${it.label}: ${it.licence}, ${it.download.bytes / 1_000_000} MB, fetched once.",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
     }
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     androidx.compose.foundation.layout.FlowRow(
@@ -431,7 +364,7 @@ fun CaptionRows(
         androidx.compose.material3.Switch(checked = on, onCheckedChange = onOn)
     }
     if (!on) return
-    Text("In", fontSize = 15.sp)
+    Text("Translated into", fontSize = 15.sp)
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         val languages = listOf("" to "As spoken", "en" to "English") +
@@ -453,6 +386,84 @@ fun CaptionRows(
                 onClick = { onModel(entry) },
                 label = { Text("${entry.label} · ${entry.download.bytes / 1_000_000} MB", fontSize = 15.sp) },
             )
+        }
+    }
+}
+
+/**
+ * The voice-over (Dub, #531, #534), in the gear's language: on or off, the voice that speaks — every line of the
+ * subtitles, a file's or those made from the speech, in their language, keeping each line's tone — and what the film's
+ * own voices do meanwhile: their dialogue channel removed (offered only where the sound has one), their voice band
+ * suppressed, or all of the sound muted. Not shown where no voice speaks these subtitles.
+ */
+@Composable
+fun VoiceOverRows(
+    voices: List<com.hawkynt.mediadroyd.player.PiperVoices.Entry>,
+    voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry?,
+    dubbing: Boolean,
+    onDubbing: (Boolean) -> Unit,
+    onVoice: (com.hawkynt.mediadroyd.player.PiperVoices.Entry) -> Unit,
+    dubStatus: String?,
+    original: com.hawkynt.mediadroyd.player.Dub.Original,
+    /** Whether the sound has a dialogue channel of its own to remove (5.1 and the like). */
+    centreChannel: Boolean,
+    onOriginal: (com.hawkynt.mediadroyd.player.Dub.Original) -> Unit,
+) {
+    if (voices.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Voice-over", fontSize = 16.sp)
+                Text(
+                    dubStatus
+                        ?: "A voice on this device speaks every line in the subtitles' language — the film re-voiced.",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(checked = dubbing, onCheckedChange = onDubbing)
+        }
+        if (dubbing) {
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                voices.forEach { entry ->
+                    FilterChip(
+                        selected = entry == voice,
+                        onClick = { onVoice(entry) },
+                        label = { Text("${entry.label} · ${entry.language}", fontSize = 15.sp) },
+                    )
+                }
+            }
+            Text("The film's own voices while a line speaks", fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val choices = buildList {
+                    if (centreChannel) {
+                        add(com.hawkynt.mediadroyd.player.Dub.Original.CHANNEL to "Remove the dialogue channel")
+                    }
+                    add(com.hawkynt.mediadroyd.player.Dub.Original.BAND to "Suppress the voice band")
+                    add(com.hawkynt.mediadroyd.player.Dub.Original.MUTE to "Mute the sound")
+                }
+                // Removing the channel where there is none works as suppressing the band, and shows so.
+                val shown = if (original == com.hawkynt.mediadroyd.player.Dub.Original.CHANNEL && !centreChannel) {
+                    com.hawkynt.mediadroyd.player.Dub.Original.BAND
+                } else {
+                    original
+                }
+                choices.forEach { (choice, label) ->
+                    FilterChip(
+                        selected = shown == choice,
+                        onClick = { onOriginal(choice) },
+                        label = { Text(label, fontSize = 15.sp) },
+                    )
+                }
+            }
+            voice?.let {
+                Text(
+                    "${it.label}: ${it.licence}, ${it.download.bytes / 1_000_000} MB, fetched once.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -789,6 +789,21 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 onModel = { state.chooseCaptionModel(it.id) },
                 status = state.captionStatus,
             )
+            VoiceOverRows(
+                voices = if (syncableSubtitles(state) != null || state.captioning) {
+                    PiperVoices.forLanguage(dubLanguage(state), platform.espeak)
+                } else {
+                    emptyList()
+                },
+                voice = dubVoice(state, platform, dubLanguage(state)),
+                dubbing = state.dubbing,
+                onDubbing = { state.dubbing = it },
+                onVoice = { voice -> state.chooseDubVoice(voice.id) },
+                original = state.dubOriginal,
+                centreChannel = com.hawkynt.mediadroyd.player.Dub.hasCentre(state.dubChannels),
+                onOriginal = state::chooseDubOriginal,
+                dubStatus = state.dubStatus,
+            )
             SubtitleLookRows(
                 state.subtitleLook, onLook = state::look, onReset = state::resetLook,
                 // Sync for a subtitle file beside the video (SubtitleSync, #450): its cues laid over the speech.
@@ -810,20 +825,6 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     }
                 },
                 syncing = state.syncing,
-                // Spoken subtitles (Dub, #531): for a file beside the video, where the build has a voice.
-                voices = if (syncableSubtitles(state) != null || state.captioning) {
-                    PiperVoices.forLanguage(dubLanguage(state), platform.espeak)
-                } else {
-                    emptyList()
-                },
-                voice = dubVoice(state, platform, dubLanguage(state)),
-                dubbing = state.dubbing,
-                onDubbing = { state.dubbing = it },
-                onVoice = { voice -> state.chooseDubVoice(voice.id) },
-                original = state.dubOriginal,
-                centreChannel = com.hawkynt.mediadroyd.player.Dub.hasCentre(state.dubChannels),
-                onOriginal = state::chooseDubOriginal,
-                dubStatus = state.dubStatus,
             )
             SleepChoice(state.session, ::monotonicMs)
             RepeatChoice(state.session.repeat) { state.session.repeat = it }

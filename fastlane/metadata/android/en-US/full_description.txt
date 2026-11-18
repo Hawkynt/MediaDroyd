@@ -22,8 +22,13 @@ Your movies and shows are already organized: folders with .nfo files and cover a
 
 <b>Sound and subtitles</b>
 • AC3, E-AC3, DTS and TrueHD through the built-in decoder where the device has none
-• Night mode, audio delay per output, spatial audio
+• Night mode, clearer voices, a 10-band equalizer, audio delay per output, spatial audio
 • ASS/SSA subtitles drawn as authored, SRT, teletext, a second subtitle line
+
+<b>Any film in your language</b>
+• No subtitles? They are written from the speech as the film plays — on your device, offline (Whisper)
+• Translated on your device into English, German, French, Spanish, Italian, Dutch or Russian
+• Subtitle files that run early, late or drift sync to the speech by themselves
 
 <b>On the big screen</b>
 • Send the film to a TV or projector while the phone keeps the controls and goes dark
