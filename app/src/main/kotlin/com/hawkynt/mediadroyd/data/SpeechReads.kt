@@ -17,6 +17,7 @@ import java.io.RandomAccessFile
  */
 object SpeechReads {
     private const val PIECE_US = 10_000_000L
+    private const val TAG = "MediaDroyd.Sound"
 
     /**
      * The video at [location] read from [fromMs]: where [near], from what Media3 read ahead of playback where it plays
@@ -24,9 +25,15 @@ object SpeechReads {
      */
     fun open(context: Context, location: String, fromMs: Long, near: Boolean = false): FilmSound.Stream? {
         if (near) {
-            SoundCopies.open(playableUri(location).toString(), fromMs) { at -> own(context, location, at) }
-                ?.let { return it }
+            SoundCopies.open(playableUri(location).toString(), fromMs) { at ->
+                android.util.Log.i(TAG, "sound at $at ms read from the file: the copies moved on")
+                own(context, location, at)
+            }?.let {
+                android.util.Log.i(TAG, "sound from $fromMs ms decoded from what playback read")
+                return it
+            }
         }
+        android.util.Log.i(TAG, "sound from $fromMs ms read from the file${if (near) ": no copies there" else ""}")
         return own(context, location, fromMs)
     }
 
