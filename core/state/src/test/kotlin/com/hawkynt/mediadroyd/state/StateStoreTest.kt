@@ -46,6 +46,24 @@ class StateStoreTest {
     }
 
     @Test
+    fun `each audio output keeps its own equalizer, the others play the household's (#451)`() {
+        val file = Memory()
+        val rock = EqualizerSetting.of(com.hawkynt.mediadroyd.player.EqualizerPreset.ROCK)
+        val pop = EqualizerSetting.of(com.hawkynt.mediadroyd.player.EqualizerPreset.POP)
+        StateStore(file).apply {
+            assertEquals(EqualizerSetting(), equalizerFor("speaker"))
+            data.settings.equalizer = rock
+            saveEqualizer("headset", pop)
+        }
+        val again = StateStore(file)
+        assertEquals(rock, again.equalizerFor("speaker"))
+        assertEquals(pop, again.equalizerFor("headset"))
+        assertEquals("Pop", again.equalizerFor("headset").name)
+        again.saveEqualizer("headset", rock)
+        assertFalse("headset" in again.data.equalizers)
+    }
+
+    @Test
     fun `the Android app's file of before the shared model reads as it was`() {
         val file = Memory(
             """{"rootPath":"/storage/emulated/0/Movies","watched":["/a.mkv"],"resume":{"/b.mkv":""" +
@@ -83,6 +101,7 @@ class StateStoreTest {
             upscaler = PictureAdjustment.Upscaler.FSR, colorize = PictureAdjustment.Colorize.DDCOLOR,
             cropBlackBars = true, stereo = PictureAdjustment.Stereo.LEFT, aspect = AspectOverride.SIXTEEN_NINE,
             logo = LogoMask(LogoMask.Corner.TOP_LEFT, 0.1f, LogoMask.Mode.BLUR), shader = "crt.glsl",
+            hue = 12f, tint = -0.3f, temperature = 5200f,
         )
         StateStore(file).saveDefaultPicture(picture)
         assertEquals(
@@ -97,6 +116,10 @@ class StateStoreTest {
         store.saveDefaultPicture(PictureAdjustment(brightness = 0.2f, cropBlackBars = true))
         store.savePicture("/v/a.mkv", store.defaultPicture())
         assertNull(store.ownPictureOf("/v/a.mkv"))
+        store.savePicture("/v/a.mkv", store.defaultPicture().copy(gamma = 1.5f, temperature = 7000f, hue = -20f))
+        assertEquals(1.5f, store.pictureFor("/v/a.mkv").gamma)
+        assertEquals(7000f, store.pictureFor("/v/a.mkv").temperature)
+        assertEquals(-20f, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/a.mkv").hue)
         store.savePicture("/v/a.mkv", store.defaultPicture().copy(gamma = 1.5f, chromaShiftX = -1.25f))
         assertEquals(1.5f, store.pictureFor("/v/a.mkv").gamma)
         assertEquals(-1.25f, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/a.mkv").chromaShiftX)

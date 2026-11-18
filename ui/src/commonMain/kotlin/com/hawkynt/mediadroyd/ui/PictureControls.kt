@@ -67,7 +67,7 @@ fun PictureSliders(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(control.label, fontSize = 16.sp, modifier = Modifier.weight(1f))
                 Text(
-                    if (control == PictureControl.BRIGHTNESS) "%+.2f".format(value) else "%.2f×".format(value),
+                    control.text(value),
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

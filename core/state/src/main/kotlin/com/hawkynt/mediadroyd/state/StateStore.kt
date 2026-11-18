@@ -163,6 +163,19 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
         save()
     }
 
+    /** The equalizer of the audio output [outputKey]: the one the gear set for it, else the household's (#451). */
+    fun equalizerFor(outputKey: String): EqualizerSetting = data.equalizers[outputKey] ?: data.settings.equalizer
+
+    /** Keeps [setting] for the audio output [outputKey]; the household's own is kept as none of its own. */
+    fun saveEqualizer(outputKey: String, setting: EqualizerSetting) {
+        if (setting == data.settings.equalizer) {
+            data.equalizers.remove(outputKey)
+        } else {
+            data.equalizers[outputKey] = setting
+        }
+        save()
+    }
+
     /** The order the [section]'s wall was last sorted by; A–Z until one is chosen. */
     fun sortFor(section: LibrarySection): SortOrder =
         data.sorts[section.name]?.let { name -> SortOrder.entries.firstOrNull { it.name == name } } ?: SortOrder.TITLE
@@ -224,6 +237,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             temporalDenoise = temporalDenoise,
             dotCrawl = dotCrawl,
             colorize = colorizeOf(colorize),
+            hue = hue,
+            tint = tint,
+            temperature = temperature,
         )
     }
 
@@ -237,6 +253,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             gamma = picture.gamma
             contrast = picture.contrast
             saturation = picture.saturation
+            hue = picture.hue
+            tint = picture.tint
+            temperature = picture.temperature
             sharpness = picture.sharpness
             clarity = picture.clarity
             noise = picture.noise
@@ -436,6 +455,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             colorize = colorizeOf(it.colorize),
             colourSystem = runCatching { PictureAdjustment.ColourSystem.valueOf(it.colourSystem) }
                 .getOrDefault(PictureAdjustment.ColourSystem.AUTO),
+            hue = it.hue,
+            tint = it.tint,
+            temperature = it.temperature,
             chromaShiftX = it.chromaShiftX,
             chromaShiftY = it.chromaShiftY,
             chromaShiftAuto = it.chromaShiftAuto,
@@ -470,6 +492,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             dotCrawl = picture.dotCrawl,
             colorize = picture.colorize.name,
             colourSystem = picture.colourSystem.name,
+            hue = picture.hue,
+            tint = picture.tint,
+            temperature = picture.temperature,
             chromaShiftX = picture.chromaShiftX,
             chromaShiftY = picture.chromaShiftY,
             chromaShiftAuto = picture.chromaShiftAuto,

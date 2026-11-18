@@ -136,6 +136,8 @@ fun DesktopPlayer(
     knobs.loudnessDb = sound.loudnessDb
     knobs.normalizeLoudness = sound.evenLoudness
     knobs.audioDelayMs = sound.audioDelayMs
+    knobs.equalizerPreampDb = sound.equalizer.preampDb
+    knobs.equalizerBandsDb = sound.equalizer.bandsDb
     knobs.nightMode = nightMode
     // The voices raised as Settings say right now (VoiceBoost, #452): Settings can be open beside the playing film.
     val tuning = remember {

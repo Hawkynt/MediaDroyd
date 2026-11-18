@@ -201,6 +201,27 @@ class GlStageTest {
         MediaReader.Picture(pts, 32, 24, ByteArray(32 * 24 * 4) { i -> if (i % 4 == 3) -1 else value.toByte() })
 
     @Test
+    fun `temperature warms or cools white, tint greens it, hue turns a colour and leaves grey (#447)`() {
+        fun rgbOf(p: PictureAdjustment, r: Int, g: Int, b: Int): List<Int> {
+            val picture = MediaReader.Picture(0, 32, 24, ByteArray(32 * 24 * 4) { i ->
+                when (i % 4) { 0 -> r; 1 -> g; 2 -> b; else -> 255 }.toByte()
+            })
+            val out = stage.process(Moment(picture), p, 32, 24).rgba
+            return (0..2).map { out[it].toInt() and 255 }
+        }
+        val warm = rgbOf(PictureAdjustment(temperature = 4000f), 235, 235, 235)
+        assertTrue("$warm", warm[0] > warm[1] && warm[1] > warm[2])
+        val cold = rgbOf(PictureAdjustment(temperature = 10_000f), 235, 235, 235)
+        assertTrue("$cold", cold[2] > cold[1] && cold[1] > cold[0])
+        val green = rgbOf(PictureAdjustment(tint = -1f), 200, 200, 200)
+        assertTrue("$green", green[1] > green[0] && green[1] > green[2])
+        val grey = rgbOf(PictureAdjustment(hue = 90f), 128, 128, 128)
+        assertTrue("$grey", grey.all { abs(it - 128) <= 1 })
+        val turned = rgbOf(PictureAdjustment(hue = 180f), 200, 60, 40)
+        assertTrue("$turned", turned[1] > turned[0] && turned[2] > turned[0])
+    }
+
+    @Test
     fun `the colour is moved against the brightness, across and down, the brightness staying (#444)`() {
         // A red block on grey whose colour sits one column and one row too far left and up.
         val w = 32
@@ -227,17 +248,29 @@ class GlStageTest {
 
     @Test
     fun `blending High shows the two pictures mixed by the clock, Low only around the middle`() {
-        val a = flat(0, 40)
-        val b = flat(40, 200)
+        // Two levels close enough to be one scene (a step of 8 % is no cut; SceneCuts).
+        val a = flat(0, 100)
+        val b = flat(40, 120)
         val high = PictureAdjustment(interpolation = PictureAdjustment.Interpolation.HIGH)
         fun at(phase: Float, p: PictureAdjustment = high) =
             stage.process(Moment(a, next = b, phase = phase), p, 32, 24).rgba[0].toInt() and 255
-        assertEquals(40, at(0f))
-        assertTrue("${at(0.5f)}", abs(at(0.5f) - 120) <= 1)
-        assertEquals(200, at(1f))
+        assertEquals(100, at(0f))
+        assertTrue("${at(0.5f)}", abs(at(0.5f) - 110) <= 1)
+        assertEquals(120, at(1f))
         val low = high.copy(interpolation = PictureAdjustment.Interpolation.LOW)
-        assertEquals(40, at(0.3f, low))
-        assertEquals(200, at(0.7f, low))
+        assertEquals(100, at(0.3f, low))
+        assertEquals(120, at(0.7f, low))
+    }
+
+    @Test
+    fun `across a scene cut the picture before stays until the next is due, never a mix (#442)`() {
+        val a = flat(0, 40)
+        val b = flat(40, 200)
+        val high = PictureAdjustment(interpolation = PictureAdjustment.Interpolation.HIGH)
+        fun at(phase: Float) = stage.process(Moment(a, next = b, phase = phase), high, 32, 24).rgba[0].toInt() and 255
+        assertEquals(40, at(0.5f))
+        assertEquals(40, at(0.9f))
+        assertEquals(200, at(1f))
     }
 
     @Test
