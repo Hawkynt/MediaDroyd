@@ -197,8 +197,8 @@ of its own, within two seconds of the tap. All of it runs on the graphics chip b
 
 Across a scene cut nothing is made between the two frames: the frame before stays until the next is due, so the
 blends and the networks never smear one shot into the next — a cut told as FFmpeg's scdet tells one (the frames' mean
-difference and its jump from the pair before, the smaller of the two at 10 % or more), on a small luma picture of each
-frame; Motion keeps its own verdict and switches half-way, as minterpolate does.
+difference and its jump from the pair before, the smaller of the two at 10 % or more; the first pair after a seek, with
+no jump to measure, at 20 % or more, so a fast pan is not taken for one), on a small luma picture of each frame; Motion keeps its own verdict and switches half-way, as minterpolate does.
 
 **Debanding** — the 8-bit steps in a sky or a fade to black smoothed away rather than hidden under grain:
 [libplacebo](https://code.videolan.org/videolan/libplacebo)'s deband (mpv's `--deband`), one slider from off through

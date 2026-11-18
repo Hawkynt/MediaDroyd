@@ -23,7 +23,9 @@ class SceneCuts {
     /**
      * Whether the frames [earlierId] and [laterId] are a cut apart, their luma planes made by [plane] (null where a
      * frame cannot be read: no cut). The jump is measured from the pair ending in [earlierId] where that was the last
-     * asked, else from nothing — the first pair after a seek, which a cut then rather holds a frame too many.
+     * asked, else from nothing — the first pair after a seek or a jump — and then, with no jump to tell a cut from
+     * fast motion, only a difference of [FIRST_THRESHOLD] counts: a pan of a few pixels over fine detail differs by
+     * some 15 %, two shots by far more.
      */
     fun isCut(earlierId: Long, laterId: Long, plane: (Long) -> Deinterlacer.Plane?): Boolean {
         verdicts[earlierId to laterId]?.let { return it }
@@ -31,8 +33,12 @@ class SceneCuts {
         val b = planeOf(laterId, plane)
         if (a == null || b == null || a.width != b.width || a.height != b.height) return false
         val mafd = mafd(a, b)
-        val before = if (lastLaterId == earlierId) lastMafd else 0.0
-        val cut = minOf(mafd, abs(mafd - before)).coerceIn(0.0, 100.0) >= THRESHOLD
+        val known = lastLaterId == earlierId
+        val cut = if (known) {
+            minOf(mafd, abs(mafd - lastMafd)).coerceIn(0.0, 100.0) >= THRESHOLD
+        } else {
+            mafd >= FIRST_THRESHOLD
+        }
         lastLaterId = laterId
         lastMafd = mafd
         verdicts[earlierId to laterId] = cut
@@ -51,6 +57,9 @@ class SceneCuts {
     companion object {
         /** scdet's default threshold, in percent. */
         const val THRESHOLD = 10.0
+
+        /** The difference a pair with no pair before it must reach to be a cut, in percent: our own, twice scdet's. */
+        const val FIRST_THRESHOLD = 2 * THRESHOLD
 
         /** How wide the luma plane a frame is judged by is. */
         const val COLUMNS = 64
