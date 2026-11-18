@@ -47,6 +47,14 @@ class SceneCutsTest {
     }
 
     @Test
+    fun `a pair with no pair before it is a cut only where it differs by far more than motion does`() {
+        // A pan of several pixels over fine detail: some 15 % apart, no cut without a jump to measure.
+        val fine = { s: Int -> Deinterlacer.Plane(w, h, IntArray(w * h) { i -> if ((i % w + s) / 2 % 2 == 0) 60 else 120 }) }
+        assertFalse(SceneCuts().isCut(0, 1) { fine(it.toInt()) })
+        assertTrue(SceneCuts().isCut(0, 1) { if (it == 0L) pan(1, 0) else pan(3, 0) })
+    }
+
+    @Test
     fun `a pair asked again keeps its verdict, and a missing picture is no cut`() {
         val cuts = SceneCuts()
         val a = scene(1, 0)
