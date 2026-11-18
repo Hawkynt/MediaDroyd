@@ -405,15 +405,16 @@ fun PanelTitle(text: String) {
 }
 
 /**
- * Subtitles made from the speech (#529), in the gear's subtitles: on or off, in English whatever is spoken, and the
- * Whisper model that hears — larger hears better and needs a faster device — with what it is doing.
+ * Subtitles made from the speech (#529), in the gear's subtitles: on or off, the language they are in (#530) — as
+ * spoken, or translated on the device into English or a language OPUS-MT writes — and the Whisper model that hears:
+ * larger hears better and needs a faster device. With what it is doing.
  */
 @Composable
 fun CaptionRows(
     on: Boolean,
     onOn: (Boolean) -> Unit,
-    english: Boolean,
-    onEnglish: (Boolean) -> Unit,
+    target: String,
+    onTarget: (String) -> Unit,
     model: com.hawkynt.mediadroyd.player.WhisperModels.Entry,
     onModel: (com.hawkynt.mediadroyd.player.WhisperModels.Entry) -> Unit,
     status: String?,
@@ -430,10 +431,20 @@ fun CaptionRows(
         androidx.compose.material3.Switch(checked = on, onCheckedChange = onOn)
     }
     if (!on) return
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text("Translate into English", fontSize = 15.sp, modifier = Modifier.weight(1f))
-        androidx.compose.material3.Switch(checked = english, onCheckedChange = onEnglish)
+    Text("In", fontSize = 15.sp)
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val languages = listOf("" to "As spoken", "en" to "English") +
+            com.hawkynt.mediadroyd.player.TranslationModels.ALL.map { it.language to it.label }
+        languages.forEach { (code, label) ->
+            FilterChip(
+                selected = target == code,
+                onClick = { onTarget(code) },
+                label = { Text(label, fontSize = 15.sp) },
+            )
+        }
     }
+    Text("Heard by", fontSize = 15.sp)
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         com.hawkynt.mediadroyd.player.WhisperModels.ALL.forEach { entry ->

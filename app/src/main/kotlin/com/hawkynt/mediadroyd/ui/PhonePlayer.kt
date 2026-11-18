@@ -1112,11 +1112,8 @@ fun PhonePlayer(
         override fun soundAt(location: String, fromMs: Long, toMs: Long) =
             com.hawkynt.mediadroyd.data.SpeechReads.soundAt(context, location, fromMs, toMs)
 
-        override fun whisperReady(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry) =
-            com.hawkynt.mediadroyd.data.ModelStore.ready(context, model.download)
-
-        override fun fetchWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry, progress: (Float) -> Unit) =
-            com.hawkynt.mediadroyd.data.ModelStore.fetch(context, model.download, progress)
+        override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
+            com.hawkynt.mediadroyd.data.ModelStore.folder(context, download)
 
         override fun openWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry): Long =
             if (!com.hawkynt.mediadroyd.player.AndroidNeural.loaded) {

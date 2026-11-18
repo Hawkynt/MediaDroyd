@@ -696,11 +696,8 @@ fun DesktopPlayer(
                 location, places.remoteFile(location), fromMs, toMs,
             )
 
-        override fun whisperReady(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry) =
-            com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(model.download), model.download)
-
-        override fun fetchWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry, progress: (Float) -> Unit) =
-            com.hawkynt.mediadroyd.player.ModelFolder.fetch(neural.folder(model.download), model.download, progress)
+        override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
+            neural.folder(download)
 
         override fun openWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry): Long =
             if (!com.hawkynt.mediadroyd.engine.desktop.NativeNetworks.loaded) {

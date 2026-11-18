@@ -43,6 +43,11 @@ import com.hawkynt.mediadroyd.player.PiperVoices
 import com.hawkynt.mediadroyd.player.LiveCaptions
 import com.hawkynt.mediadroyd.player.NativeWhisper
 import com.hawkynt.mediadroyd.player.WhisperModels
+import com.hawkynt.mediadroyd.player.CaptionRoute
+import com.hawkynt.mediadroyd.player.MarianTranslator
+import com.hawkynt.mediadroyd.player.NeuralModels
+import com.hawkynt.mediadroyd.player.ModelFolder
+import com.hawkynt.mediadroyd.player.TranslationModels
 import com.hawkynt.mediadroyd.player.ChapterSteps
 import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
@@ -106,11 +111,8 @@ interface PlayerPlatform {
      */
     fun soundAt(location: String, fromMs: Long, toMs: Long): FloatArray? = null
 
-    /** Whether [model]'s file is in place. */
-    fun whisperReady(model: WhisperModels.Entry): Boolean = false
-
-    /** Fetches [model], telling [progress] (0 … 1); whether it is in place. Blocks. */
-    fun fetchWhisper(model: WhisperModels.Entry, progress: (Float) -> Unit): Boolean = false
+    /** The folder [download]'s files are kept in (models fetched when chosen); null where this build keeps none. */
+    fun modelFolder(download: NeuralModels.Download): java.io.File? = null
 
     /** [model] loaded into the native library (NativeWhisper.open); 0 where it cannot here. Blocks. */
     fun openWhisper(model: WhisperModels.Entry): Long = 0L
@@ -294,40 +296,59 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
     }
 
     // Subtitles made from the speech (#529): the sound ahead of the position heard by Whisper (the household's model,
-    // fetched the first time), in English where asked; shown over the picture, and spoken where the dub is on.
-    LaunchedEffect(state.captioning, state.captionTranslate, state.captionModel, session.index) {
+    // fetched the first time); in the language wanted (#530) — as spoken, Whisper's English, or that English translated
+    // by OPUS-MT (CaptionRoute); shown over the picture, and spoken where the dub is on.
+    LaunchedEffect(state.captioning, state.captionTarget, state.captionModel, session.index) {
         state.captions = null
         state.captionText = null
+        state.captionSpoken = null
         if (!state.captioning) {
             state.captionStatus = null
             return@LaunchedEffect
         }
         val model = WhisperModels.of(state.captionModel)
-        if (!platform.whisperReady(model)) {
-            state.captionStatus = "Fetching Whisper ${model.label}…"
-            val fetched = withContext(Dispatchers.IO) {
-                platform.fetchWhisper(model) { done ->
-                    state.captionStatus = "Fetching Whisper ${model.label}… ${(done * 100).toInt()} %"
-                }
-            }
-            if (!fetched) {
-                state.captionStatus = "Whisper ${model.label} could not be fetched."
-                return@LaunchedEffect
-            }
+        if (!fetched(platform, model.download, "Whisper ${model.label}") { state.captionStatus = it }) {
+            return@LaunchedEffect
+        }
+        val target = state.captionTarget
+        val translation = TranslationModels.into(target)
+        if (translation != null &&
+            !fetched(platform, translation.download, "the ${translation.label} translator") { state.captionStatus = it }
+        ) {
+            return@LaunchedEffect
         }
         val handle = withContext(Dispatchers.Default) { platform.openWhisper(model) }
         if (handle == 0L) {
             state.captionStatus = "Whisper cannot run in this build."
             return@LaunchedEffect
         }
+        val translator = translation?.let { entry ->
+            withContext(Dispatchers.Default) {
+                platform.modelFolder(entry.download)?.let { runCatching { MarianTranslator(it) }.getOrNull() }
+            }
+        }
         val video = session.current.videoPath
-        val translate = state.captionTranslate
         val threads = maxOf(1, Runtime.getRuntime().availableProcessors() - 1)
+        var spoken: String? = null
         val captions = LiveCaptions(
-            hear = { fromMs, toMs ->
-                platform.soundAt(video, fromMs, toMs)?.let { pcm ->
-                    NativeWhisper.transcribe(handle, pcm, "auto", translate, threads)?.let(::heardOf)
+            hear = hear@{ fromMs, toMs ->
+                val pcm = platform.soundAt(video, fromMs, toMs) ?: return@hear null
+                fun whisper(translate: Boolean) =
+                    NativeWhisper.transcribe(handle, pcm, spoken ?: "auto", translate, threads)?.let(::heardOf)
+                // The language spoken from the first window, written as spoken; then by the route to the target.
+                var heard = if (spoken == null) whisper(false)?.also { spoken = it.language } else null
+                val route = CaptionRoute.of(target, spoken)
+                if (heard == null || route.whisperTranslates) {
+                    heard = whisper(route.whisperTranslates) ?: return@hear null
                 }
+                if (route.translator != null && translator != null) {
+                    heard = heard.copy(
+                        segments = heard.segments.map { segment ->
+                            segment.copy(text = translator.translate(segment.text.trim()) ?: segment.text)
+                        },
+                    )
+                }
+                heard.copy(language = spoken ?: heard.language)
             },
             durationMs = engine.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE,
         )
@@ -345,13 +366,17 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     val heard = withContext(Dispatchers.Default) { captions.ahead(state.positionMs) }
                     if (heard) {
                         state.captionStatus = null
-                        state.captionLanguage = if (translate) "en" else captions.language
+                        state.captionSpoken = spoken
+                        state.captionLanguage = target.ifEmpty { spoken }
                     }
                     delay(DUB_PACE_MS)
                 }
             }
         } finally {
-            withContext(NonCancellable + Dispatchers.Default) { NativeWhisper.close(handle) }
+            withContext(NonCancellable + Dispatchers.Default) {
+                NativeWhisper.close(handle)
+                translator?.close()
+            }
         }
     }
 
@@ -371,7 +396,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             return@LaunchedEffect
         }
         val language = if (dubCaptions != null) {
-            state.captionLanguage ?: if (state.captionTranslate) "en" else null
+            state.captionLanguage ?: state.captionTarget.ifEmpty { null }
         } else {
             state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language
         }
@@ -736,8 +761,8 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             CaptionRows(
                 on = state.captioning,
                 onOn = { state.captioning = it },
-                english = state.captionTranslate,
-                onEnglish = state::chooseCaptionTranslate,
+                target = state.captionTarget,
+                onTarget = state::chooseCaptionTarget,
                 model = WhisperModels.of(state.captionModel),
                 onModel = { state.chooseCaptionModel(it.id) },
                 status = state.captionStatus,
@@ -799,7 +824,8 @@ private fun Dialogs(state: PlayerScreenState, platform: PlayerPlatform) {
             graph = PlaybackChain.of(
                 platform.facts().copy(
                     made = PlaybackChain.Made(
-                        WhisperModels.of(state.captionModel).label, state.captionLanguage, state.captionTranslate,
+                        WhisperModels.of(state.captionModel).label, state.captionSpoken,
+                        translation = captionTranslation(state),
                     ).takeIf { state.captioning },
                     voiceOver = if (state.dubbing) {
                         val voice = dubVoice(state, platform, dubLanguage(state))?.label ?: "no voice"
@@ -934,7 +960,7 @@ internal fun dubVoice(state: PlayerScreenState, platform: PlayerPlatform, langua
 /** The language of the subtitle track playing, as the engine names it. */
 internal fun dubLanguage(state: PlayerScreenState): String? =
     if (syncableSubtitles(state) == null && state.captioning) {
-        state.captionLanguage ?: if (state.captionTranslate) "en" else null
+        state.captionLanguage ?: state.captionTarget.ifEmpty { null }
     } else {
         state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language
     }
@@ -952,4 +978,39 @@ internal fun heardOf(text: String): LiveCaptions.Heard {
         if (start == null || end == null) null else LiveCaptions.Segment(start, end, parts.getOrElse(2) { "" })
     }
     return LiveCaptions.Heard(lines.firstOrNull().orEmpty(), segments)
+}
+
+/**
+ * Whether [download]'s files are in place, fetched now where not (telling [say] how far, as [what]); false where they
+ * could not be — [say] has said why.
+ */
+internal suspend fun fetched(
+    platform: PlayerPlatform,
+    download: NeuralModels.Download,
+    what: String,
+    say: (String?) -> Unit,
+): Boolean {
+    val dir = platform.modelFolder(download) ?: run {
+        say("This build cannot keep $what.")
+        return false
+    }
+    if (ModelFolder.ready(dir, download)) return true
+    say("Fetching $what…")
+    val done = withContext(Dispatchers.IO) {
+        ModelFolder.fetch(dir, download, { part -> say("Fetching $what… ${(part * 100).toInt()} %") })
+    }
+    if (!done) say("$what could not be fetched.")
+    return done
+}
+
+/** How the made subtitles are translated, as the info graph names it; null where they are as spoken. */
+internal fun captionTranslation(state: PlayerScreenState): String? {
+    val route = CaptionRoute.of(state.captionTarget, state.captionSpoken)
+    val into = TranslationModels.into(route.translator)
+    return when {
+        route.translator != null && route.whisperTranslates -> "Whisper into English, then OPUS-MT into ${into?.label}"
+        route.translator != null -> "OPUS-MT, English into ${into?.label}"
+        route.whisperTranslates -> "Whisper, into English"
+        else -> null
+    }
 }

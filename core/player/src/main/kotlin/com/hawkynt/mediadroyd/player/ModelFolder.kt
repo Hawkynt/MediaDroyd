@@ -54,6 +54,8 @@ object ModelFolder {
                 continue
             }
             val part = File(dir, "${file.name}.part")
+            // A file in a folder of its download's (onnx/model.onnx) gets that folder.
+            part.parentFile?.mkdirs()
             val ok = runCatching {
                 open(file).use { input ->
                     part.outputStream().use { output ->
@@ -104,6 +106,8 @@ object ModelFolder {
                     val entry = zip.nextEntry ?: break
                     val file = wanted[entry.name] ?: continue
                     val part = File(dir, "${file.name}.part")
+            // A file in a folder of its download's (onnx/model.onnx) gets that folder.
+            part.parentFile?.mkdirs()
                     part.outputStream().use { zip.copyTo(it) }
                     val target = File(dir, file.name)
                     target.delete()

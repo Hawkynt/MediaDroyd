@@ -166,7 +166,7 @@ data class Settings(
     var dubVoice: String = "",               // the voice subtitles are spoken in (PiperVoices id), "" none chosen
     var dubOriginal: String = "BAND",        // Dub.Original name: the dialogue channel, the voice band, or all
     var captionModel: String = "base-q5_1", // WhisperModels id: subtitles made from the speech (#529)
-    var captionTranslate: Boolean = false,    // made subtitles in English, whatever is spoken
+    var captionTarget: String = "",          // made subtitles' language (ISO 639-1); "" as spoken (#530)
     var equalizer: EqualizerSetting = EqualizerSetting(), // the household's, where an output keeps none (#451)
     var evenLoudness: Boolean = false,        // every file at the same loudness: ReplayGain, else measured (R128)
     var matchRefreshRate: Boolean = false,    // TV boxes: switch the display to a multiple of the film's frame rate

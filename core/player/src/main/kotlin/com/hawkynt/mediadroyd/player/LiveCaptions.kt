@@ -81,3 +81,21 @@ class LiveCaptions(
         const val EDGE_MS = 2_000L
     }
 }
+
+/**
+ * How made subtitles reach the language wanted (#529, #530): whether Whisper writes English ([whisperTranslates]) and
+ * into which language OPUS-MT then translates that English ([translator]; null for none). [of] decides from the
+ * language [target]ed (null or empty: as spoken) and the one [spoken] (null before it is known): as spoken, Whisper
+ * writes what it hears; into English, Whisper translates unless English is spoken; into another language, nothing
+ * where that is spoken, else English first — Whisper's, unless English is spoken — then OPUS-MT.
+ */
+data class CaptionRoute(val whisperTranslates: Boolean, val translator: String?) {
+    companion object {
+        fun of(target: String?, spoken: String?): CaptionRoute = when {
+            target.isNullOrEmpty() -> CaptionRoute(false, null)
+            target == "en" -> CaptionRoute(spoken != "en", null)
+            target == spoken -> CaptionRoute(false, null)
+            else -> CaptionRoute(spoken != "en", target)
+        }
+    }
+}

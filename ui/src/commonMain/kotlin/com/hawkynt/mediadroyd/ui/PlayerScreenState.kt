@@ -69,11 +69,12 @@ class PlayerScreenState(
     val subtitleDelayNow: Int get() = subtitleLook.delayAt(positionMs)
 
     /**
-     * Subtitles made from the speech (#529): whether they are on, in English or as spoken, by which Whisper model (the
-     * household's), what it is doing, the lines heard, the one showing now and the language they are in.
+     * Subtitles made from the speech (#529): whether they are on, in which language (#530; as spoken, or translated),
+     * by which Whisper model (the household's), what it is doing, the lines heard, the one showing now and the
+     * language they are in.
      */
     var captioning by mutableStateOf(false)
-    var captionTranslate by mutableStateOf(store.data.settings.captionTranslate)
+    var captionTarget by mutableStateOf(store.data.settings.captionTarget)
         private set
     var captionModel by mutableStateOf(store.data.settings.captionModel)
         private set
@@ -82,11 +83,15 @@ class PlayerScreenState(
     var captionText by mutableStateOf<String?>(null)
     var captionLanguage by mutableStateOf<String?>(null)
 
-    fun chooseCaptionTranslate(on: Boolean) {
-        captionTranslate = on
-        store.data.settings.captionTranslate = on
+    /** Made subtitles in [language] (ISO 639-1; "" as spoken) from now on, for every video (#530). */
+    fun chooseCaptionTarget(language: String) {
+        captionTarget = language
+        store.data.settings.captionTarget = language
         store.save()
     }
+
+    /** The made subtitles' route to the language wanted, and the language spoken, as last heard. */
+    var captionSpoken by mutableStateOf<String?>(null)
 
     fun chooseCaptionModel(id: String) {
         captionModel = id

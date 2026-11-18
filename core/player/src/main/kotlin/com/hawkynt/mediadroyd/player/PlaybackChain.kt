@@ -44,9 +44,9 @@ object PlaybackChain {
 
     /**
      * Subtitles made from the speech: the Whisper [model] that hears, the [language] it heard (null before), and
-     * whether they are [translated] into English.
+     * how they are translated ([translation]; null for as spoken).
      */
-    data class Made(val model: String, val language: String?, val translated: Boolean)
+    data class Made(val model: String, val language: String?, val translation: String? = null)
 
     /** The picture's way from the decoder to the screen. */
     data class Video(
@@ -248,7 +248,7 @@ object PlaybackChain {
                 "Whisper ${made.model} (whisper.cpp), heard ahead of the position" +
                     (made.language?.let { " · ${it.uppercase()}" } ?: ""),
             ),
-            Node("Translation", "Whisper, into English").takeIf { made.translated },
+            made.translation?.let { Node("Translation", it) },
             Node("Renderer", "MediaDroyd's own text over the picture"),
         ),
         Node("Screen", "over the picture"),

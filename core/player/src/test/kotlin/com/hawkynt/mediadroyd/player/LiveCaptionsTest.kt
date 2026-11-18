@@ -47,4 +47,19 @@ class LiveCaptionsTest {
         assertEquals("line 75", line?.text)
         assertEquals(null, captions.lineAt(302_500))
     }
+
+    @Test
+    fun `made subtitles reach any language through English`() {
+        assertEquals(CaptionRoute(false, null), CaptionRoute.of("", "ja"))
+        assertEquals(CaptionRoute(true, null), CaptionRoute.of("en", "ja"))
+        assertEquals(CaptionRoute(false, null), CaptionRoute.of("en", "en"))
+        // Japanese speech into German: Whisper's English, then OPUS-MT into German.
+        assertEquals(CaptionRoute(true, "de"), CaptionRoute.of("de", "ja"))
+        // English speech into German: Whisper writes English, OPUS-MT translates it.
+        assertEquals(CaptionRoute(false, "de"), CaptionRoute.of("de", "en"))
+        // German speech into German: written as spoken.
+        assertEquals(CaptionRoute(false, null), CaptionRoute.of("de", "de"))
+        // Not known yet: English first, to be safe.
+        assertEquals(CaptionRoute(true, "de"), CaptionRoute.of("de", null))
+    }
 }

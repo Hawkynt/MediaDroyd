@@ -77,7 +77,7 @@ tasks.test {
         exclude(
             "**/NativeNetworksTest*", "**/NativeNeuralTest*", "**/LibAssTest*", "**/LibAssEngineTest*",
             "**/FingerprintTest*", "**/SoundPrintsTest*", "**/PicturePrintsTest*", "**/NativeTextTest*",
-            "**/PiperSpeakerTest*", "**/WhisperTest*",
+            "**/PiperSpeakerTest*", "**/WhisperTest*", "**/TranslatorTest*",
         )
     }
 }
