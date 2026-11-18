@@ -75,6 +75,7 @@ import com.hawkynt.mediadroyd.engine.desktop.DesktopPlaybackEngine
 import com.hawkynt.mediadroyd.engine.desktop.MediaReader
 import com.hawkynt.mediadroyd.player.AssPicture
 import com.hawkynt.mediadroyd.player.AutoCrop
+import com.hawkynt.mediadroyd.player.VhsEdges
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.library.FolderDefaults
 import com.hawkynt.mediadroyd.player.BurnInDrift
@@ -304,6 +305,11 @@ fun DesktopPlayer(
         // afresh for every video; the crop found, for pictures of the size it was found on.
         val autoCrop = AutoCrop()
         var cropVideo: String? = null
+        // A tape's torn lines at the bottom (VhsEdges.Auto): the picture's last lines judged every few seconds until
+        // decided, afresh for every video.
+        val edgesAuto = VhsEdges.Auto()
+        var edgesVideo: String? = null
+        var edgesSampleMs = 0L
         var lastSampleMs = 0L
         var crop: PictureCrop? = null
         var staged: MediaReader.Picture? = null
@@ -396,7 +402,22 @@ fun DesktopPlayer(
                         autoCrop.crop(raw.width, raw.height).takeUnless { it.isWhole(raw.width, raw.height) }
                     }
                 }
-                val part = crop?.takeIf { it.left + it.width <= raw.width && it.top + it.height <= raw.height }
+                if (engine.openedPath != edgesVideo || !picture.edgesAuto) {
+                    edgesVideo = engine.openedPath
+                    edgesAuto.restart()
+                    edgesSampleMs = 0L
+                }
+                if (picture.edgesAuto && !edgesAuto.decided && nowMs - edgesSampleMs >= VhsEdges.Auto.INTERVAL_MS) {
+                    edgesSampleMs = nowMs
+                    withContext(Dispatchers.Default) {
+                        edgesAuto.add(VhsEdges.tornLines(VhsEdges.bottomLuma(raw.rgba, raw.width, raw.height,
+                            if (raw.hdr != null) 2 else 1)))
+                    }
+                }
+                // The black bars' crop, and a tape's edges cut inside it (VhsEdges, #445).
+                val bars = crop?.takeIf { it.left + it.width <= raw.width && it.top + it.height <= raw.height }
+                val part = VhsEdges.crop(picture.edges, bars, raw.width, raw.height,
+                    if (picture.edgesAuto) edgesAuto.bottom else 0)
                 val timing = when {
                     picture.interpolation != PictureAdjustment.Interpolation.OFF -> moment.phase
                     picture.isFieldRate -> moment.phase >= 0.5f

@@ -28,6 +28,7 @@ import com.hawkynt.mediadroyd.player.NeuralEnlarging
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.player.PictureCheck
 import com.hawkynt.mediadroyd.player.PictureControl
+import com.hawkynt.mediadroyd.player.VhsEdges
 
 /**
  * The four picture sliders, neutral in the middle, black bars cropped or not, then the filters: sharpness, clarity and
@@ -45,6 +46,8 @@ fun PictureSliders(
     stereo: Boolean = false,
     /** Offer hiding a station logo; a choice for one show, remembered for its folder, not a household default. */
     logo: Boolean = false,
+    /** Offer cutting a tape's edges away (VhsEdges); per video or folder, not a household default. */
+    tapeEdges: Boolean = false,
     /**
      * Tries a choice of deinterlacing, upscaling or smooth motion before it is taken (see pictureCheck); a choice it
      * refuses is not taken, and why shows below its row. Takes everything by default.
@@ -120,6 +123,48 @@ fun PictureSliders(
                 )
             }
             Slider(value = value, onValueChange = { onChange(set(it)) }, onValueChangeFinished = onDone)
+        }
+        // A tape's edges (VhsEdges, #445): the head-switching tear and the dirt a TV hid under its overscan.
+        if (tapeEdges) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text("Tape edges", fontSize = 16.sp)
+                    Text(
+                        "Cut away the torn lines at the bottom and dirty edges. Auto finds the tear itself.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text("Auto", fontSize = 15.sp, modifier = Modifier.padding(end = 8.dp))
+                androidx.compose.material3.Switch(
+                    checked = picture.edgesAuto,
+                    onCheckedChange = {
+                        onChange(picture.copy(edgesAuto = it))
+                        onDone()
+                    },
+                )
+            }
+            listOf(
+                Triple("Left", picture.edgeLeft) { v: Int -> picture.copy(edgeLeft = v) },
+                Triple("Top", picture.edgeTop) { v: Int -> picture.copy(edgeTop = v) },
+                Triple("Right", picture.edgeRight) { v: Int -> picture.copy(edgeRight = v) },
+                Triple("Bottom", picture.edgeBottom) { v: Int -> picture.copy(edgeBottom = v) },
+            ).forEach { (label, value, set) ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        if (value == 0) "off" else "$value px",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = value.toFloat(),
+                    onValueChange = { onChange(set(it.toInt())) },
+                    valueRange = 0f..VhsEdges.MAX_PX.toFloat(),
+                    onValueChangeFinished = onDone,
+                )
+            }
         }
         // Only while dot crawl is combed out: the capture's colour system, where its rate does not tell it (PAL-M;
         // DotCrawl.Standard), kept for this video.

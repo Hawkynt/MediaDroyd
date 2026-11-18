@@ -278,8 +278,51 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
     @Volatile
     var onCrop: ((widthShare: Float, heightShare: Float) -> Unit)? = null
 
-    /** The black bars' crop in effect: found for the eye shown now, while the household has cropping on. */
-    private fun activeCrop(): PictureCrop? = barCrop.takeIf { filters.cropBlackBars && barCropFor == wholeEye() }
+    /**
+     * The part of the picture shown: the black bars' crop found for the eye shown now, while the household has cropping
+     * on, and a tape's edges cut inside it (VhsEdges, #445) — the gear's per edge, and Auto's torn lines at the bottom.
+     */
+    private fun activeCrop(): PictureCrop? {
+        val eye = wholeEye()
+        val bars = barCrop.takeIf { filters.cropBlackBars && barCropFor == eye }
+        val torn = if (filters.edgesAuto) edgesAuto.bottom else 0
+        return VhsEdges.crop(filters.edges, bars, eye.width, eye.height, torn)
+    }
+
+    // A tape's torn lines found as it plays (VhsEdges.Auto), afresh for every video: the picture's last lines read back
+    // now and then and judged on the crop's thread.
+    private val edgesAuto = VhsEdges.Auto()
+    @Volatile private var edgesDecided = false
+    private var lastEdgesSampleNs = 0L
+
+    /** With Auto on and a look due: [from]'s last lines ([width] × [height]) read back and judged. Bytes only. */
+    private fun lookForTear(picture: PictureAdjustment, from: Frame, width: Int, height: Int) {
+        val now = System.nanoTime()
+        if (!picture.edgesAuto || edgesDecided || from.half || cropWorker.isShutdown ||
+            now - lastEdgesSampleNs < VhsEdges.Auto.INTERVAL_MS * 1_000_000L
+        ) {
+            return
+        }
+        lastEdgesSampleNs = now
+        val rows = minOf(height, VhsEdges.LOOK_LINES + 2)
+        val read = ByteBuffer.allocateDirect(width * rows * 4).order(ByteOrder.nativeOrder())
+        from.bind()
+        GLES20.glReadPixels(0, 0, width, rows, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, read)
+        val generation = cropGeneration
+        cropWorker.execute {
+            // The frame's first row is the picture's last: turned round to run from the top, as luma.
+            val luma = IntArray(width * rows) { i ->
+                val at = ((rows - 1 - i / width) * width + i % width) * 4
+                val r = read.get(at).toInt() and 0xff
+                val g = read.get(at + 1).toInt() and 0xff
+                val b = read.get(at + 2).toInt() and 0xff
+                (77 * r + 150 * g + 29 * b + 128) shr 8
+            }
+            val changed = edgesAuto.add(VhsEdges.tornLines(Deinterlacer.Plane(width, rows, luma)))
+            edgesDecided = edgesAuto.decided
+            if (changed) handler.post { if (generation == cropGeneration) publishCrop() }
+        }
+    }
 
     /** Forgets the black bars found so far — a new video starts its own. */
     fun forgetCrop() {
@@ -290,7 +333,14 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         cropGeneration++
         cropPending.fill(null)
         lastCropSampleNs = 0L
-        if (!cropWorker.isShutdown) cropWorker.execute { autoCrop.restart() }
+        if (!cropWorker.isShutdown) {
+            cropWorker.execute {
+                autoCrop.restart()
+                edgesAuto.restart()
+                edgesDecided = false
+            }
+        }
+        lastEdgesSampleNs = 0L
         setCrop(null, PictureSize(0, 0))
     }
 
@@ -308,9 +358,9 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         val now = activeCrop()
         if (now == publishedCrop) return
         publishedCrop = now
-        val share = now?.let { it.width.toFloat() / barCropFor.width to it.height.toFloat() / barCropFor.height }
-            ?: (1f to 1f)
-        cropArea = now?.let { it to barCropFor }
+        val eye = wholeEye()
+        val share = now?.let { it.width.toFloat() / eye.width to it.height.toFloat() / eye.height } ?: (1f to 1f)
+        cropArea = now?.let { it to eye }
         cropShare = share
         onCrop?.invoke(share.first, share.second)
     }
@@ -671,6 +721,8 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             val cropping = field.cropBlackBars
             field = value
             if (value.cropBlackBars != cropping) handler.post { restartCrop() }
+            // Another tape edge, or Auto turned on or off: the part shown anew.
+            handler.post { publishCrop() }
             handler.post { busy { if (hasFrame && window != EGL14.EGL_NO_SURFACE) draw(redraw = true) } }
         }
 
@@ -1917,6 +1969,7 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
      * as libplacebo runs it first on the decoded picture: the steps it looks for are the source's own.
      */
     private fun denoised(picture: PictureAdjustment, from: Frame, width: Int, height: Int): Frame {
+        lookForTear(picture, from, width, height)
         var source = deblocked(picture, from, width, height)
         // Colour for a black-and-white picture after deblocking, as on the desktop, so the filters after it see it.
         if (picture.colorize != PictureAdjustment.Colorize.OFF) source = coloured(picture, source, width, height)
