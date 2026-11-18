@@ -253,4 +253,31 @@ class DubTest {
         assertEquals((300 + 5 * 100 * 2) / 2.0, said.pcm.size * 1000.0 / said.rate, 1.0)
         assertEquals(1.3f, speaker.livelinesses.first(), 1e-6f)
     }
+
+    @Test
+    fun `each line is spoken by a man's or a woman's voice by the voice that spoke it (#532)`() {
+        val man = FakeSpeaker()
+        val woman = FakeSpeaker()
+        val lines = listOf(
+            Dub.Line(0, 1000, "low", heardPitchHz = 110.0),
+            Dub.Line(2000, 3000, "high", heardPitchHz = 220.0),
+            Dub.Line(4000, 5000, "unknown"),
+        )
+        val byVoice = { line: Dub.Line -> if (Dub.womanSpoke(line) == true) woman else man }
+        val speaking = Dub.Speaking({ lines }, byVoice, Dub.Track())
+        speaking.ahead(0)
+        assertEquals(2, man.scales.size)
+        assertEquals(1, woman.scales.size)
+    }
+
+    @Test
+    fun `a language's man's and woman's voices are found for choosing by the speaker`() {
+        val (male, female) = PiperVoices.pair("ger", espeak = true)
+        assertEquals("de_DE-thorsten-medium", male?.id)
+        assertEquals("de_DE-kerstin-low", female?.id)
+        val (enMale, enFemale) = PiperVoices.pair("en", espeak = true)
+        assertEquals("en_US-joe-medium", enMale?.id)
+        assertEquals(PiperVoices.Sex.FEMALE, enFemale?.sex)
+        assertEquals(null to null, PiperVoices.pair("de", espeak = false))
+    }
 }

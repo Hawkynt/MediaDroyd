@@ -19,8 +19,13 @@ class LiveCaptions(
 
     private val heard = ArrayList<Dub.Line>()
 
-    /** The film's own speech so far, which each line's tone is measured against (#534). */
-    private val baseline = Prosody.Baseline()
+    /**
+     * The film's own speech so far, which each line's tone is measured against (#534): men's and women's apart, so a
+     * woman's line is not taken for a raised one (#532); lines with no voiced frames against all.
+     */
+    private val men = Prosody.Baseline()
+    private val women = Prosody.Baseline()
+    private val anyone = Prosody.Baseline()
     private val covered = ArrayList<LongRange>()
 
     /** The language the speech was heard in, once any was. */
@@ -54,8 +59,17 @@ class LiveCaptions(
                 for (segment in kept) {
                     val text = segment.text.trim()
                     if (text.isEmpty()) continue
-                    val delivery = segment.tone?.let { baseline.add(it); baseline.delivery(it) } ?: Dub.Delivery()
-                    val line = Dub.Line(cursor + segment.startMs, cursor + segment.endMs, text, delivery = delivery)
+                    val tone = segment.tone
+                    val baseline = when {
+                        tone == null || tone.pitchHz <= 0 -> anyone
+                        tone.pitchHz >= Dub.WOMAN_HZ -> women
+                        else -> men
+                    }
+                    val delivery = tone?.let { baseline.add(it); baseline.delivery(it) } ?: Dub.Delivery()
+                    val line = Dub.Line(
+                        cursor + segment.startMs, cursor + segment.endMs, text, delivery = delivery,
+                        heardPitchHz = tone?.pitchHz?.takeIf { it > 0 },
+                    )
                     if (heard.none { it.startMs < line.endMs && line.startMs < it.endMs }) heard += line
                 }
                 heard.sortBy { it.startMs }

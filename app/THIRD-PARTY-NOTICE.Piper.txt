@@ -10,6 +10,7 @@ each voice's training data carries its own licence, named beside it in the app:
   de_DE thorsten (CC0) — Thorsten-Voice, https://github.com/thorstenMueller/Thorsten-Voice
   de_DE kerstin (CC0) — https://github.com/rhasspy/dataset-voice-kerstin
   en_US libritts_r (CC BY 4.0) — LibriTTS-R, http://www.openslr.org/141/
+  en_US joe (CC0) — https://github.com/OHF-Voice/voice-datasets
   en_GB alba (CC BY 4.0) — https://datashare.ed.ac.uk/handle/10283/3270
   en_GB cori (CC BY 4.0) — Hi-Fi Multi-Speaker English TTS Dataset, NVIDIA Corporation, https://www.openslr.org/109/
   fr_FR siwis (CC BY 4.0) — https://datashare.is.ed.ac.uk/handle/10283/2353

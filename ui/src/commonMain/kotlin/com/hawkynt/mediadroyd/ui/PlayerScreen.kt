@@ -429,11 +429,16 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         } else {
             state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language
         }
-        val voice = dubVoice(state, platform, language) ?: run {
+        // Auto: a man's and a woman's voice, each line spoken by the one its speaker's voice calls for (#532);
+        // else the one voice chosen.
+        val pair = dubPair(state, platform, language)
+        val voices = pair?.toList() ?: listOfNotNull(dubVoice(state, platform, language))
+        if (voices.isEmpty()) {
             state.dubStatus = "This build has no voice for these subtitles."
             return@LaunchedEffect
         }
-        if (!platform.voiceReady(voice)) {
+        for (voice in voices) {
+            if (platform.voiceReady(voice)) continue
             state.dubStatus = "Fetching ${voice.label}…"
             val fetched = withContext(Dispatchers.IO) {
                 platform.fetchVoice(voice) { done ->
@@ -445,9 +450,16 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 return@LaunchedEffect
             }
         }
-        val speaker = withContext(Dispatchers.Default) { platform.speaker(voice) } ?: run {
-            state.dubStatus = "${voice.label} cannot speak in this build."
-            return@LaunchedEffect
+        val speakers = voices.map { voice ->
+            withContext(Dispatchers.Default) { platform.speaker(voice) } ?: run {
+                state.dubStatus = "${voice.label} cannot speak in this build."
+                return@LaunchedEffect
+            }
+        }
+        val speakerFor: (Dub.Line) -> Dub.LineSpeaker = if (speakers.size == 2) {
+            { line -> if (Dub.womanSpoke(line) == true) speakers[1] else speakers[0] }
+        } else {
+            { speakers[0] }
         }
         // A file's lines at the times its delay and drift give them; made ones as they are heard.
         val look = state.subtitleLook
@@ -476,7 +488,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             val speech = if (found.isCompleted) runCatching { found.getCompleted() }.getOrNull() else null
             if (speech != null) Dub.align(raw, speech) else raw
         }
-        val speaking = Dub.Speaking(lines, speaker, state.dubTrack)
+        val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack)
         var aligned = false
         try {
             while (true) {
@@ -494,7 +506,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             }
         } finally {
             found.cancel()
-            speaker.close()
+            speakers.forEach { it.close() }
         }
     }
 
@@ -809,7 +821,13 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 } else {
                     emptyList()
                 },
-                voice = dubVoice(state, platform, dubLanguage(state)),
+                voice = dubVoice(state, platform, dubLanguage(state))
+                    .takeIf { dubPair(state, platform, dubLanguage(state)) == null },
+                pair = PiperVoices.pair(dubLanguage(state), platform.espeak).let { (man, woman) ->
+                    if (man != null && woman != null) man to woman else null
+                },
+                auto = dubPair(state, platform, dubLanguage(state)) != null,
+                onAuto = { state.chooseDubVoice(PiperVoices.AUTO) },
                 dubbing = state.dubbing,
                 onDubbing = { state.dubbing = it },
                 onVoice = { voice -> state.chooseDubVoice(voice.id) },
@@ -865,7 +883,9 @@ private fun Dialogs(state: PlayerScreenState, platform: PlayerPlatform) {
                         translation = captionTranslation(state),
                     ).takeIf { state.captioning },
                     voiceOver = if (state.dubbing) {
-                        val voice = dubVoice(state, platform, dubLanguage(state))?.label ?: "no voice"
+                        val voice = dubPair(state, platform, dubLanguage(state))
+                            ?.let { (man, woman) -> "Auto: ${man.label} for men, ${woman.label} for women" }
+                            ?: dubVoice(state, platform, dubLanguage(state))?.label ?: "no voice"
                         val original = when (state.dubOriginal) {
                             Dub.Original.CHANNEL -> if (Dub.hasCentre(state.dubChannels)) {
                                 "the dialogue channel removed"
@@ -992,6 +1012,20 @@ private const val DUB_PACE_MS = 500L
 internal fun dubVoice(state: PlayerScreenState, platform: PlayerPlatform, language: String?): PiperVoices.Entry? {
     val offered = PiperVoices.forLanguage(language, platform.espeak)
     return offered.firstOrNull { it.id == state.dubVoiceId } ?: offered.firstOrNull()
+}
+
+/**
+ * The man's and the woman's voice when the household speaks the subtitles automatically by the speaker (#532) — Auto,
+ * the default before any voice is chosen — and the language has both; null for one voice.
+ */
+internal fun dubPair(
+    state: PlayerScreenState,
+    platform: PlayerPlatform,
+    language: String?,
+): Pair<PiperVoices.Entry, PiperVoices.Entry>? {
+    if (state.dubVoiceId.isNotEmpty() && state.dubVoiceId != PiperVoices.AUTO) return null
+    val (male, female) = PiperVoices.pair(language, platform.espeak)
+    return if (male != null && female != null) male to female else null
 }
 
 /** The language of the subtitle track playing, as the engine names it. */

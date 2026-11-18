@@ -40,7 +40,15 @@ object Dub {
         val speaker: String? = null,
         val delivery: Delivery = Delivery(),
         val spokenMs: Long? = null,
+        /** The pitch of the voice that spoke it in the film (Hz), where it was heard: a man's or a woman's (#532). */
+        val heardPitchHz: Double? = null,
     )
+
+    /** Below this a voice is taken for a man's, from it on for a woman's: between their usual ranges. */
+    const val WOMAN_HZ = 165.0
+
+    /** Whether [line] was spoken by a woman, by its heard pitch; null where that is not known. */
+    fun womanSpoke(line: Line): Boolean? = line.heardPitchHz?.takeIf { it > 0 }?.let { it >= WOMAN_HZ }
 
     /** How far from its cue a line's speech is looked for. */
     const val ALIGN_MS = 700L
@@ -235,8 +243,13 @@ object Dub {
      * not spoken yet (known by their start), each fitted before the next line ([fit]), scaled to 16-bit. One line at a
      * time, off the main thread; a seek simply speaks from the new position on.
      */
-    class Speaking(private val lines: () -> List<Line>, private val speaker: LineSpeaker, private val track: Track) {
-        constructor(lines: List<Line>, speaker: LineSpeaker, track: Track) : this({ lines }, speaker, track)
+    class Speaking(
+        private val lines: () -> List<Line>,
+        private val speakerFor: (Line) -> LineSpeaker,
+        private val track: Track,
+    ) {
+        constructor(lines: List<Line>, speaker: LineSpeaker, track: Track) : this({ lines }, { speaker }, track)
+        constructor(lines: () -> List<Line>, speaker: LineSpeaker, track: Track) : this(lines, { speaker }, track)
 
         private val spoken = HashSet<Long>()
 
@@ -248,7 +261,7 @@ object Dub {
                 if (line.endMs < positionMs || line.startMs in spoken) continue
                 if (line.startMs > positionMs + AHEAD_MS) break
                 val next = now.getOrNull(i + 1)?.startMs
-                val said = fit(line, speaker, next, voice)
+                val said = fit(line, speakerFor(line), next, voice)
                 spoken += line.startMs
                 if (said != null) {
                     val pcm = said.pcm

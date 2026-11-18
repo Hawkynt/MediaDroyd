@@ -411,6 +411,13 @@ fun VoiceOverRows(
     /** Whether the sound has a dialogue channel of its own to remove (5.1 and the like). */
     centreChannel: Boolean,
     onOriginal: (com.hawkynt.mediadroyd.player.Dub.Original) -> Unit,
+    /** The language's man's and woman's voice, where it has both: Auto picks between them line by line (#532). */
+    pair: Pair<
+        com.hawkynt.mediadroyd.player.PiperVoices.Entry,
+        com.hawkynt.mediadroyd.player.PiperVoices.Entry,
+    >? = null,
+    auto: Boolean = false,
+    onAuto: () -> Unit = {},
 ) {
     if (voices.isNotEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -428,9 +435,16 @@ fun VoiceOverRows(
         if (dubbing) {
             @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                pair?.let { (man, woman) ->
+                    FilterChip(
+                        selected = auto,
+                        onClick = onAuto,
+                        label = { Text("Auto · ${man.label} for men, ${woman.label} for women", fontSize = 15.sp) },
+                    )
+                }
                 voices.forEach { entry ->
                     FilterChip(
-                        selected = entry == voice,
+                        selected = !auto && entry == voice,
                         onClick = { onVoice(entry) },
                         label = { Text("${entry.label} · ${entry.language}", fontSize = 15.sp) },
                     )
