@@ -44,8 +44,11 @@ class DesktopPlaybackEngine(
 ) : PlaybackEngine {
 
     // Only the video's own picture is worth a graphics chip's decoder: not the cover art of a sound file beside it.
-    private fun readerOf(location: String, decoders: List<HardwareDecoding.Device> = emptyList()) =
-        MediaReader(location, files(location), decoders)
+    private fun readerOf(
+        location: String,
+        decoders: List<HardwareDecoding.Device> = emptyList(),
+        readAhead: Boolean = false,
+    ) = MediaReader(location, files(location), decoders, readAhead = readAhead)
 
     private val listeners = CopyOnWriteArrayList<PlaybackEngine.Listener>()
     // As many as picturesAhead allows: a few, more while the sound is set sooner than the picture.
@@ -136,7 +139,9 @@ class DesktopPlaybackEngine(
         stop()
         moveTo(PlaybackState.BUFFERING)
         val opened = try {
-            readerOf(request.path, HardwareDecoding.candidates(softwareDecoding))
+            // Read ahead once for everyone: the analysis taps the film's sound from it (SharedReads, #535).
+            readerOf(request.path, HardwareDecoding.candidates(softwareDecoding), readAhead = true)
+                .also { SharedReads.put(request.path, it) }
         } catch (failed: Exception) {
             moveTo(PlaybackState.IDLE)
             throw failed
@@ -942,6 +947,7 @@ class DesktopPlaybackEngine(
         thread = null
         sink?.close()
         sink = null
+        reader?.let { r -> openedPath?.let { SharedReads.remove(it, r) } }
         reader?.close()
         reader = null
         ass?.close()

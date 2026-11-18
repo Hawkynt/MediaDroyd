@@ -8,11 +8,18 @@ import java.nio.ByteOrder
 /**
  * A film's sound read once on the desktop for everything that analyses it (PlayerPlatform.openSound, FilmSound, #535):
  * FFmpeg decodes it (MediaReader, its pictures left alone) as 16-bit stereo at MediaReader.SAMPLE_RATE, mixed to one
- * channel and every three samples averaged into one — FilmSound.RATE — handed on a decoded piece at a time.
+ * channel and every three samples averaged into one — FilmSound.RATE — handed on a decoded piece at a time. Near
+ * the position of the film playing, tapped from the packets playback reads ahead instead (SharedReads, SoundTap).
  */
 object SpeechReads {
-    /** The video at [path] ([from] a network source where it is on one) read from [fromMs]; null where unreadable. */
-    fun open(path: String, from: FsFile?, fromMs: Long): FilmSound.Stream? = runCatching {
+    /**
+     * The video at [path] ([from] a network source where it is on one) read from [fromMs]: where [near], tapped from
+     * what playback reads ahead where it plays it; else from the file. Null where unreadable.
+     */
+    fun open(path: String, from: FsFile?, fromMs: Long, near: Boolean = false): FilmSound.Stream? =
+        (if (near) SharedReads.tap(path, fromMs) { at -> own(path, from, at) } else null) ?: own(path, from, fromMs)
+
+    private fun own(path: String, from: FsFile?, fromMs: Long): FilmSound.Stream? = runCatching {
         val reader = MediaReader(path, from, decoders = emptyList(), pictures = false)
         if (fromMs > 0) reader.seek(fromMs)
         val step = MediaReader.SAMPLE_RATE / FilmSound.RATE

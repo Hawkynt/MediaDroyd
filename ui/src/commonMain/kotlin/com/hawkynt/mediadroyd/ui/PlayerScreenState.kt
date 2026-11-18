@@ -164,10 +164,11 @@ class PlayerScreenState(
     fun soundOf(
         video: String,
         durationMs: Long,
-        open: (fromMs: Long) -> com.hawkynt.mediadroyd.player.FilmSound.Stream?,
+        open: (fromMs: Long, near: Boolean) -> com.hawkynt.mediadroyd.player.FilmSound.Stream?,
     ): com.hawkynt.mediadroyd.player.FilmSound {
         sound?.takeIf { it.first == video }?.let { return it.second }
-        sound?.second?.close()
+        // Off this thread: a read under way on the other video's sound is waited for.
+        sound?.second?.let { other -> Thread({ other.close() }, "mediadroyd-sound-close").start() }
         return com.hawkynt.mediadroyd.player.FilmSound(open, durationMs).also { sound = video to it }
     }
 

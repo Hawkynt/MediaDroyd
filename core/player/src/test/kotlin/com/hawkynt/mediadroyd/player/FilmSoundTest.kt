@@ -19,10 +19,12 @@ class FilmSoundTest {
 
     private var opened = 0
     private var decoded = 0L
+    private val shared = ArrayList<Boolean>()
 
     // The platform's stream: chunks of a tenth of a second from where it is opened.
-    private fun open(fromMs: Long): FilmSound.Stream {
+    private fun open(fromMs: Long, near: Boolean): FilmSound.Stream {
         opened++
+        shared += near
         return object : FilmSound.Stream {
             var at = fromMs * rate / 1000
             override fun read(): FloatArray? {
@@ -72,5 +74,41 @@ class FilmSoundTest {
         assertTrue(!at(100_200))
         sound.decodeAll { }
         assertTrue(sound.speech()[100_200 / 10])
+    }
+
+    @Test
+    fun `the whole film for Sync is read on a stream of its own, never the one shared with playback`() {
+        val sound = FilmSound(::open, durationMs = 600_000)
+        sound.samples(0, 10_000)
+        sound.decodeAll { }
+        assertEquals(listOf(true, false), shared)
+    }
+
+    @Test
+    fun `a read waiting for playback to move on holds up neither the speech found nor what is decoded already`() {
+        val gate = java.util.concurrent.CountDownLatch(1)
+        val sound = FilmSound({ from, near ->
+            val inner = open(from, near)
+            object : FilmSound.Stream {
+                override fun read(): FloatArray? {
+                    // Past 20 s the shared stream waits, as at the edge of the minute playback reads ahead.
+                    if (near && decoded >= 20L * rate) gate.await()
+                    return inner.read()
+                }
+                override fun close() = inner.close()
+            }
+        }, durationMs = 600_000)
+        sound.samples(0, 10_000)
+        val waiting = Thread { sound.samples(10_000, 40_000) }.apply {
+            isDaemon = true
+            start()
+        }
+        Thread.sleep(200)
+        val started = System.nanoTime()
+        sound.speech()
+        assertEquals(10 * rate, sound.samples(0, 10_000)!!.size)
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 500)
+        gate.countDown()
+        waiting.join(5_000)
     }
 }

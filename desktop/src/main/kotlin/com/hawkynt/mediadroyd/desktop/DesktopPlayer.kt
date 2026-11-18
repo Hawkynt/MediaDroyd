@@ -697,8 +697,8 @@ fun DesktopPlayer(
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.recognise(neural, gray)
 
         // The film's sound read once for every analysis of it (FilmSound, #535): FFmpeg's sound at 16 kHz.
-        override fun openSound(location: String, fromMs: Long) =
-            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.open(location, places.remoteFile(location), fromMs)
+        override fun openSound(location: String, fromMs: Long, near: Boolean) =
+            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.open(location, places.remoteFile(location), fromMs, near)
 
         override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
             neural.folder(download)

@@ -107,9 +107,10 @@ interface PlayerPlatform {
     /**
      * [location]'s sound read from [fromMs] on, mono floats at FilmSound.RATE, the first at [fromMs] — the one reader
      * every analysis of a film's sound shares (FilmSound, #535): Whisper's windows, the speech found, each line's tone;
-     * null where it cannot be read. Reading blocks: off the main thread.
+     * where [near], served from the packets playback reads ahead where the platform can (ReadAhead), waiting where
+     * playback has not read yet; else from the file itself. Null where it cannot be read. Blocks: off the main thread.
      */
-    fun openSound(location: String, fromMs: Long): FilmSound.Stream? = null
+    fun openSound(location: String, fromMs: Long, near: Boolean): FilmSound.Stream? = null
 
     /** The folder [download]'s files are kept in (models fetched when chosen); null where this build keeps none. */
     fun modelFolder(download: NeuralModels.Download): java.io.File? = null
@@ -329,7 +330,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             }
         }
         val video = session.current.videoPath
-        val sound = state.soundOf(video, engine.durationMs) { from -> platform.openSound(video, from) }
+        val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
         // The fast cores only: a phone's little ones slow ggml down (FastCores).
         val threads = com.hawkynt.mediadroyd.player.FastCores.count()
         var spoken: String? = null
@@ -478,7 +479,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         // Every line on the film's own speech (Dub.align), found in the film's shared sound (FilmSound, #535) — kept
         // decoded a minute ahead of the position, so each line is placed before it is spoken.
         val video = session.current.videoPath
-        val sound = state.soundOf(video, engine.durationMs) { from -> platform.openSound(video, from) }
+        val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
         val lines: () -> List<Dub.Line> = {
             val raw = dubCaptions?.lines()?.mapNotNull { line ->
                 // The tone heard in the line, its text's own hints on top (#534).
@@ -846,8 +847,8 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                             val fit = withContext(Dispatchers.Default) {
                                 val cues = platform.fileOf(file)?.readTextOrNull()?.let(SubtitleSync::cues)
                                 // All of the film's speech, from its shared sound: only what is not decoded yet is.
-                                val sound = state.soundOf(video, state.engine.durationMs) { from ->
-                                    platform.openSound(video, from)
+                                val sound = state.soundOf(video, state.engine.durationMs) { from, near ->
+                                    platform.openSound(video, from, near)
                                 }
                                 sound.decodeAll { part ->
                                     state.syncing = "Listening to the sound… ${(part * 100).toInt()} %"

@@ -10,100 +10,134 @@ import kotlin.math.log10
  * decoded is never decoded again, and reading on continues the stream already open — a seek opens one where it lands.
  * The speech band's levels (SubtitleSync's detector) are worked out as each block fills and kept for the whole film,
  * so the speech found survives the blocks given up. Playback keeps its own decoding: this runs ahead of what plays.
+ *
+ * Two streams: the near one ([open] with `near`), which the platform may serve from the packets playback reads ahead
+ * (ReadAhead) and which then waits where playback has not read yet, and the wide one [decodeAll] reads the whole film
+ * on, from the file itself. A read that waits holds up only its own caller: what is decoded already and the speech
+ * found are handed out meanwhile.
  */
-class FilmSound(private val open: (fromMs: Long) -> Stream?, private val durationMs: Long) {
+class FilmSound(private val open: (fromMs: Long, near: Boolean) -> Stream?, private val durationMs: Long) {
     /** The platform's reader of the film's sound: mono floats at [RATE] from where it was opened, chunk after chunk. */
     interface Stream : AutoCloseable {
         /** The next chunk; null at the end or where nothing more can be read. */
         fun read(): FloatArray?
+
+        /** Ends a [read] waiting on another thread (it then gives null); [close] follows once it has returned. */
+        fun cancel() {}
     }
 
+    // A stream and where it stands, read by one caller at a time.
+    private inner class Slot(val near: Boolean) {
+        @Volatile var stream: Stream? = null
+        var at = -1L
+
+        fun close() {
+            stream?.close()
+            stream = null
+        }
+    }
+
+    private val near = Slot(near = true)
+    private val wide = Slot(near = false)
+
+    // Guarded by this: the blocks, how full each is, the levels, where the film ended.
     private val blocks = LinkedHashMap<Long, ShortArray>()
     private val filled = HashMap<Long, Int>()
     private var levels = FloatArray(levelsFor(durationMs)) { Float.NaN }
-
-    private var stream: Stream? = null
-    private var streamAt = -1L
     private var ended = Long.MAX_VALUE
+    @Volatile private var closed = false
 
     /**
      * The sound from [fromMs] to [toMs] (mono floats at [RATE]), decoded where it is not yet; shorter where the film
      * ends sooner, null where nothing can be read. Blocks while it decodes.
      */
-    @Synchronized
-    fun samples(fromMs: Long, toMs: Long): FloatArray? {
+    fun samples(fromMs: Long, toMs: Long): FloatArray? = samples(fromMs, toMs, near)
+
+    private fun samples(fromMs: Long, toMs: Long, slot: Slot): FloatArray? {
         val first = fromMs * RATE / 1000
-        val last = minOf(toMs * RATE / 1000, ended)
-        if (last <= first) return null
-        decode(first, last)
+        if (synchronized(this) { minOf(toMs * RATE / 1000, ended) } <= first) return null
+        // Only where something is missing: a read waiting on the stream holds up no one asking for what is decoded.
+        if (!decoded(first, toMs * RATE / 1000)) synchronized(slot) { decode(first, toMs * RATE / 1000, slot) }
+        return synchronized(this) {
+            val end = minOf(toMs * RATE / 1000, ended)
+            if (end <= first) return null
+            keepNear(first / RATE)
+            FloatArray((end - first).toInt()) { i ->
+                val at = first + i
+                (blocks[at / RATE]?.get((at % RATE).toInt()) ?: 0) / FULL
+            }
+        }
+    }
+
+    // Whether every block from [first] up to [last] (samples) is full, or lies past the film's end.
+    private fun decoded(first: Long, last: Long): Boolean = synchronized(this) {
         val end = minOf(last, ended)
-        if (end <= first) return null
-        return FloatArray((end - first).toInt()) { i ->
-            val at = first + i
-            (blocks[at / RATE]?.get((at % RATE).toInt()) ?: 0) / FULL
-        }.also { keepNear(first / RATE) }
+        end <= first || (first / RATE..(end - 1) / RATE).all { (filled[it] ?: 0) >= RATE }
     }
 
     /** The speech found so far, SubtitleSync.RATE verdicts a second from the film's start; none where not decoded. */
-    @Synchronized
-    fun speech(): BooleanArray = SubtitleSync.verdicts(levels.copyOf())
+    fun speech(): BooleanArray = SubtitleSync.verdicts(synchronized(this) { levels.copyOf() })
 
     /**
-     * Decodes what is not decoded yet across the whole film — for Sync, which needs all of its speech — telling
-     * [progress] how far (0 … 1); the blocks given up as it goes, the levels kept. Blocks.
+     * Decodes what is not decoded yet across the whole film — for Sync, which needs all of its speech — on a stream of
+     * its own, telling [progress] how far (0 … 1); the blocks given up as it goes, the levels kept. Blocks.
      */
     fun decodeAll(progress: (Float) -> Unit) {
         val total = if (durationMs > 0) durationMs else return
         var ms = 0L
-        while (ms < total) {
+        while (ms < total && !closed) {
             val to = minOf(ms + STEP_MS, total)
             val known = synchronized(this) {
                 (ms / 10 until to / 10).all { it < levels.size && !levels[it.toInt()].isNaN() }
             }
-            if (!known) samples(ms, to) ?: break
+            if (!known) samples(ms, to, wide) ?: break
             ms = to
             progress(ms.toFloat() / total)
         }
+        synchronized(wide) { wide.close() }
     }
 
-    /** Closes the stream open. */
-    @Synchronized
+    /** Closes the streams open, a read waiting on one ended first; blocks until a read under way has returned. */
     fun close() {
-        stream?.close()
-        stream = null
+        closed = true
+        near.stream?.cancel()
+        wide.stream?.cancel()
+        synchronized(near) { near.close() }
+        synchronized(wide) { wide.close() }
     }
 
-    // Every block from [first] up to [last] (samples) full: read on where the open stream stands there, else open one
-    // at the first block still missing.
-    private fun decode(first: Long, last: Long) {
+    // Every block from [first] up to [last] (samples) full, read on [slot]: on where its stream stands there, else on
+    // one opened at the first block still missing.
+    private fun decode(first: Long, last: Long, slot: Slot) {
         var at = first
-        while (at < last && at < ended) {
+        while (!closed) {
+            val have = synchronized(this) {
+                if (at >= last || at >= ended) return
+                filled[at / RATE] ?: 0
+            }
             val block = at / RATE
-            val have = filled[block] ?: 0
             if (have >= RATE) {
                 at = (block + 1) * RATE
                 continue
             }
-            // The open stream stands where this block needs its next sample: read on; else open one at the block.
-            val next = block * RATE + have
-            if (stream == null || streamAt != next) {
-                stream?.close()
-                stream = open(block * 1000)
-                streamAt = block * RATE
-                if (stream == null) {
-                    ended = at
+            // The stream stands where this block needs its next sample: read on; else open one at the block.
+            if (slot.stream == null || slot.at != block * RATE + have) {
+                slot.close()
+                slot.stream = open(block * 1000, slot.near)
+                slot.at = block * RATE
+                if (slot.stream == null) {
+                    synchronized(this) { ended = minOf(ended, at) }
                     return
                 }
             }
-            val chunk = stream!!.read()
+            val chunk = slot.stream!!.read()
             if (chunk == null) {
-                ended = streamAt
-                stream?.close()
-                stream = null
+                if (!closed) synchronized(this) { ended = minOf(ended, slot.at) }
+                slot.close()
                 return
             }
-            put(streamAt, chunk)
-            streamAt += chunk.size
+            synchronized(this) { put(slot.at, chunk) }
+            slot.at += chunk.size
         }
     }
 
