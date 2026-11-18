@@ -130,6 +130,10 @@ data class PictureOverride(
     val hue: Float = 0f,
     val tint: Float = 0f,
     val temperature: Float = 6504f,
+    /** The colour moved against the brightness in pixels, or found as it plays (ChromaShift, #444). */
+    val chromaShiftX: Float = 0f,
+    val chromaShiftY: Float = 0f,
+    val chromaShiftAuto: Boolean = false,
     /** A tape's edges cut away in pixels, and the tear found as it plays (VhsEdges, #445). */
     val edgeLeft: Int = 0,
     val edgeTop: Int = 0,

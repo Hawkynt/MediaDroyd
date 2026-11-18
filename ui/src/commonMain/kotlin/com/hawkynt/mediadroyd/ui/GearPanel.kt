@@ -143,7 +143,8 @@ fun GearPanel(
             TextButton(onClick = onResetPicture) { Text("Reset", fontSize = 16.sp) }
         }
         PictureSliders(
-            picture, onChange = onPicture, onDone = onPictureDone, stereo = true, logo = true, tapeEdges = true,
+            picture, onChange = onPicture, onDone = onPictureDone, stereo = true, logo = true, colourOffset = true,
+            tapeEdges = true,
             check = check,
             colorizers = colorizers, neuralModels = neuralModels,
         )

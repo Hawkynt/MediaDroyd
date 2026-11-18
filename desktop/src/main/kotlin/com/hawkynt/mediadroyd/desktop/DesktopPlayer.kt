@@ -75,6 +75,7 @@ import com.hawkynt.mediadroyd.engine.desktop.DesktopPlaybackEngine
 import com.hawkynt.mediadroyd.engine.desktop.MediaReader
 import com.hawkynt.mediadroyd.player.AssPicture
 import com.hawkynt.mediadroyd.player.AutoCrop
+import com.hawkynt.mediadroyd.player.ChromaShift
 import com.hawkynt.mediadroyd.player.VhsEdges
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.library.FolderDefaults
@@ -305,6 +306,11 @@ fun DesktopPlayer(
         // afresh for every video; the crop found, for pictures of the size it was found on.
         val autoCrop = AutoCrop()
         var cropVideo: String? = null
+        // A tape's colour offset (ChromaShift.Auto): the picture's centre judged every few seconds until it is
+        // decided, afresh for every video.
+        val chromaAuto = ChromaShift.Auto()
+        var chromaVideo: String? = null
+        var chromaSampleMs = 0L
         // A tape's torn lines at the bottom (VhsEdges.Auto): the picture's last lines judged every few seconds until
         // decided, afresh for every video.
         val edgesAuto = VhsEdges.Auto()
@@ -381,10 +387,30 @@ fun DesktopPlayer(
                 }
             } else engine.moment(aheadMs)?.let { moment ->
                 // The picture as shown: smoothed where Even frames finds no even rate (EvenFrames).
-                val picture = evenFrames.shown(state.picture)
+                val chosen = evenFrames.shown(state.picture)
                 val fit = state.fit
                 val raw = moment.shown
                 val nowMs = System.currentTimeMillis()
+                if (engine.openedPath != chromaVideo || !chosen.chromaShiftAuto) {
+                    chromaVideo = engine.openedPath
+                    chromaAuto.restart()
+                    chromaSampleMs = 0L
+                }
+                if (chosen.chromaShiftAuto && !chromaAuto.decided &&
+                    nowMs - chromaSampleMs >= ChromaShift.Auto.INTERVAL_MS
+                ) {
+                    chromaSampleMs = nowMs
+                    withContext(Dispatchers.Default) {
+                        val (centre, cw, ch) = ChromaShift.centre(raw.rgba, raw.width, raw.height,
+                            if (raw.hdr != null) 2 else 1)
+                        ChromaShift.estimate(centre, cw, ch)?.let(chromaAuto::add)
+                    }
+                }
+                val picture = if (chosen.chromaShiftAuto) {
+                    chosen.copy(chromaShiftX = -chromaAuto.shift.first, chromaShiftY = -chromaAuto.shift.second)
+                } else {
+                    chosen
+                }
                 if (engine.openedPath != cropVideo || !picture.cropBlackBars || !stage.ready) {
                     cropVideo = engine.openedPath
                     autoCrop.restart()

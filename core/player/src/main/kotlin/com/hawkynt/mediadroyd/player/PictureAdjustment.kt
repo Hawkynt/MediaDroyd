@@ -103,6 +103,11 @@ data class PictureAdjustment(
     val tint: Float = 0f,
     /** Colour temperature in kelvin, 4000 (warm) … 10000 (cold): the white D65 is shown as; 6504 leaves it. */
     val temperature: Float = ColourBalance.D65_KELVIN,
+    /** How far the colour is moved against the brightness, across and down in pixels (ChromaShift, #444). */
+    val chromaShiftX: Float = 0f,
+    val chromaShiftY: Float = 0f,
+    /** The colour's offset found as the video plays instead (ChromaShift.Auto); the player fills in the two above. */
+    val chromaShiftAuto: Boolean = false,
     /** A tape's edges cut away, in the decoded picture's pixels (VhsEdges, #445), before every other filter. */
     val edgeLeft: Int = 0,
     val edgeTop: Int = 0,
@@ -405,7 +410,8 @@ data class PictureAdjustment(
             temporalDenoise > 0f || dotCrawl > 0f ||
             deinterlace != Deinterlace.OFF ||
             upscaler != Upscaler.STANDARD || interpolation != Interpolation.OFF || stereo != Stereo.OFF ||
-            colorize != Colorize.OFF || !edges.isNone || edgesAuto ||
+            colorize != Colorize.OFF || chromaShiftX != 0f || chromaShiftY != 0f || chromaShiftAuto ||
+            !edges.isNone || edgesAuto ||
             !isColorNeutral
 
     /**
