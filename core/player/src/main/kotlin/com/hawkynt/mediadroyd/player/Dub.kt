@@ -83,8 +83,8 @@ object Dub {
     private val SPEAKER = Regex("""^([A-Z][A-Z0-9 .'-]{0,30}):\s+""")
 
     /**
-     * A cue's raw [words] as spoken: ASS override blocks, HTML-like tags and line breaks gone, a speaker's name before a
-     * colon taken off, descriptions in brackets or parentheses dropped — their whispering or shouting kept as the
+     * A cue's raw [words] as spoken: ASS override blocks, HTML-like tags and line breaks gone, a speaker's name
+     * before a colon taken off, descriptions in brackets or parentheses dropped — their whispering or shouting kept as the
      * delivery — songs (♪) not spoken; a line in capitals or ending in ! shouted, its capitals made sentence case.
      */
     fun clean(words: String): Cleaned {
