@@ -97,6 +97,11 @@ data class PictureAdjustment(
     val dotCrawl: Float = 0f,
     /** The colour system of a composite capture, which the dot-crawl comb follows ([ColourSystem]): this video's. */
     val colourSystem: ColourSystem = ColourSystem.AUTO,
+    /** How far the colour is moved against the brightness, across and down in pixels (ChromaShift, #444). */
+    val chromaShiftX: Float = 0f,
+    val chromaShiftY: Float = 0f,
+    /** The colour's offset found as the video plays instead (ChromaShift.Auto); the player fills in the two above. */
+    val chromaShiftAuto: Boolean = false,
 ) {
     /** The share of plain scaling mixed over the [upscaler]'s picture: 0 at full strength, 1 with it off. */
     val plainShare: Float get() = 1f - upscalerStrength.coerceIn(0f, 1f)
@@ -388,7 +393,7 @@ data class PictureAdjustment(
             temporalDenoise > 0f || dotCrawl > 0f ||
             deinterlace != Deinterlace.OFF ||
             upscaler != Upscaler.STANDARD || interpolation != Interpolation.OFF || stereo != Stereo.OFF ||
-            colorize != Colorize.OFF ||
+            colorize != Colorize.OFF || chromaShiftX != 0f || chromaShiftY != 0f || chromaShiftAuto ||
             !isColorNeutral
 
     /** The correction as a GPU shader applies it: saturation, contrast, brightness, then the true gamma curve. */

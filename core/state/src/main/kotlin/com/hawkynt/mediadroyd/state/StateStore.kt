@@ -436,6 +436,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             colorize = colorizeOf(it.colorize),
             colourSystem = runCatching { PictureAdjustment.ColourSystem.valueOf(it.colourSystem) }
                 .getOrDefault(PictureAdjustment.ColourSystem.AUTO),
+            chromaShiftX = it.chromaShiftX,
+            chromaShiftY = it.chromaShiftY,
+            chromaShiftAuto = it.chromaShiftAuto,
         )
 
         /** A picture as kept, the choices by name. */
@@ -467,6 +470,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             dotCrawl = picture.dotCrawl,
             colorize = picture.colorize.name,
             colourSystem = picture.colourSystem.name,
+            chromaShiftX = picture.chromaShiftX,
+            chromaShiftY = picture.chromaShiftY,
+            chromaShiftAuto = picture.chromaShiftAuto,
         )
 
         private fun chromaOf(name: String) =

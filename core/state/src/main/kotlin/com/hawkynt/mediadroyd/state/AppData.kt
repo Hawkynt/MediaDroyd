@@ -104,6 +104,10 @@ data class PictureOverride(
     val colorize: String = "OFF",
     /** PictureAdjustment.ColourSystem name: a composite capture's colour system, kept per video or folder only. */
     val colourSystem: String = "AUTO",
+    /** The colour moved against the brightness in pixels, or found as it plays (ChromaShift, #444). */
+    val chromaShiftX: Float = 0f,
+    val chromaShiftY: Float = 0f,
+    val chromaShiftAuto: Boolean = false,
 )
 
 /** How one output screen is set up (see [com.hawkynt.mediadroyd.player.ScreenSetup]); names, as kept. */

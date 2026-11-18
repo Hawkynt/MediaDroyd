@@ -417,7 +417,7 @@ class GlStage(
         // A change to the filters, to the part shown, or to the frames' depth makes every kept picture stale.
         val look = listOf(
             a.deinterlace, a.stereo, a.deband, a.noise, a.sharpness, a.clarity, crop, deep, a.chroma, a.colorize,
-            a.logo, a.deblock, a.dering,
+            a.logo, a.deblock, a.dering, a.chromaShiftX, a.chromaShiftY,
             a.temporalDenoise, a.dotCrawl, a.colourSystem, planeHooked, lumaPlanes,
         )
         // Another chroma upscaler, or another shader hooking the planes, makes every picture uploaded from its planes
@@ -649,6 +649,11 @@ class GlStage(
             source = restoration.dering(source, target("cdefBlocks", blocksWide, blocksHigh),
                 target("deringed", w, h, half = deep), originX, originY, d) as Target
         }
+        // 1c. The colour moved back onto the brightness (ChromaShift, #444), on the decoded picture's pixels.
+        if (a.chromaShiftX != 0f || a.chromaShiftY != 0f) {
+            source = restoration.chromaShift(source, target("chromaShifted", w, h, half = deep), a.chromaShiftX,
+                a.chromaShiftY) as Target
+        }
         // 1c. Colour for a black-and-white picture, by the network whose test passed (see colored).
         if (a.colorize != PictureAdjustment.Colorize.OFF) source = colored(source)
         // 2. The station logo hidden, then deband, denoise and sharpen at the picture's own size.
@@ -808,7 +813,7 @@ class GlStage(
     private fun atDecodedSize(a: PictureAdjustment): Boolean =
         a.deinterlace != PictureAdjustment.Deinterlace.OFF || a.deblock > 0f || a.dering > 0f ||
             DotCrawl.threshold(a.dotCrawl) != null || a.temporalDenoise > 0f ||
-            a.interpolation != PictureAdjustment.Interpolation.OFF
+            a.interpolation != PictureAdjustment.Interpolation.OFF || a.chromaShiftX != 0f || a.chromaShiftY != 0f
 
     /** The least recently used of [slots], now holding [picture]. */
     private fun claim(

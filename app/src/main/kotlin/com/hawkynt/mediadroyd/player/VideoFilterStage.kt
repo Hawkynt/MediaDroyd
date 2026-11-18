@@ -290,7 +290,15 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         cropGeneration++
         cropPending.fill(null)
         lastCropSampleNs = 0L
-        if (!cropWorker.isShutdown) cropWorker.execute { autoCrop.restart() }
+        if (!cropWorker.isShutdown) {
+            cropWorker.execute {
+                autoCrop.restart()
+                chromaAuto.restart()
+                chromaDecided = false
+            }
+        }
+        chromaFound = 0f to 0f
+        lastChromaSampleNs = 0L
         setCrop(null, PictureSize(0, 0))
     }
 
@@ -1913,6 +1921,14 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
      */
     private fun denoised(picture: PictureAdjustment, from: Frame, width: Int, height: Int): Frame {
         var source = deblocked(picture, from, width, height)
+        // The colour moved back onto the brightness (ChromaShift, #444), on the decoded picture's pixels.
+        val (shiftX, shiftY) = chromaShiftOf(picture, source, width, height)
+        if (shiftX != 0f || shiftY != 0f) {
+            val into = frames[if (source === frames[DEBLOCK_A]) DEBLOCK_B else DEBLOCK_A]
+                .ensure(width, height, deepInput(picture))
+            restoration.chromaShift(source, into, shiftX, shiftY)
+            source = into
+        }
         // Colour for a black-and-white picture after deblocking, as on the desktop, so the filters after it see it.
         if (picture.colorize != PictureAdjustment.Colorize.OFF) source = coloured(picture, source, width, height)
         // A station logo hidden after deblocking, so the filters after it see the picture without it.
@@ -1954,6 +1970,48 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         val net = { NeuralColorizer.open(context, unit)?.let { Colouring.network(it) } }
         return colouring.colored(from, passed, net) { frames[COLOURED].ensure(width, height, deepInput(picture)) }
             as Frame
+    }
+
+    // A tape's colour offset found as it plays (ChromaShift.Auto), afresh for every video: the picture's centre read
+    // back now and then and judged on the crop's thread; what it found, as the colour is to be moved.
+    private val chromaAuto = ChromaShift.Auto()
+    @Volatile private var chromaDecided = false
+    private var chromaFound = 0f to 0f
+    private var lastChromaSampleNs = 0L
+
+    /**
+     * How far [picture] moves the colour: its own offset, or with Auto what was found so far — sampling [from]
+     * ([width] × [height]) when a sample is due. A frame held in half floats is not read back (bytes only).
+     */
+    private fun chromaShiftOf(picture: PictureAdjustment, from: Frame, width: Int, height: Int): Pair<Float, Float> {
+        if (!picture.chromaShiftAuto) return picture.chromaShiftX to picture.chromaShiftY
+        val now = System.nanoTime()
+        if (!chromaDecided && !from.half && !cropWorker.isShutdown &&
+            now - lastChromaSampleNs >= ChromaShift.Auto.INTERVAL_MS * 1_000_000L
+        ) {
+            lastChromaSampleNs = now
+            val w = minOf(width, ChromaShift.CENTRE_WIDTH)
+            val h = minOf(height, ChromaShift.CENTRE_HEIGHT)
+            val read = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder())
+            from.bind()
+            GLES20.glReadPixels((width - w) / 2, (height - h) / 2, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, read)
+            // The frame's top row is its last: rows turned round to run from the top.
+            val rgba = ByteArray(w * h * 4)
+            for (y in 0 until h) {
+                read.position((h - 1 - y) * w * 4)
+                read.get(rgba, y * w * 4, w * 4)
+            }
+            val generation = cropGeneration
+            cropWorker.execute {
+                val found = ChromaShift.estimate(rgba, w, h) ?: return@execute
+                if (chromaAuto.add(found)) {
+                    val (x, y) = chromaAuto.shift
+                    handler.post { if (generation == cropGeneration) chromaFound = -x to -y }
+                }
+                chromaDecided = chromaAuto.decided
+            }
+        }
+        return chromaFound
     }
 
     private fun deblocked(picture: PictureAdjustment, from: Frame, width: Int, height: Int): Frame {
