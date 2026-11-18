@@ -384,7 +384,10 @@ fun CaptionRows(
             FilterChip(
                 selected = entry == model,
                 onClick = { onModel(entry) },
-                label = { Text("${entry.label} · ${entry.download.bytes / 1_000_000} MB", fontSize = 15.sp) },
+                label = {
+                    val size = "${entry.download.bytes / 1_000_000} MB"
+                    Text("${entry.label} · $size" + if (entry.desktop) " · for desktops" else "", fontSize = 15.sp)
+                },
             )
         }
     }

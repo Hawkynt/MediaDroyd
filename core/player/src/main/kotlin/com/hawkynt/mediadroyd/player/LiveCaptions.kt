@@ -31,6 +31,9 @@ class LiveCaptions(
     /** The lines heard so far, in order. */
     fun lines(): List<Dub.Line> = synchronized(heard) { heard.toList() }
 
+    /** Whether the speech at [positionMs] is heard already: else the hearing runs behind the film. */
+    fun heardAt(positionMs: Long): Boolean = synchronized(heard) { covered.any { positionMs in it } }
+
     /** The line showing at [positionMs], or null. */
     fun lineAt(positionMs: Long): Dub.Line? =
         synchronized(heard) { heard.lastOrNull { positionMs in it.startMs until it.endMs } }

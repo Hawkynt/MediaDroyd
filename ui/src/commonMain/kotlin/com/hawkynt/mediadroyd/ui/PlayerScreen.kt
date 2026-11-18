@@ -331,8 +331,12 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         val video = session.current.videoPath
         val threads = maxOf(1, Runtime.getRuntime().availableProcessors() - 1)
         var spoken: String? = null
+        // How long the last window took to hear, for telling the household when the model cannot keep up.
+        var tookMs = 0L
+        var windowMs = 0L
         val captions = LiveCaptions(
             hear = hear@{ fromMs, toMs ->
+                val began = System.nanoTime()
                 val pcm = platform.soundAt(video, fromMs, toMs) ?: return@hear null
                 fun whisper(translate: Boolean) =
                     NativeWhisper.transcribe(handle, pcm, spoken ?: "auto", translate, threads)?.let(::heardOf)
@@ -359,6 +363,8 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                         },
                     )
                 }
+                tookMs = (System.nanoTime() - began) / 1_000_000
+                windowMs = toMs - fromMs
                 heard.copy(language = spoken ?: heard.language)
             },
             durationMs = engine.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE,
@@ -370,6 +376,14 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 launch {
                     while (true) {
                         state.captionText = captions.lineAt(state.positionMs)?.text
+                        // Behind the film: what plays is not heard yet — say how slow the model is here.
+                        val heardNow = captions.heardAt(state.positionMs)
+                        if (!heardNow && tookMs > 0) {
+                            state.captionStatus = "Behind the film: Whisper ${model.label} took ${tookMs / 1000} s " +
+                                "for ${windowMs / 1000} s of sound here — a smaller model keeps up."
+                        } else if (heardNow && state.captionStatus?.startsWith("Behind") == true) {
+                            state.captionStatus = null
+                        }
                         delay(CAPTION_PACE_MS)
                     }
                 }

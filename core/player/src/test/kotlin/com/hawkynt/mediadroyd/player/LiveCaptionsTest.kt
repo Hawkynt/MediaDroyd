@@ -42,7 +42,9 @@ class LiveCaptionsTest {
     fun `a seek beyond what is heard starts hearing there`() {
         val captions = LiveCaptions(::hear, durationMs = 600_000)
         captions.ahead(0)
+        assertEquals(false, captions.heardAt(300_000))
         captions.ahead(300_000)
+        assertEquals(true, captions.heardAt(300_000))
         val line = captions.lineAt(300_500)
         assertEquals("line 75", line?.text)
         assertEquals(null, captions.lineAt(302_500))
