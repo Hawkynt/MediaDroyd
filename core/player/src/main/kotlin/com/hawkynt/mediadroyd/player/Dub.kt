@@ -348,7 +348,9 @@ object Dub {
                         val start = range.first * rate / 1000
                         val end = range.last * rate / 1000
                         if (end < fromFrame || start >= fromFrame + n) continue
-                        for (f in maxOf(start, fromFrame) until minOf(end, fromFrame + n)) speaking[(f - fromFrame).toInt()] = true
+                        for (f in maxOf(start, fromFrame) until minOf(end, fromFrame + n)) {
+                            speaking[(f - fromFrame).toInt()] = true
+                        }
                         any = true
                     }
                 }
