@@ -410,12 +410,18 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                         delay(CAPTION_PACE_MS)
                     }
                 }
+                var told = ""
                 while (true) {
+                    val at = state.positionMs
                     val heard = withContext(Dispatchers.Default) {
-                        runCatching { captions.ahead(state.positionMs) }
+                        runCatching { captions.ahead(at) }
                             .onFailure { state.captionStatus = "The speech could not be heard: ${it.message ?: it}" }
                             .getOrDefault(false)
                     }
+                    val round = "hearing round at ${at / 1000} s of ${engine.durationMs / 1000} s: " +
+                        if (heard) "heard" else "nothing to hear (heard there: ${captions.heardAt(at)})"
+                    if (round.substringAfter(": ") != told) platform.log(round)
+                    told = round.substringAfter(": ")
                     if (heard) {
                         state.captionStatus = null
                         state.captionSpoken = spoken
