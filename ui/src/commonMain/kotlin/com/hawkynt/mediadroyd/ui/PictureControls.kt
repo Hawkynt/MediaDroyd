@@ -27,6 +27,7 @@ import com.hawkynt.mediadroyd.player.MpvShaders
 import com.hawkynt.mediadroyd.player.NeuralEnlarging
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.player.PictureCheck
+import com.hawkynt.mediadroyd.player.ChromaShift
 import com.hawkynt.mediadroyd.player.PictureControl
 
 /**
@@ -45,6 +46,8 @@ fun PictureSliders(
     stereo: Boolean = false,
     /** Offer hiding a station logo; a choice for one show, remembered for its folder, not a household default. */
     logo: Boolean = false,
+    /** Offer moving a tape's colour back onto its brightness (ChromaShift); per video or folder, not household. */
+    colourOffset: Boolean = false,
     /**
      * Tries a choice of deinterlacing, upscaling or smooth motion before it is taken (see pictureCheck); a choice it
      * refuses is not taken, and why shows below its row. Takes everything by default.
@@ -120,6 +123,52 @@ fun PictureSliders(
                 )
             }
             Slider(value = value, onValueChange = { onChange(set(it)) }, onValueChangeFinished = onDone)
+        }
+        // A tape's colour sitting beside its brightness (ChromaShift, #444): Auto, or by hand in quarter pixels.
+        if (colourOffset) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text("Colour offset", fontSize = 16.sp)
+                    Text(
+                        if (picture.chromaShiftAuto) {
+                            "Found as the video plays: the colour's edges against the brightness's."
+                        } else {
+                            "Tapes often carry the colour beside the picture: a red coat with a red edge."
+                        },
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text("Auto", fontSize = 15.sp, modifier = Modifier.padding(end = 8.dp))
+                androidx.compose.material3.Switch(
+                    checked = picture.chromaShiftAuto,
+                    onCheckedChange = {
+                        onChange(picture.copy(chromaShiftAuto = it, chromaShiftX = 0f, chromaShiftY = 0f))
+                        onDone()
+                    },
+                )
+            }
+            if (!picture.chromaShiftAuto) {
+                listOf(
+                    Triple("Colour across", picture.chromaShiftX) { v: Float -> picture.copy(chromaShiftX = v) },
+                    Triple("Colour down", picture.chromaShiftY) { v: Float -> picture.copy(chromaShiftY = v) },
+                ).forEach { (label, value, set) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(
+                            if (value == 0f) "off" else "%+.2f px".format(value),
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Slider(
+                        value = value,
+                        onValueChange = { onChange(set(ChromaShift.quarter(it))) },
+                        valueRange = -ChromaShift.MAX_PX..ChromaShift.MAX_PX,
+                        onValueChangeFinished = onDone,
+                    )
+                }
+            }
         }
         // Only while dot crawl is combed out: the capture's colour system, where its rate does not tell it (PAL-M;
         // DotCrawl.Standard), kept for this video.

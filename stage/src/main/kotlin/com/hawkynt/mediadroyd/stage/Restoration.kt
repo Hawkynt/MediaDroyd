@@ -102,6 +102,16 @@ class Restoration(private val gl: Gles, private val passes: Passes) {
     }
 
     /**
+     * [from] into [into] with its colour moved by [dxPx] across and [dyPx] down (pixels; ChromaShift): each pixel's
+     * brightness kept, its colour taken from that far the other way. The stage's frames hold the picture's
+     * top row at v = 1, so down is towards smaller v.
+     */
+    fun chromaShift(from: DrawTarget, into: DrawTarget, dxPx: Float, dyPx: Float): DrawTarget =
+        passes.draw(Shaders.VIDEO_CHROMA_SHIFT, into, from.texture) {
+            set("uShift", -dxPx / from.width, dyPx / from.height)
+        }
+
+    /**
      * Deblocking's [step] (0 to 2) of [from] into [into] (Deblock), on the decoded picture's block grid starting at
      * [originX], [originY].
      */

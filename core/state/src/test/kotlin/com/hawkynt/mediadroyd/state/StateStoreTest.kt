@@ -120,6 +120,9 @@ class StateStoreTest {
         assertEquals(1.5f, store.pictureFor("/v/a.mkv").gamma)
         assertEquals(7000f, store.pictureFor("/v/a.mkv").temperature)
         assertEquals(-20f, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/a.mkv").hue)
+        store.savePicture("/v/a.mkv", store.defaultPicture().copy(gamma = 1.5f, chromaShiftX = -1.25f))
+        assertEquals(1.5f, store.pictureFor("/v/a.mkv").gamma)
+        assertEquals(-1.25f, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/a.mkv").chromaShiftX)
         assertEquals(0.2f, store.pictureFor("/v/b.mkv").brightness)
     }
 

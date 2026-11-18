@@ -222,6 +222,31 @@ class GlStageTest {
     }
 
     @Test
+    fun `the colour is moved against the brightness, across and down, the brightness staying (#444)`() {
+        // A red block on grey whose colour sits one column and one row too far left and up.
+        val w = 32
+        val h = 24
+        val picture = MediaReader.Picture(0, w, h, ByteArray(w * h * 4) { i ->
+            val x = (i / 4) % w
+            val y = (i / 4) / w
+            val red = x in 10..19 && y in 8..15
+            when (i % 4) { 0 -> if (red) 220 else 128; 3 -> 255; else -> if (red) 60 else 128 }.toByte()
+        })
+        fun pixel(out: ByteArray, x: Int, y: Int) = (0..2).map { out[(y * w + x) * 4 + it].toInt() and 255 }
+        val plain = stage.process(Moment(picture), PictureAdjustment.Neutral, w, h).rgba
+        val moved = stage.process(Moment(picture), PictureAdjustment(chromaShiftX = 1f, chromaShiftY = 1f), w, h).rgba
+        // Inside the block's top-left corner the colour is now grey's, outside its bottom-right corner red's.
+        val corner = pixel(moved, 10, 8)
+        assertTrue("$corner", abs(corner[0] - corner[2]) < 10)
+        val beyond = pixel(moved, 20, 16)
+        assertTrue("$beyond", beyond[0] - beyond[2] > 40)
+        // The brightness stays where it was.
+        fun luma(p: List<Int>) = 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]
+        assertEquals(luma(pixel(plain, 15, 12)), luma(pixel(moved, 15, 12)), 2.0)
+        assertEquals(luma(pixel(plain, 20, 16)), luma(beyond), 3.0)
+    }
+
+    @Test
     fun `blending High shows the two pictures mixed by the clock, Low only around the middle`() {
         // Two levels close enough to be one scene (a step of 8 % is no cut; SceneCuts).
         val a = flat(0, 100)

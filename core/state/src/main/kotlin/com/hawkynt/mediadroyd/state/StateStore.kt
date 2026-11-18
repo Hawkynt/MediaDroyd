@@ -458,6 +458,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             hue = it.hue,
             tint = it.tint,
             temperature = it.temperature,
+            chromaShiftX = it.chromaShiftX,
+            chromaShiftY = it.chromaShiftY,
+            chromaShiftAuto = it.chromaShiftAuto,
         )
 
         /** A picture as kept, the choices by name. */
@@ -492,6 +495,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             hue = picture.hue,
             tint = picture.tint,
             temperature = picture.temperature,
+            chromaShiftX = picture.chromaShiftX,
+            chromaShiftY = picture.chromaShiftY,
+            chromaShiftAuto = picture.chromaShiftAuto,
         )
 
         private fun chromaOf(name: String) =
