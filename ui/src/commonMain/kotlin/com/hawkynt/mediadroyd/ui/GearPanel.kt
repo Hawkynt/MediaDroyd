@@ -144,6 +144,7 @@ fun GearPanel(
         }
         PictureSliders(
             picture, onChange = onPicture, onDone = onPictureDone, stereo = true, logo = true, colourOffset = true,
+            tapeEdges = true,
             check = check,
             colorizers = colorizers, neuralModels = neuralModels,
         )

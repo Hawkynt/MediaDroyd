@@ -136,6 +136,12 @@ data class PictureOverride(
     val chromaShiftX: Float = 0f,
     val chromaShiftY: Float = 0f,
     val chromaShiftAuto: Boolean = false,
+    /** A tape's edges cut away in pixels, and the tear found as it plays (VhsEdges, #445). */
+    val edgeLeft: Int = 0,
+    val edgeTop: Int = 0,
+    val edgeRight: Int = 0,
+    val edgeBottom: Int = 0,
+    val edgesAuto: Boolean = false,
 )
 
 /** How one output screen is set up (see [com.hawkynt.mediadroyd.player.ScreenSetup]); names, as kept. */

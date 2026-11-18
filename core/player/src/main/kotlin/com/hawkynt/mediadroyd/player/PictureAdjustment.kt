@@ -108,7 +108,17 @@ data class PictureAdjustment(
     val chromaShiftY: Float = 0f,
     /** The colour's offset found as the video plays instead (ChromaShift.Auto); the player fills in the two above. */
     val chromaShiftAuto: Boolean = false,
+    /** A tape's edges cut away, in the decoded picture's pixels (VhsEdges, #445), before every other filter. */
+    val edgeLeft: Int = 0,
+    val edgeTop: Int = 0,
+    val edgeRight: Int = 0,
+    val edgeBottom: Int = 0,
+    /** The head-switching tear at the bottom found as the video plays (VhsEdges.Auto). */
+    val edgesAuto: Boolean = false,
 ) {
+    /** The tape's edges as one. */
+    val edges: VhsEdges.Edges get() = VhsEdges.Edges(edgeLeft, edgeTop, edgeRight, edgeBottom)
+
     /** The share of plain scaling mixed over the [upscaler]'s picture: 0 at full strength, 1 with it off. */
     val plainShare: Float get() = 1f - upscalerStrength.coerceIn(0f, 1f)
 
@@ -401,6 +411,7 @@ data class PictureAdjustment(
             deinterlace != Deinterlace.OFF ||
             upscaler != Upscaler.STANDARD || interpolation != Interpolation.OFF || stereo != Stereo.OFF ||
             colorize != Colorize.OFF || chromaShiftX != 0f || chromaShiftY != 0f || chromaShiftAuto ||
+            !edges.isNone || edgesAuto ||
             !isColorNeutral
 
     /**
