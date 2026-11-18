@@ -64,7 +64,8 @@ object SpeechReads {
                         count = 0
                     }
                 }
-                if (out.size >= (toMs - fromMs) * com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE / 1000) break@loop
+                val wanted = (toMs - fromMs) * com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE / 1000
+                if (out.size >= wanted) break@loop
             }
             if (out.isEmpty()) null else out.toFloatArray()
         }

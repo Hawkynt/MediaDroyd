@@ -692,7 +692,9 @@ fun DesktopPlayer(
 
         // Subtitles made from the speech (#529): FFmpeg's sound at 16 kHz, Whisper in the native library.
         override fun soundAt(location: String, fromMs: Long, toMs: Long) =
-            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.soundAt(location, places.remoteFile(location), fromMs, toMs)
+            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.soundAt(
+                location, places.remoteFile(location), fromMs, toMs,
+            )
 
         override fun whisperReady(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry) =
             com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(model.download), model.download)

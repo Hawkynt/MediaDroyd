@@ -350,7 +350,7 @@ class PlaybackChainTest {
     }
 
     @Test
-    fun `subtitles made from the speech show their recognition and translation, the voice-over its voice (#529, #531)`() {
+    fun `made subtitles show their recognition and translation, the voice-over its voice (#529, #531)`() {
         val made = PlaybackChain.of(
             facts.copy(
                 subtitles = null,
