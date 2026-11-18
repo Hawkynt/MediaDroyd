@@ -36,6 +36,8 @@ import com.hawkynt.mediadroyd.engine.Tracks
 import com.hawkynt.mediadroyd.library.Chapters
 import com.hawkynt.mediadroyd.library.FsFile
 import com.hawkynt.mediadroyd.library.Sidecars
+import com.hawkynt.mediadroyd.library.readTextOrNull
+import com.hawkynt.mediadroyd.player.SubtitleSync
 import com.hawkynt.mediadroyd.player.ChapterSteps
 import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
@@ -82,6 +84,13 @@ interface PlayerPlatform {
      */
     fun readText(location: String, at: (durationMs: Long) -> List<Long>): List<Pair<Long, List<CreditText.Line>>>? =
         null
+
+    /**
+     * Where [location]'s sound speaks, for moving subtitles onto it (SubtitleSync, #450): the whole sound decoded and
+     * judged, SubtitleSync.RATE verdicts a second ([SubtitleSync.Speech]); null where it cannot be read. Blocks for as
+     * long as decoding the sound takes: called off the main thread.
+     */
+    fun speech(location: String): BooleanArray? = null
 
     /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
@@ -484,6 +493,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
 /** The gear: speed, picture size, this video's picture, subtitles and sound, and what only the platform offers. */
 @Composable
 private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
     val byTrack = platform.subtitlesByTrack
     GearPanel(
         speed = state.speed,
@@ -532,7 +542,28 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         sections = { with(platform) { GearSections() } },
         afterPictureSize = { with(platform) { GearAfterPictureSize() } },
         end = {
-            SubtitleLookRows(state.subtitleLook, onLook = state::look, onReset = state::resetLook)
+            SubtitleLookRows(
+                state.subtitleLook, onLook = state::look, onReset = state::resetLook,
+                // Sync for a subtitle file beside the video (SubtitleSync, #450): its cues laid over the speech.
+                onSync = syncableSubtitles(state)?.let { file ->
+                    {
+                        scope.launch {
+                            state.syncing = "Listening to the sound…"
+                            val video = state.session.current.videoPath
+                            val fit = withContext(Dispatchers.Default) {
+                                val cues = platform.fileOf(file)?.readTextOrNull()?.let(SubtitleSync::cues)
+                                val speech = state.speechFor(video) { platform.speech(video) }
+                                if (cues != null && speech != null) SubtitleSync.fit(speech, cues) else null
+                            }
+                            state.syncing = if (fit == null) "No speech or no lines found to match." else null
+                            if (fit != null) {
+                                state.look(state.subtitleLook.copy(delayMs = fit.offsetMs.toInt(), drift = fit.ratio))
+                            }
+                        }
+                    }
+                },
+                syncing = state.syncing,
+            )
             SleepChoice(state.session, ::monotonicMs)
             RepeatChoice(state.session.repeat) { state.session.repeat = it }
             with(platform) { GearEnd() }
@@ -647,4 +678,11 @@ fun BoxScope.SwipeLevel(level: Float, side: Side) {
             .align(if (side == Side.LEFT) Alignment.CenterStart else Alignment.CenterEnd)
             .padding(horizontal = 32.dp),
     )
+}
+
+/** The subtitle file beside the video whose track is playing, which Sync can move; null for a track in the video. */
+internal fun syncableSubtitles(state: PlayerScreenState): String? {
+    val track = state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second } ?: return null
+    if (track.source <= 0) return null
+    return state.sidecars.filter { it.first.kind == Sidecars.Kind.SUBTITLES }.getOrNull(track.source - 1)?.second
 }

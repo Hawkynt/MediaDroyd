@@ -392,6 +392,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             size = runCatching { SubtitleLook.Size.valueOf(it.size) }.getOrDefault(SubtitleLook.Size.NORMAL),
             raised = it.raised,
             box = it.box,
+            drift = it.drift,
         )
     } ?: defaultSubtitleLook()
 
@@ -400,7 +401,8 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
         if (look == null || look == defaultSubtitleLook()) {
             data.subtitles.remove(videoPath)
         } else {
-            data.subtitles[videoPath] = SubtitleOverride(look.delayMs, look.size.name, look.raised, look.box)
+            data.subtitles[videoPath] =
+                SubtitleOverride(look.delayMs, look.size.name, look.raised, look.box, look.drift)
         }
         save()
     }

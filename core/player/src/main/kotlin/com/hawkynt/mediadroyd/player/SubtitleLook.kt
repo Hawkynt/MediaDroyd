@@ -10,7 +10,19 @@ data class SubtitleLook(
     val size: Size = Size.NORMAL,
     val raised: Boolean = false,
     val box: Boolean = false,
+    /**
+     * How much slower the cues run than the film (SubtitleSync, #450): a file timed for another frame rate, 1 where
+     * not. The cue at t then belongs at t × drift + [delayMs].
+     */
+    val drift: Double = 1.0,
 ) {
+    /**
+     * The delay at playback [positionMs]: [delayMs], and with a [drift] what it adds by then — the cue shown there was
+     * timed at (position − delay) / drift.
+     */
+    fun delayAt(positionMs: Long): Int =
+        if (drift == 1.0) delayMs else (delayMs + (positionMs - delayMs) * (drift - 1) / drift).toInt()
+
     enum class Size(val label: String, val scale: Float) {
         SMALL("Small", 0.8f),
         NORMAL("Normal", 1f),
@@ -26,7 +38,10 @@ data class SubtitleLook(
 
     /** The delay moved by [steps] of [DELAY_STEP_MS], held within ±[DELAY_LIMIT_MS]. */
     fun nudgeDelay(steps: Int): SubtitleLook =
-        copy(delayMs = (delayMs + steps * DELAY_STEP_MS).coerceIn(-DELAY_LIMIT_MS, DELAY_LIMIT_MS))
+        copy(
+            delayMs = (delayMs + steps * DELAY_STEP_MS)
+                .coerceIn(minOf(-DELAY_LIMIT_MS, delayMs), maxOf(DELAY_LIMIT_MS, delayMs)),
+        )
 
     companion object {
         const val DELAY_STEP_MS = 100

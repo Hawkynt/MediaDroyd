@@ -233,7 +233,7 @@ fun PhonePlayer(
             override val nightMode get() = nightMode
             override val normalizeLoudness get() = settings.evenLoudness
             override val audioDelayMs get() = audioDelayMs
-            override val subtitleDelayMs get() = shared[0]?.subtitleLook?.delayMs ?: 0
+            override val subtitleDelayMs get() = shared[0]?.subtitleDelayNow ?: 0
             override val voiceBoostDb get() = settings.voices
             override val equalizerPreampDb get() = equalizer.preampDb
             override val equalizerBandsDb get() = equalizer.bandsDb
@@ -1103,6 +1103,9 @@ fun PhonePlayer(
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.data.CreditReads.read(context, location, at)
+
+        // Where the sound speaks, for Sync: the app's FFmpeg decoding the whole sound (SpeechReads).
+        override fun speech(location: String) = com.hawkynt.mediadroyd.data.SpeechReads.of(context, location)
 
         // Media3's own controls take play, pause and seeking; a remote's keys reach them.
         override val commands = PHONE_COMMANDS
