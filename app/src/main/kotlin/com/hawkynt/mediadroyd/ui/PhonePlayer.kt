@@ -200,12 +200,15 @@ fun PhonePlayer(
     // Lip-sync, remembered per audio output: a Bluetooth headset lags differently from the speaker.
     var audioOutput by remember { mutableStateOf(com.hawkynt.mediadroyd.player.currentAudioOutput(context)) }
     var audioDelayMs by remember { mutableIntStateOf(store.audioDelayFor(audioOutput.key)) }
+    // The equalizer, likewise per output (#451): headphones want other bands than the speaker.
+    var equalizer by remember { mutableStateOf(store.equalizerFor(audioOutput.key)) }
     DisposableEffect(Unit) {
         val audioManager = context.getSystemService(AudioManager::class.java)
         val callback = object : android.media.AudioDeviceCallback() {
             fun refresh() {
                 audioOutput = com.hawkynt.mediadroyd.player.currentAudioOutput(context)
                 audioDelayMs = store.audioDelayFor(audioOutput.key)
+                equalizer = store.equalizerFor(audioOutput.key)
             }
             override fun onAudioDevicesAdded(added: Array<out android.media.AudioDeviceInfo>?) = refresh()
             override fun onAudioDevicesRemoved(removed: Array<out android.media.AudioDeviceInfo>?) = refresh()
@@ -232,6 +235,8 @@ fun PhonePlayer(
             override val audioDelayMs get() = audioDelayMs
             override val subtitleDelayMs get() = shared[0]?.subtitleLook?.delayMs ?: 0
             override val voiceBoostDb get() = settings.voices
+            override val equalizerPreampDb get() = equalizer.preampDb
+            override val equalizerBandsDb get() = equalizer.bandsDb
         }
     }
     val engine = remember {
@@ -1424,6 +1429,17 @@ fun PhonePlayer(
                 PlaybackMath.syncText("sound", audioDelayMs).replaceFirstChar { it.uppercase() } +
                     ". Later when you hear a word before the lips move, sooner when after. " +
                     "Kept for this output.",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            PanelTitle("Equalizer · ${audioOutput.name}")
+            EqualizerControls(equalizer, { e ->
+                equalizer = e
+                store.saveEqualizer(audioOutput.key, e)
+            })
+            Text(
+                "Kept for this output; Settings sets what the others play.",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

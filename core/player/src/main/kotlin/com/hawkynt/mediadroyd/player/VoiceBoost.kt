@@ -1,12 +1,5 @@
 package com.hawkynt.mediadroyd.player
 
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sign
-import kotlin.math.sin
-import kotlin.math.tanh
-
 /**
  * Clearer voices (#452): films mixed for cinemas bury the dialogue on TV speakers and phones, and this raises it.
  * Dialogue sits in the centre — a film's centre channel, which a downmix puts into left and right alike — so in stereo
@@ -52,58 +45,7 @@ class VoiceBoost(sampleRate: Int, channels: Int) {
 
     private fun band(x: Float): Float = lowPass.next(highPass.next(x))
 
-    // [x] as a sample: as it is up to [KNEE], then bending softly towards full scale.
-    private fun knee(x: Float): Short {
-        val magnitude = abs(x)
-        val room = FULL - KNEE
-        val shaped = if (magnitude <= KNEE) magnitude else KNEE + room * tanh((magnitude - KNEE) / room)
-        return (shaped * sign(x)).toInt().toShort()
-    }
-
-    // One second-order section, transposed direct form II.
-    private class Biquad(
-        private val b0: Float,
-        private val b1: Float,
-        private val b2: Float,
-        private val a1: Float,
-        private val a2: Float,
-    ) {
-        private var z1 = 0f
-        private var z2 = 0f
-
-        fun next(x: Float): Float {
-            val y = b0 * x + z1
-            z1 = b1 * x - a1 * y + z2
-            z2 = b2 * x - a2 * y
-            return y
-        }
-
-        companion object {
-            private const val Q = 0.7071f
-
-            fun highPass(rate: Int, hz: Double): Biquad {
-                val w = 2 * PI * hz / rate
-                val alpha = sin(w) / (2 * Q)
-                val c = cos(w)
-                val a0 = 1 + alpha
-                return Biquad(
-                    ((1 + c) / 2 / a0).toFloat(), (-(1 + c) / a0).toFloat(), ((1 + c) / 2 / a0).toFloat(),
-                    (-2 * c / a0).toFloat(), ((1 - alpha) / a0).toFloat(),
-                )
-            }
-
-            fun lowPass(rate: Int, hz: Double): Biquad {
-                val w = 2 * PI * hz / rate
-                val alpha = sin(w) / (2 * Q)
-                val c = cos(w)
-                val a0 = 1 + alpha
-                return Biquad(
-                    ((1 - c) / 2 / a0).toFloat(), ((1 - c) / a0).toFloat(), ((1 - c) / 2 / a0).toFloat(),
-                    (-2 * c / a0).toFloat(), ((1 - alpha) / a0).toFloat(),
-                )
-            }
-        }
-    }
+    private fun knee(x: Float): Short = SoftKnee.apply(x)
 
     companion object {
         /** The speech band raised: its fundamentals' floor to the consonants' clarity. */
@@ -115,7 +57,5 @@ class VoiceBoost(sampleRate: Int, channels: Int) {
 
         // The centre channel in the WAVE order 5.1 and 7.1 arrive in: front left, front right, centre, …
         private const val CENTRE = 2
-        private const val FULL = 32767f
-        private const val KNEE = 24000f
     }
 }

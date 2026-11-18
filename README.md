@@ -279,8 +279,8 @@ and denoised. How the networks are checked on a desktop:
 ### 🔊 Sound
 
 - AC3, E-AC3, DTS, TrueHD and more through the bundled FFmpeg; passthrough to an AV receiver over HDMI.
-- Night mode (a compressor after Giannoulis, Massberg & Reiss, JAES 2012), clearer voices, loudness boost up to
-  800 %, even loudness from file to file (ReplayGain, else EBU R128 measured), audio delay remembered per output,
+- Night mode (a compressor after Giannoulis, Massberg & Reiss, JAES 2012), clearer voices, a 10-band equalizer,
+  loudness boost up to 800 %, even loudness from file to file (ReplayGain, else EBU R128 measured), audio delay remembered per output,
   spatial audio on Android 13+.
 
 <details>
@@ -289,6 +289,7 @@ and denoised. How the networks are checked on a desktop:
 - AC3, E-AC3, DTS, TrueHD and other exotic audio tracks play through a bundled FFmpeg decoder, even on hardware without them.
 - Night mode in the gear compresses the dynamic range in the app's own audio stage — quiet dialogue comes up, explosions come down — for late evenings and thin walls; it combines with the loudness gain and the volume boost (soft-knee compressor after Giannoulis, Massberg & Reiss, JAES 2012).
 - Clearer voices in Settings, off up to +12 dB, raise the dialogue films mix for cinemas and bury on TV speakers and phones: the voices sit in the centre, so in stereo the mid (L + R) is band-passed to the speech band, 200 Hz to 4 kHz (second-order filters from Robert Bristow-Johnson's Audio EQ Cookbook), and added back to both channels — music and effects at the sides, the bass and the hiss stay as they were — and where a file's channels arrive unmixed (5.1, 7.1 on Android) the centre channel itself is raised; near full scale a soft knee bends the peaks instead of clipping. It comes before the loudness gain and night mode and works with both, on both platforms.
+- An equalizer, ten bands (60 Hz … 16 kHz, VLC's bands) of −20 … +20 dB and a preamp, with VLC's presets — Flat, Classical, Club, Dance, Full bass, Full bass and treble, Full treble, Headphones, Large hall, Live, Party, Pop, Reggae, Rock, Ska, Soft, Soft rock, Techno — their values copied from VLC's `equalizer_presets.h` (its preamp taken as VLC means it, 12 dB above its own −12 dB input, so Flat is no change): each band a peaking filter from Robert Bristow-Johnson's Audio EQ Cookbook, an octave wide, on every channel, after clearer voices and before the loudness gain and night mode; near full scale a soft knee bends the peaks instead of clipping; a band at or above half the sample rate is left out. Settings sets the household's equalizer; the gear changes it for the audio output playing — the phone's speaker, each headset, the desktop's output — and that output keeps it, as it keeps its audio delay, on both platforms.
 - Even loudness in Settings plays every film and song about as loud as the last, beside the loudness gain and night mode: a file whose tags carry ReplayGain — `REPLAYGAIN_TRACK_GAIN` / `_PEAK` in Vorbis comments, ID3, iTunes atoms or an MP3's LAME header, Opus's `R128_TRACK_GAIN` — plays at its track gain from the first sample, held back so its peak stays within full scale; any other file is measured as it plays (EBU R128 / ITU-R BS.1770 integrated loudness: K-weighting, 400 ms blocks, the −70 LUFS and −10 LU gates — converted from libebur128 and agreeing with it and with FFmpeg's ebur128 filter) and turned towards ReplayGain's −18 LUFS, after its first three seconds, no faster than 2 dB a second, by at most +12 / −24 dB. The info graph names which of the two is at work.
 - Audio delay in the gear, −2.5 s … +2.5 s in 50 ms steps, fixes lip-sync; the gear says it in words — "sound 150 ms after the picture", "subtitles 2 s before the picture" — and its buttons are Sooner and Later, for the sound as for the subtitles; it is remembered per audio output — the phone's speaker, each Bluetooth headset, USB, HDMI — since each has its own latency, and follows the output when it changes.
 - Spatial audio: on Android 13+ devices with a spatializer, a remembered switch in the gear hands multichannel sound to it for headphones that support it. The player takes audio focus like any film player: other apps pause, a call pauses the film — on the phone's own screen; on a second screen or in picture-in-picture it plays on whatever other apps play.
@@ -541,7 +542,7 @@ details, Files, Settings and the player — are shared (`:ui`, Compose Multiplat
   Playback speed from 0.2× to 5×, the sound at its own pitch, kept for the next video.
 - Sound settings in the same panel, through the very sample code Android runs (`LoudnessChain` in `:core:player`):
   the loudness gain (−12 … +12 dB), even loudness (ReplayGain from the tags FFmpeg reads, else EBU R128 measured as it
-  plays), night mode for the evening, and the audio delay, −2.5 … +2.5 s as on the phone, in 50 ms steps with Sooner
+  plays), night mode for the evening, the equalizer as on the phone, and the audio delay, −2.5 … +2.5 s as on the phone, in 50 ms steps with Sooner
   and Later; all but night mode are kept for the next video. A sound set sooner than the picture holds that many more
   decoded pictures back, up to half a gigabyte of them; a sound set later is held that long before the sound output,
   so the reader runs ahead to the pictures due.
@@ -578,7 +579,7 @@ details, Files, Settings and the player — are shared (`:ui`, Compose Multiplat
 ## 🗺️ Roadmap
 
 What comes next lives in the [open issues](https://github.com/Hawkynt/MediaDroyd/issues), each a requirement of its
-own — among them clearer voices, an equalizer and headphone surround for the sound, VHS clean-up, 3D LUTs and
+own — among them headphone surround for the sound, VHS clean-up, 3D LUTs and
 NNEDI3 for the picture, DVD and Blu-ray folders, UPnP/DLNA servers, backups through a Google account, and a Linux
 arm64 package.
 Considered and left out: online scraping, playlists, and IMDb/TMDb links — the metadata stays what is already in the

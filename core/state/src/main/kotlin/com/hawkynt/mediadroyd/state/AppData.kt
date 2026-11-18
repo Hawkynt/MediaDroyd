@@ -1,6 +1,7 @@
 package com.hawkynt.mediadroyd.state
 
 import com.hawkynt.mediadroyd.library.Source
+import com.hawkynt.mediadroyd.player.EqualizerPreset
 import com.hawkynt.mediadroyd.player.NeuralEnlarging
 import com.hawkynt.mediadroyd.player.NeuralInterpolation
 import com.hawkynt.mediadroyd.player.PictureAdjustment
@@ -18,6 +19,27 @@ data class SubtitleOverride(
     val raised: Boolean = false,
     val box: Boolean = false,
 )
+
+/**
+ * An equalizer as kept (Equalizer, #451): its preamp and its gains per band (Equalizer.HZ) in dB; empty bands are
+ * flat. Settings keeps the household's, each audio output the one the gear set for it.
+ */
+@Serializable
+data class EqualizerSetting(val preampDb: Float = 0f, val bandsDb: List<Float> = emptyList()) {
+    /** The preset this is, or null where it is the household's own. */
+    val preset: EqualizerPreset? get() = EqualizerPreset.matching(preampDb, bandsDb)
+
+    /** The preset's name to show, else "Custom". */
+    val name: String get() = preset?.label ?: "Custom"
+
+    /** Whether it changes nothing. */
+    val isFlat: Boolean get() = preampDb == 0f && bandsDb.all { it == 0f }
+
+    companion object {
+        /** The [preset]'s values. */
+        fun of(preset: EqualizerPreset) = EqualizerSetting(preset.preampDb, preset.bandsDb)
+    }
+}
 
 /** A station logo hidden for every video in a folder (one show): PictureAdjustment's LogoMask by names. */
 /**
@@ -131,6 +153,7 @@ data class Settings(
     var defaultSpeed: Float = 1.0f,
     var loudness: Float = 0f,                 // dB, -12..12
     var voices: Float = 0f,                   // dB the dialogue is raised by, 0..12 (VoiceBoost, #452)
+    var equalizer: EqualizerSetting = EqualizerSetting(), // the household's, where an output keeps none (#451)
     var evenLoudness: Boolean = false,        // every file at the same loudness: ReplayGain, else measured (R128)
     var matchRefreshRate: Boolean = false,    // TV boxes: switch the display to a multiple of the film's frame rate
     var audioPassthrough: Boolean = false,    // TV boxes: compressed surround untouched to an AV receiver
@@ -238,6 +261,7 @@ data class AppData(
     // Pictures per folder or share, by FolderPlace.key ("sourceId|folder"): what the videos in it start with.
     val folderPictures: MutableMap<String, PictureOverride> = mutableMapOf(),
     val audioDelays: MutableMap<String, Int> = mutableMapOf(), // lip-sync per audio output, in ms
+    val equalizers: MutableMap<String, EqualizerSetting> = mutableMapOf(), // the gear's per audio output (#451)
     val sorts: MutableMap<String, String> = mutableMapOf(), // SortOrder per LibrarySection, by name
     var wallMode: String = "",                 // WallMode by name; "" is posters
     var filesSort: String = "",                // FileSort by name; "" is by name
