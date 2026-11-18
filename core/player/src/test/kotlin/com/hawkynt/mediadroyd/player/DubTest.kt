@@ -214,18 +214,12 @@ class DubTest {
         val track = Dub.Track().apply { add(0, FloatArray(frames) { 0f }, rate) }
         val out = input.copyOf()
         Dub.Mixer(rate, 2).process(out, 0, frames, 0L, track)
-        // What is left: the bass alone, near enough; a 1 kHz voice mostly gone.
-        val from = rate
-        var bass = 0.0
-        var left = 0.0
-        for (f in from until frames) {
-            val t = f.toDouble() / rate
-            val b = 5000 * sin(2 * PI * 60 * t)
-            bass += b * b
-            val residual = out[f * 2] - b
-            left += residual * residual
+        // What is left: the bass's level alone, near enough (its phase turned by the low-pass); the voice gone.
+        val bassOnly = ShortArray(frames * 2) { i ->
+            (5000 * sin(2 * PI * 60 * (i / 2).toDouble() / rate)).toInt().toShort()
         }
-        assertTrue("residual ${sqrt(left / bass)}", sqrt(left / bass) < 0.35)
+        val ratio = rms(out, 0, 2, rate, frames) / rms(bassOnly, 0, 2, rate, frames)
+        assertEquals("left over against the bass alone", 1.0, ratio, 0.15)
     }
 
     @Test
@@ -233,13 +227,15 @@ class DubTest {
         assertTrue(Dub.hasCentre(6) && Dub.hasCentre(8) && Dub.hasCentre(3))
         assertTrue(!Dub.hasCentre(2) && !Dub.hasCentre(1))
         val frames = rate
-        val input = ShortArray(frames * 2) { i -> (5000 * sin(2 * PI * 60 * (i / 2).toDouble() / rate)).toInt().toShort() }
+        val input = ShortArray(frames * 2) { i ->
+            (5000 * sin(2 * PI * 60 * (i / 2).toDouble() / rate)).toInt().toShort()
+        }
         val track = Dub.Track().apply { add(0, FloatArray(frames) { 0f }, rate) }
         val out = input.copyOf()
         Dub.Mixer(rate, 2, Dub.Original.CHANNEL).process(out, 0, frames, 0L, track)
         // Stereo's bass stays: what "the channel" would have removed is only the voice band here.
-        val f = (rate * 0.8).toInt()
-        assertTrue("${out[f * 2]} against ${input[f * 2]}", abs(out[f * 2] - input[f * 2]) < 800)
+        val ratio = rms(out, 0, 2, rate / 2, frames) / rms(input, 0, 2, rate / 2, frames)
+        assertEquals(1.0, ratio, 0.1)
     }
 
     @Test
@@ -279,5 +275,39 @@ class DubTest {
         assertEquals("en_US-joe-medium", enMale?.id)
         assertEquals(PiperVoices.Sex.FEMALE, enFemale?.sex)
         assertEquals(null to null, PiperVoices.pair("de", espeak = false))
+    }
+
+    @Test
+    fun `the film's voice steps back for the whole of its line, not only while the shorter voice-over speaks`() {
+        val frames = rate * 3
+        val input = ShortArray(frames * 2) { 4000 }
+        // The voice-over speaks 0.5 … 1.0 s; the actor's line ran 0.5 … 2.5 s.
+        val track = Dub.Track().apply {
+            add(500, FloatArray(rate / 2) { 0f }, rate)
+            duck(500L..2500L)
+        }
+        val out = input.copyOf()
+        Dub.Mixer(rate, 2, Dub.Original.MUTE).process(out, 0, frames, 0L, track)
+        assertEquals(0, out[(rate * 2.0).toInt() * 2].toInt())
+        assertEquals(4000, out[(rate * 2.8).toInt() * 2].toInt())
+    }
+
+    @Test
+    fun `suppressing the voice band takes a man's low voice too, the deep bass stays`() {
+        val frames = rate * 2
+        fun tone(hz: Double) = ShortArray(frames * 2) { i ->
+            (5000 * sin(2 * PI * hz * (i / 2).toDouble() / rate)).toInt().toShort()
+        }
+        val track = Dub.Track().apply { add(0, FloatArray(frames) { 0f }, rate) }
+        fun left(hz: Double): Double {
+            val input = tone(hz)
+            val out = input.copyOf()
+            Dub.Mixer(rate, 2).process(out, 0, frames, 0L, track)
+            return rms(out, 0, 2, rate, frames) / rms(input, 0, 2, rate, frames)
+        }
+        assertTrue("a man's 150 Hz: ${left(150.0)}", left(150.0) < 0.6)
+        assertTrue("a man's 200 Hz: ${left(200.0)}", left(200.0) < 0.35)
+        assertTrue("speech at 1 kHz: ${left(1000.0)}", left(1000.0) < 0.1)
+        assertTrue("bass at 40 Hz: ${left(40.0)}", left(40.0) > 0.8)
     }
 }

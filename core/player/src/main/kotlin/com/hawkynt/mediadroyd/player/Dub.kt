@@ -9,6 +9,10 @@ package com.hawkynt.mediadroyd.player
  * platforms'.
  */
 object Dub {
+    /** The voice band suppressed under a spoken line: a man's fundamental up to the consonants' hiss. */
+    const val VOICE_LOW_HZ = 150.0
+    const val VOICE_HIGH_HZ = 5000.0
+
     /** How long the dialogue takes to step back or return. */
     const val RAMP_MS = 50L
 
@@ -266,6 +270,7 @@ object Dub {
                 if (said != null) {
                     val pcm = said.pcm
                     track.add(line.startMs, FloatArray(pcm.size) { pcm[it] * FULL_SCALE }, said.rate)
+                    track.duck(line.startMs..line.endMs)
                     count++
                 }
             }
@@ -287,6 +292,13 @@ object Dub {
 
         private val clips = ArrayList<Clip>()
 
+        // Where the film's own lines ran that are spoken over: its voice steps back there too, however short the
+        // spoken line is.
+        private val ducks = ArrayList<LongRange>()
+
+        /** Has the film's voice step back over [range] (ms) as well: the original line a spoken one replaces. */
+        fun duck(range: LongRange) = synchronized(clips) { ducks += range }
+
         /** [pcm] (mono, at [rate]) from [startMs] on. */
         fun add(startMs: Long, pcm: FloatArray, rate: Int) {
             if (pcm.isEmpty() || rate <= 0) return
@@ -297,7 +309,10 @@ object Dub {
         }
 
         /** Forgets every line: another track, or another video. */
-        fun clear() = synchronized(clips) { clips.clear() }
+        fun clear() = synchronized(clips) {
+            clips.clear()
+            ducks.clear()
+        }
 
         /**
          * The voice for [voice].size frames at [rate] from [fromMs] into [voice], and where a line speaks into
@@ -328,6 +343,15 @@ object Dub {
                     }
                     any = true
                 }
+                if (speaking != null) {
+                    for (range in ducks) {
+                        val start = range.first * rate / 1000
+                        val end = range.last * rate / 1000
+                        if (end < fromFrame || start >= fromFrame + n) continue
+                        for (f in maxOf(start, fromFrame) until minOf(end, fromFrame + n)) speaking[(f - fromFrame).toInt()] = true
+                        any = true
+                    }
+                }
             }
             return any
         }
@@ -343,7 +367,7 @@ object Dub {
         CHANNEL,
 
         /**
-         * The voice band suppressed: the speech band (200 Hz … 4 kHz) taken out of where the dialogue is — the centre
+         * The voice band suppressed: the voice band (150 Hz … 5 kHz) taken out of where the dialogue is — the centre
          * channel, else stereo's middle (L + R), else the one channel — the bass, the highs and the sides staying.
          */
         BAND,
@@ -370,9 +394,14 @@ object Dub {
         private var voice = FloatArray(0)
         private var speaking = BooleanArray(0)
 
-        // The speech band of where the dialogue is, kept running so a line starting finds them settled.
-        private val highPass = Biquad.highPass(rate, VoiceBoost.LOW_HZ)
-        private val lowPass = Biquad.lowPass(rate, VoiceBoost.HIGH_HZ)
+        // What is left of where the dialogue is without its voice band: below it and above it, each through two
+        // sections (Linkwitz–Riley, 24 dB an octave), kept running so a line starting finds them settled. Faded to
+        // rather than the band subtracted: a filter's phase would make a subtraction boost the band's edges.
+        private val below = listOf(Biquad.lowPass(rate, VOICE_LOW_HZ), Biquad.lowPass(rate, VOICE_LOW_HZ))
+        private val above = listOf(Biquad.highPass(rate, VOICE_HIGH_HZ), Biquad.highPass(rate, VOICE_HIGH_HZ))
+
+        private fun withoutVoice(x: Float): Float =
+            below.fold(x) { y, section -> section.next(y) } + above.fold(x) { y, section -> section.next(y) }
         private val banded = this.original == Original.BAND
 
         /** Mixes [track] into [frames] frames of [samples] from [offset], the first of them at [ptsMs]. */
@@ -399,15 +428,13 @@ object Dub {
                     centred || channels == 1 -> {
                         val c = if (centred) CENTRE else 0
                         val x = samples[at + c].toFloat()
-                        val band = lowPass.next(highPass.next(x))
-                        samples[at + c] = SoftKnee.apply(x - band * (1 - gain) + v)
+                        samples[at + c] = SoftKnee.apply(x * gain + withoutVoice(x) * (1 - gain) + v)
                     }
                     else -> {
                         val l = samples[at].toFloat()
                         val r = samples[at + 1].toFloat()
                         val mid = (l + r) / 2
-                        val band = lowPass.next(highPass.next(mid))
-                        val out = mid - band * (1 - gain) + v
+                        val out = mid * gain + withoutVoice(mid) * (1 - gain) + v
                         val side = (l - r) / 2
                         samples[at] = SoftKnee.apply(out + side)
                         samples[at + 1] = SoftKnee.apply(out - side)
