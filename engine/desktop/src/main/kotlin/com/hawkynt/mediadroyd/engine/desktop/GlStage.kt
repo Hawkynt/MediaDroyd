@@ -14,6 +14,7 @@ import com.hawkynt.mediadroyd.player.NeuralPace
 import com.hawkynt.mediadroyd.player.OldGame
 import com.hawkynt.mediadroyd.player.PeakDetect
 import com.hawkynt.mediadroyd.player.PictureAdjustment
+import com.hawkynt.mediadroyd.player.SceneCuts
 import com.hawkynt.mediadroyd.player.PictureCrop
 import com.hawkynt.mediadroyd.player.ScreenWarp
 import com.hawkynt.mediadroyd.player.TemporalDenoise
@@ -130,6 +131,7 @@ class GlStage(
 
     // Motion's vectors on the graphics card, and the search's answer they hold.
     private val motion = MotionSearch()
+    private val cuts = SceneCuts()
     private var vectorTexture = 0
     private var vectorsShown: MotionSearch.Vectors? = null
 
@@ -720,6 +722,15 @@ class GlStage(
     ): Target {
         val phase = m.phase.coerceIn(0f, 1f)
         var weight = a.interpolation.weight(phase)
+        // Across a scene cut neither a network's in-between nor a blend: the earlier picture until the later is due
+        // (SceneCuts, #442). Motion has its own search's verdict.
+        if (!a.interpolation.isMotionCompensated && cuts.isCut(idOf(m.shown), idOf(next)) { id ->
+                val p = if (id == idOf(m.shown)) m.shown else next
+                SceneCuts.luma(p.rgba, p.width, p.height, if (p.hdr != null) 2 else 1)
+            }
+        ) {
+            return if (phase < 1f) earlier else later
+        }
         // A network's in-between: the picture runs from the earlier through it to the later (NeuralInterpolation.mix).
         if (a.interpolation.isNeural) {
             val middle = inBetween(a.interpolation, m.shown, next, earlier, later)
