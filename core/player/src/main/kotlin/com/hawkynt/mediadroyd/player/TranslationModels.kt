@@ -12,7 +12,7 @@ object TranslationModels {
 
     /** The files every export has, by name in the download (the networks in its onnx/ folder). */
     const val ENCODER = "onnx/encoder_model_quantized.onnx"
-    const val DECODER = "onnx/decoder_model_quantized.onnx"
+    const val DECODER = "onnx/decoder_model_merged_quantized.onnx"
     const val TOKENIZER = "tokenizer.json"
     const val CONFIG = "config.json"
 
@@ -30,7 +30,7 @@ object TranslationModels {
     val ALL = listOf(
         model(
             "de", "German", "1ca130c44c4c5441ef16d48aae521a424ab644f7",
-            56_281_702L to "75ef79aa9bde9e3dce9ca584c29507be5f464973f6c600c89ff419bc8de29ebc",
+            56_652_404L to "8b46a825964cdd182fe47cc780f0fb87d357eae1f47cf20aa63c1c09be5b510c",
             49_366_942L to "15834b45fabd2dfb8c6c029b3ca3e7289aeefd90ece798ce42bcf548d1bd3b8d",
             5_498_450L to "8e0fcf45621ea87fa680c7f9969c37a7f819c1f4c7658a2e6e0879b866a14b17",
             1_389_436L to "d5acea957b265a78554999144459c5e391e0df525864edc8287bc090290baa44",
@@ -38,7 +38,7 @@ object TranslationModels {
         ),
         model(
             "fr", "French", "28726206f80896b90035bd99cccd5cc1e151f916",
-            57_010_810L to "bdacc5f38e4d2b805a2fc9f38cf43844cdea56666e735137dbacf2a54a785257",
+            57_381_512L to "333b244bce16023df04541c8cf9fd60aec9b0569da393c4b831d561897b0bda8",
             50_090_398L to "0a81bdba62f53223740a8c6c6f58e716eba8ea1f92dfa569caf27ed5e3b6a0f7",
             5_637_839L to "8391785c1a2139e7af4678571ccd8dc654ecbb72e4be186940f65d7c604f0246",
             1_458_196L to "f2ba9c69ae20f96b8bd821239a9152be422394f980350b77907cffc183db5f2d",
@@ -46,7 +46,7 @@ object TranslationModels {
         ),
         model(
             "es", "Spanish", "4b002a4c7edd54a7ced58877258b87f7efd3f892",
-            59_842_102L to "2b45074cc819f1d901e40510d7bc0781d99327d16c7eca04518c4ee0c3d6ba10",
+            60_212_804L to "58ee5ddd6e22d1693d8722b90c1486afb93700a4376cf28fd74175052ad530ae",
             52_899_742L to "03434edd1147e6c49e22066e9dc5888235e99cc35a6711d1c4ea5b06455d5da9",
             6_262_682L to "285eb29e7155ee48851a77960797813f86a125f70d2c1a124f613f1fbd2b19c3",
             1_720_044L to "b074b4cca0036ade5a39ea97faabd534e1015482c480fc2cb02c6481983eb163",
@@ -54,7 +54,7 @@ object TranslationModels {
         ),
         model(
             "it", "Italian", "075406e3c8c2c30634d4a1bd8f00c21d9e162011",
-            67_599_646L to "d5c77fd7f60eebdf81d3f6f6fecd8e6804529cbcbecc2bb742fd60f225e2cf3e",
+            67_970_348L to "f9db146ed7665ea7d437dc4df564e3af5df923366de4d52aaf2c4b4e3e4ae4f1",
             60_597_150L to "b51c5110c7ba356ef01ee400d427afe162e657de1d7a2e9a40deedd811b49e6f",
             7_904_597L to "fb93411d5198eb85753bbd68e9ac24ccb42071003214851b2f37c81f2ea50416",
             2_511_647L to "40c98ffc0013f2f09ed9127418131738ad9c2de4d8f7f52d52532332bb2bf78c",
@@ -62,7 +62,7 @@ object TranslationModels {
         ),
         model(
             "nl", "Dutch", "c3a0541231a7329b4492809fc2bd7ab7d2ceb0bc",
-            60_888_033L to "e9d1474106c1bdf8aaf236eb7ace8a29edf6fee655c583132f521e5b63ccbf97",
+            61_258_735L to "5f8034fddc4cdcb6fa6c3b64a06e1cd9b1955c0c6dcd13e0e47610ab99ac4a99",
             53_937_565L to "0febb990f8ca8ed9fd3e0017dfcb55ec5293999f20ead81d2bb4370e9e3120ff",
             6_433_167L to "c6b55d9ac70b2a566f0307c6f80d3136fb839ed8e70bb16186324747df58668b",
             1_794_274L to "b1fba91c620564d90848c5f77b03f13d17949790f8e7c7741e4a8ea13b8b0d91",
@@ -70,7 +70,7 @@ object TranslationModels {
         ),
         model(
             "ru", "Russian", "e050376e960175e8ddc5cff85025dc8436cddd68",
-            58_560_874L to "7e4e602c31130176b086cd4bf31d6d08d44a6a367617e910870e0ea3e5408574",
+            58_931_576L to "7efefcd793a5663bc204224a92a123524f3dfe2ffad59e5f73d6734d1b11ad04",
             51_628_446L to "97f28d8295d231b7da721ded06fa8c034787df2122cd8f85b904abdc4d15bd53",
             7_205_388L to "981cd3d9fef6bb4dda8082afda716b65deb6717cb3ef35ac0b57002c09dec2bb",
             2_726_796L to "5cf0d95d930d8d3e783c9e2f46a72f08b43a18060dab4ddefbcb66a733efedcb",

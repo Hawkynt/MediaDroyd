@@ -344,7 +344,8 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             hear = hear@{ fromMs, toMs ->
                 val began = System.nanoTime()
                 val startedAt = state.positionMs
-                val pcm = sound.samples(fromMs, toMs) ?: return@hear null
+                platform.log("hearing ${fromMs / 1000}…${toMs / 1000} s asked for at ${startedAt / 1000} s")
+                val pcm = sound.samples(fromMs, toMs) ?: return@hear null.also { platform.log("no sound there") }
                 val readMs = (System.nanoTime() - began) / 1_000_000
                 var whisperMs = 0L
                 fun whisper(translate: Boolean): LiveCaptions.Heard? {
@@ -369,10 +370,12 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     },
                 )
                 val translated = System.nanoTime()
+                // The window's lines translated together (MarianTranslator.translateAll): the steps of the longest.
                 if (route.translator != null && translator != null) {
+                    val texts = translator.translateAll(heard.segments.map { it.text.trim() })
                     heard = heard.copy(
-                        segments = heard.segments.map { segment ->
-                            segment.copy(text = translator.translate(segment.text.trim()) ?: segment.text)
+                        segments = heard.segments.mapIndexed { i, segment ->
+                            segment.copy(text = texts?.getOrNull(i)?.takeIf { it.isNotEmpty() } ?: segment.text)
                         },
                     )
                 }
