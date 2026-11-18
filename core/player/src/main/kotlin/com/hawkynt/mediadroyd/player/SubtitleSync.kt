@@ -184,32 +184,40 @@ object SubtitleSync {
         }
 
         /** The verdicts so far, [RATE] a second. */
-        fun result(): BooleanArray {
-            if (size == 0) return BooleanArray(0)
-            val sorted = levels.copyOf(size).sorted()
-            val threshold = sorted[size / 10] + ABOVE_DB
-            val speech = BooleanArray(size) { levels[it] > threshold }
-            val gap = (GAP_MS * RATE / 1000).toInt()
-            val min = (MIN_MS * RATE / 1000).toInt()
-            var last = -1
-            for (i in 0 until size) {
-                if (!speech[i]) continue
-                if (last >= 0 && i - last - 1 in 1..gap) for (k in last + 1 until i) speech[k] = true
-                last = i
-            }
-            var start = 0
-            while (start < size) {
-                if (!speech[start]) {
-                    start++
-                    continue
-                }
-                var end = start
-                while (end < size && speech[end]) end++
-                if (end - start < min) for (k in start until end) speech[k] = false
-                start = end
-            }
-            return speech
+        fun result(): BooleanArray = verdicts(levels.copyOf(size))
+    }
+
+    /**
+     * Speech verdicts from [levels] (the speech band's energy in dB every 1 / [RATE] s; NaN where not known yet):
+     * speech where it stands [ABOVE_DB] over the quiet tenth of what is known, pauses under [GAP_MS] bridged and
+     * stretches under [MIN_MS] dropped; nothing where unknown.
+     */
+    fun verdicts(levels: FloatArray): BooleanArray {
+        val size = levels.size
+        val known = levels.filter { !it.isNaN() }.sorted()
+        if (known.isEmpty()) return BooleanArray(size)
+        val threshold = known[known.size / 10] + ABOVE_DB
+        val speech = BooleanArray(size) { !levels[it].isNaN() && levels[it] > threshold }
+        val gap = (GAP_MS * RATE / 1000).toInt()
+        val min = (MIN_MS * RATE / 1000).toInt()
+        var last = -1
+        for (i in 0 until size) {
+            if (!speech[i]) continue
+            if (last >= 0 && i - last - 1 in 1..gap) for (k in last + 1 until i) speech[k] = true
+            last = i
         }
+        var start = 0
+        while (start < size) {
+            if (!speech[start]) {
+                start++
+                continue
+            }
+            var end = start
+            while (end < size && speech[end]) end++
+            if (end - start < min) for (k in start until end) speech[k] = false
+            start = end
+        }
+        return speech
     }
 
     // How far over the quiet tenth speech stands, the pause bridged and the shortest speech kept.

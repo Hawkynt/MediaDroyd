@@ -1105,12 +1105,9 @@ fun PhonePlayer(
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.data.CreditReads.read(context, location, at)
 
-        // Where the sound speaks, for Sync: the app's FFmpeg decoding the whole sound (SpeechReads).
-        override fun speech(location: String) = com.hawkynt.mediadroyd.data.SpeechReads.of(context, location)
-
-        // Subtitles made from the speech (#529): the app's FFmpeg at 16 kHz, Whisper in the native library.
-        override fun soundAt(location: String, fromMs: Long, toMs: Long) =
-            com.hawkynt.mediadroyd.data.SpeechReads.soundAt(context, location, fromMs, toMs)
+        // The film's sound read once for every analysis of it (FilmSound, #535): the app's FFmpeg at 16 kHz.
+        override fun openSound(location: String, fromMs: Long) =
+            com.hawkynt.mediadroyd.data.SpeechReads.open(context, location, fromMs)
 
         override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
             com.hawkynt.mediadroyd.data.ModelStore.folder(context, download)

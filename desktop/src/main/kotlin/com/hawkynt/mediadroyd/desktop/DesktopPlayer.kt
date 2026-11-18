@@ -690,11 +690,9 @@ fun DesktopPlayer(
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)
 
-        // Subtitles made from the speech (#529): FFmpeg's sound at 16 kHz, Whisper in the native library.
-        override fun soundAt(location: String, fromMs: Long, toMs: Long) =
-            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.soundAt(
-                location, places.remoteFile(location), fromMs, toMs,
-            )
+        // The film's sound read once for every analysis of it (FilmSound, #535): FFmpeg's sound at 16 kHz.
+        override fun openSound(location: String, fromMs: Long) =
+            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.open(location, places.remoteFile(location), fromMs)
 
         override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
             neural.folder(download)
@@ -719,10 +717,6 @@ fun DesktopPlayer(
             com.hawkynt.mediadroyd.player.Dub.LineSpeaker? = runCatching {
             com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.speaker(neural.folder(voice.download), voice)
         }.getOrNull()
-
-        // Where the sound speaks, for Sync: FFmpeg decoding the whole sound (SpeechReads).
-        override fun speech(location: String) =
-            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.of(location, places.remoteFile(location))
 
         override val commands = PlayerCommand.entries.toSet()
         override val subtitlesByTrack = true

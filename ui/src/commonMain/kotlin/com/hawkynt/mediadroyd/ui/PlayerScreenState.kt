@@ -153,12 +153,23 @@ class PlayerScreenState(
     /** What Sync is doing or found wrong, shown under its button; null when it is done (SubtitleSync, #450). */
     var syncing by mutableStateOf<String?>(null)
 
-    // The speech found in a video's sound, kept while the player is open: decoding it takes a while.
-    private var speech: Pair<String, BooleanArray>? = null
+    // The video's sound, decoded once for every analysis of it while the player is open (FilmSound, #535).
+    private var sound: Pair<String, com.hawkynt.mediadroyd.player.FilmSound>? = null
 
-    /** The speech in [video]'s sound, found by [find] the first time it is asked for. Blocks. */
-    fun speechFor(video: String, find: () -> BooleanArray?): BooleanArray? =
-        speech?.takeIf { it.first == video }?.second ?: find()?.also { speech = video to it }
+    /**
+     * [video]'s shared sound ([durationMs] long), read through [open] (the platform's reader from a time) — the same
+     * one for Whisper, the voice-over's placement and Sync; another video's closed as this one opens.
+     */
+    @Synchronized
+    fun soundOf(
+        video: String,
+        durationMs: Long,
+        open: (fromMs: Long) -> com.hawkynt.mediadroyd.player.FilmSound.Stream?,
+    ): com.hawkynt.mediadroyd.player.FilmSound {
+        sound?.takeIf { it.first == video }?.let { return it.second }
+        sound?.second?.close()
+        return com.hawkynt.mediadroyd.player.FilmSound(open, durationMs).also { sound = video to it }
+    }
 
     /** Whether it plays now, for what shows only while paused. */
     var playing by mutableStateOf(false)

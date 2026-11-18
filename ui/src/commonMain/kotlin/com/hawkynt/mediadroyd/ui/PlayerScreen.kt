@@ -44,6 +44,7 @@ import com.hawkynt.mediadroyd.player.LiveCaptions
 import com.hawkynt.mediadroyd.player.NativeWhisper
 import com.hawkynt.mediadroyd.player.WhisperModels
 import com.hawkynt.mediadroyd.player.Prosody
+import com.hawkynt.mediadroyd.player.FilmSound
 import com.hawkynt.mediadroyd.player.CaptionRoute
 import com.hawkynt.mediadroyd.player.MarianTranslator
 import com.hawkynt.mediadroyd.player.NeuralModels
@@ -100,17 +101,11 @@ interface PlayerPlatform {
         null
 
     /**
-     * Where [location]'s sound speaks, for moving subtitles onto it (SubtitleSync, #450): the whole sound decoded and
-     * judged, SubtitleSync.RATE verdicts a second ([SubtitleSync.Speech]); null where it cannot be read. Blocks for as
-     * long as decoding the sound takes: called off the main thread.
+     * [location]'s sound read from [fromMs] on, mono floats at FilmSound.RATE, the first at [fromMs] — the one reader
+     * every analysis of a film's sound shares (FilmSound, #535): Whisper's windows, the speech found, each line's tone;
+     * null where it cannot be read. Reading blocks: off the main thread.
      */
-    fun speech(location: String): BooleanArray? = null
-
-    /**
-     * [location]'s sound from [fromMs] to [toMs] as Whisper hears it — mono floats at NativeWhisper.SAMPLE_RATE, the
-     * first at [fromMs] — for subtitles made from the speech (#529); null where it cannot be read. Blocks.
-     */
-    fun soundAt(location: String, fromMs: Long, toMs: Long): FloatArray? = null
+    fun openSound(location: String, fromMs: Long): FilmSound.Stream? = null
 
     /** The folder [download]'s files are kept in (models fetched when chosen); null where this build keeps none. */
     fun modelFolder(download: NeuralModels.Download): java.io.File? = null
@@ -329,6 +324,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             }
         }
         val video = session.current.videoPath
+        val sound = state.soundOf(video, engine.durationMs) { from -> platform.openSound(video, from) }
         // The fast cores only: a phone's little ones slow ggml down (FastCores).
         val threads = com.hawkynt.mediadroyd.player.FastCores.count()
         var spoken: String? = null
@@ -338,7 +334,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         val captions = LiveCaptions(
             hear = hear@{ fromMs, toMs ->
                 val began = System.nanoTime()
-                val pcm = platform.soundAt(video, fromMs, toMs) ?: return@hear null
+                val pcm = sound.samples(fromMs, toMs) ?: return@hear null
                 fun whisper(translate: Boolean) =
                     NativeWhisper.transcribe(handle, pcm, spoken ?: "auto", translate, threads)?.let(::heardOf)
                 // The language spoken from the first window, written as spoken; then by the route to the target.
@@ -474,10 +470,10 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             emptyList()
         }
         state.dubStatus = null
-        // Every line on the film's own speech once that is found (decoding its sound takes a while, kept for Sync
-        // too): until then the lines' own times (Dub.align).
+        // Every line on the film's own speech (Dub.align), found in the film's shared sound (FilmSound, #535) — kept
+        // decoded a minute ahead of the position, so each line is placed before it is spoken.
         val video = session.current.videoPath
-        val found = async(Dispatchers.Default) { state.speechFor(video) { platform.speech(video) } }
+        val sound = state.soundOf(video, engine.durationMs) { from -> platform.openSound(video, from) }
         val lines: () -> List<Dub.Line> = {
             val raw = dubCaptions?.lines()?.mapNotNull { line ->
                 // The tone heard in the line, its text's own hints on top (#534).
@@ -486,27 +482,22 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     line.copy(text = it.text, speaker = it.speaker, delivery = delivery)
                 }
             } ?: fileLines
-            val speech = if (found.isCompleted) runCatching { found.getCompleted() }.getOrNull() else null
-            if (speech != null) Dub.align(raw, speech) else raw
+            Dub.align(raw, sound.speech())
         }
         val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack)
-        var aligned = false
         try {
             while (true) {
-                if (!aligned && found.isCompleted) {
-                    // The lines moved: what was spoken at the cues' times is spoken again on the speech.
-                    aligned = true
-                    state.dubTrack.clear()
-                }
                 // A line that cannot be spoken says so in the gear; it never takes the player down.
                 withContext(Dispatchers.Default) {
-                    runCatching { speaking.ahead(state.positionMs) }
-                        .onFailure { state.dubStatus = "A line could not be spoken: ${it.message ?: it}" }
+                    runCatching {
+                        // The sound a minute ahead decoded (once, shared), so the lines due are placed on the speech.
+                        sound.samples(state.positionMs, state.positionMs + LiveCaptions.AHEAD_MS)
+                        speaking.ahead(state.positionMs)
+                    }.onFailure { state.dubStatus = "A line could not be spoken: ${it.message ?: it}" }
                 }
                 delay(DUB_PACE_MS)
             }
         } finally {
-            found.cancel()
             speakers.forEach { it.close() }
         }
     }
@@ -849,8 +840,15 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                             val video = state.session.current.videoPath
                             val fit = withContext(Dispatchers.Default) {
                                 val cues = platform.fileOf(file)?.readTextOrNull()?.let(SubtitleSync::cues)
-                                val speech = state.speechFor(video) { platform.speech(video) }
-                                if (cues != null && speech != null) SubtitleSync.fit(speech, cues) else null
+                                // All of the film's speech, from its shared sound: only what is not decoded yet is.
+                                val sound = state.soundOf(video, state.engine.durationMs) { from ->
+                                    platform.openSound(video, from)
+                                }
+                                sound.decodeAll { part ->
+                                    state.syncing = "Listening to the sound… ${(part * 100).toInt()} %"
+                                }
+                                val speech = sound.speech()
+                                if (cues != null && speech.any { it }) SubtitleSync.fit(speech, cues) else null
                             }
                             state.syncing = if (fit == null) "No speech or no lines found to match." else null
                             if (fit != null) {

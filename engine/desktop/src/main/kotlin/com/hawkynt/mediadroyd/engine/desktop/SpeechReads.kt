@@ -1,73 +1,53 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
 import com.hawkynt.mediadroyd.library.FsFile
-import com.hawkynt.mediadroyd.player.SubtitleSync
+import com.hawkynt.mediadroyd.player.FilmSound
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Where a video's sound speaks on the desktop, for moving subtitles onto it (PlayerPlatform.speech, SubtitleSync):
- * FFmpeg decodes its whole sound (MediaReader, its pictures left alone) as 16-bit stereo at MediaReader.SAMPLE_RATE,
- * piece by piece into SubtitleSync.Speech.
+ * A film's sound read once on the desktop for everything that analyses it (PlayerPlatform.openSound, FilmSound, #535):
+ * FFmpeg decodes it (MediaReader, its pictures left alone) as 16-bit stereo at MediaReader.SAMPLE_RATE, mixed to one
+ * channel and every three samples averaged into one — FilmSound.RATE — handed on a decoded piece at a time.
  */
 object SpeechReads {
-    /** The verdicts for the video at [path] ([from] a network source where it lives on one); null where unreadable. */
-    fun of(path: String, from: FsFile?): BooleanArray? = runCatching {
-        MediaReader(path, from, decoders = emptyList(), pictures = false).use { reader ->
-            val speech = SubtitleSync.Speech(MediaReader.SAMPLE_RATE, 2)
-            var samples = ShortArray(0)
-            var read = false
-            while (true) {
-                val sound = reader.read() ?: break
-                if (sound !is MediaReader.Sound) continue
-                val count = sound.pcm.size / 2
-                if (samples.size < count) samples = ShortArray(count)
-                ByteBuffer.wrap(sound.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(samples, 0, count)
-                speech.feed(samples, 0, count / 2)
-                read = true
-            }
-            if (read) speech.result() else null
-        }
-    }.getOrNull()
-
-    /**
-     * The video at [path]'s sound from [fromMs] to [toMs] as Whisper hears it (subtitles made from the speech, #529):
-     * mono floats at NativeWhisper.SAMPLE_RATE, the first at [fromMs] — FFmpeg's 48 kHz stereo mixed to one channel
-     * and every three samples averaged into one. Null where it cannot be read.
-     */
-    fun soundAt(path: String, from: FsFile?, fromMs: Long, toMs: Long): FloatArray? = runCatching {
-        MediaReader(path, from, decoders = emptyList(), pictures = false).use { reader ->
-            if (fromMs > 0) reader.seek(fromMs)
-            val rate = MediaReader.SAMPLE_RATE
-            val step = rate / com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE
-            val out = ArrayList<Float>()
+    /** The video at [path] ([from] a network source where it is on one) read from [fromMs]; null where unreadable. */
+    fun open(path: String, from: FsFile?, fromMs: Long): FilmSound.Stream? = runCatching {
+        val reader = MediaReader(path, from, decoders = emptyList(), pictures = false)
+        if (fromMs > 0) reader.seek(fromMs)
+        val step = MediaReader.SAMPLE_RATE / FilmSound.RATE
+        object : FilmSound.Stream {
+            // What a seek hands out before fromMs, in input frames; -1 until the first piece says how much.
             var skip = -1L
             var sum = 0f
             var count = 0
-            loop@ while (true) {
-                val sound = reader.read() ?: break
-                if (sound !is MediaReader.Sound) continue
-                if (sound.ptsMs >= toMs) break
-                // What a seek hands out before fromMs is dropped.
-                if (skip < 0) skip = ((fromMs - sound.ptsMs).coerceAtLeast(0) * rate / 1000)
-                val shorts = ByteBuffer.wrap(sound.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-                while (shorts.remaining() >= 2) {
-                    val mono = (shorts.get() + shorts.get()) / 65_536f
-                    if (skip > 0) {
-                        skip--
-                        continue
+
+            override fun read(): FloatArray? {
+                while (true) {
+                    val sound = runCatching { reader.read() }.getOrNull() ?: return null
+                    if (sound !is MediaReader.Sound) continue
+                    if (skip < 0) skip = (fromMs - sound.ptsMs).coerceAtLeast(0) * MediaReader.SAMPLE_RATE / 1000
+                    val shorts = ByteBuffer.wrap(sound.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                    val out = FloatArray(shorts.remaining() / 2 / step + 1)
+                    var n = 0
+                    while (shorts.remaining() >= 2) {
+                        val mono = (shorts.get() + shorts.get()) / 65_536f
+                        if (skip > 0) {
+                            skip--
+                            continue
+                        }
+                        sum += mono
+                        if (++count == step) {
+                            out[n++] = sum / step
+                            sum = 0f
+                            count = 0
+                        }
                     }
-                    sum += mono
-                    if (++count == step) {
-                        out += sum / step
-                        sum = 0f
-                        count = 0
-                    }
+                    if (n > 0) return out.copyOf(n)
                 }
-                val wanted = (toMs - fromMs) * com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE / 1000
-                if (out.size >= wanted) break@loop
             }
-            if (out.isEmpty()) null else out.toFloatArray()
+
+            override fun close() = reader.close()
         }
     }.getOrNull()
 }
