@@ -234,6 +234,7 @@ fun PhonePlayer(
             override val normalizeLoudness get() = settings.evenLoudness
             override val audioDelayMs get() = audioDelayMs
             override val subtitleDelayMs get() = shared[0]?.subtitleDelayNow ?: 0
+            override val voiceOver get() = shared[0]?.voiceOver
             override val voiceBoostDb get() = settings.voices
             override val equalizerPreampDb get() = equalizer.preampDb
             override val equalizerBandsDb get() = equalizer.bandsDb

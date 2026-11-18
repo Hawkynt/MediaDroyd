@@ -146,6 +146,7 @@ fun DesktopPlayer(
         object : PlaybackTuning by knobs {
             override val voiceBoostDb get() = store.state.data.settings.voices
             override val subtitleDelayMs get() = screenState[0]?.subtitleDelayNow ?: knobs.subtitleDelayMs
+            override val voiceOver get() = screenState[0]?.voiceOver
         }
     }
     val engine = remember {
@@ -688,6 +689,26 @@ fun DesktopPlayer(
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)
+
+        // Spoken subtitles (#531): Piper's voices on ONNX Runtime, in the models folder; espeak-ng where carried.
+        override val espeak get() = com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.dataDir != null
+
+        override fun voiceReady(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
+            com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(voice.download), voice.download)
+
+        override fun fetchVoice(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry, progress: (Float) -> Unit) =
+            com.hawkynt.mediadroyd.player.ModelFolder.fetch(neural.folder(voice.download), voice.download, progress)
+
+        override fun speaker(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry):
+            com.hawkynt.mediadroyd.player.Dub.LineSpeaker? = runCatching {
+            val piper = com.hawkynt.mediadroyd.engine.desktop.PiperSpeaker(neural.folder(voice.download), voice)
+            object : com.hawkynt.mediadroyd.player.Dub.LineSpeaker {
+                override val sampleRate = piper.voice.sampleRate
+                override fun speak(text: String, lengthScale: Float, speaker: Int) =
+                    piper.speak(text, lengthScale, speaker)
+                override fun close() = piper.close()
+            }
+        }.getOrNull()
 
         // Where the sound speaks, for Sync: FFmpeg decoding the whole sound (SpeechReads).
         override fun speech(location: String) =

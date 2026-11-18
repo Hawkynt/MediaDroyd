@@ -652,6 +652,7 @@ Requires JDK 21 and an Android SDK with platform 37; `local.properties` must poi
 ./buildnonlgpl.sh         # the same with the GPL + nonfree FFmpeg: dist/MediaDroyd-nonlgpl.apk
 ./gradlew :desktop:run    # the desktop app (Windows, Linux); a video path after --args plays it at once
 ./gradlew :desktop:run -PfullFfmpeg   # the same with Bytedeco's GPL FFmpeg build, for your own machine only
+./gradlew :desktop:run -Pespeak       # with espeak-ng for Piper's voices (spoken subtitles), for your own machine only
 ./gradlew :engine:desktop:probe -Pfolder=<dir>   # every video in a folder opened and its start decoded
 ./gradlew :desktop:appImage                      # Linux: desktop/build/dist/MediaDroyd-linux-x64.AppImage
 ./gradlew :desktop:windowsZip -PdesktopTarget=windows   # Windows, portable: desktop/build/dist/MediaDroyd-windows-x64.zip
@@ -680,6 +681,11 @@ CI refuses a package whose library or OpenMP runtime needs a newer glibc than 2.
 `build.sh` signs with the release key when `KEYSTORE` (or `KEYSTORE_BASE64`), `KEYSTORE_PASSWORD` and `KEY_ALIAS` are set — in the environment or in a git-ignored `signing.env` — and otherwise with the Android debug key, which installs on your own device but cannot update a release or nightly. The key itself lives only in the repository's secrets. `buildnonlgpl.sh` first builds FFmpeg with every decoder, demuxer and parser (`FULL=1 tools/ffmpeg/build.sh`, once, into `stage/ffmpeg-full`); that build is GPL and cannot be distributed under this licence, so it is for your own device only — see [tools/ffmpeg/README.md](tools/ffmpeg/README.md). The desktop app decodes
 with FFmpeg through [Bytedeco's JavaCPP presets](https://github.com/bytedeco/javacpp-presets): FFmpeg's LGPL build in
 what is published, the GPL one with `-PfullFfmpeg` (see `engine/desktop/THIRD-PARTY-NOTICE.ffmpeg.txt`).
+`-Pespeak` builds espeak-ng 1.52.0 (GPL-3.0-or-later; fetched by `:native:espeakSource` and checked against its digest)
+into a library of its own beside the native one, `mediadroyd_espeak`, with its phoneme tables and dictionaries in
+`espeak-ng-data` beside it: the phonemes Piper's own voices were trained on, for the spoken subtitles. MediaDroyd's own
+library never links it and the app runs without it, so builds made without the flag — every release — carry none of it;
+`install.sh --build --full` and `install.bat /build /full` pass it with `-PfullFfmpeg`.
 
 ## 🤝 Contributing
 

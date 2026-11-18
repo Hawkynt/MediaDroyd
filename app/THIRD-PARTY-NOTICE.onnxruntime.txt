@@ -1,0 +1,6 @@
+ONNX Runtime 1.31.1
+https://github.com/microsoft/onnxruntime
+
+Copyright (c) Microsoft Corporation. Licensed under the MIT License.
+
+Runs the spoken subtitles' Piper voices (VITS networks in ONNX).

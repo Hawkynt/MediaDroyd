@@ -84,8 +84,8 @@ object Dub {
 
     /**
      * A cue's raw [words] as spoken: ASS override blocks, HTML-like tags and line breaks gone, a speaker's name
-     * before a colon taken off, descriptions in brackets or parentheses dropped — their whispering or shouting kept as the
-     * delivery — songs (♪) not spoken; a line in capitals or ending in ! shouted, its capitals made sentence case.
+     * before a colon taken off, descriptions in brackets or parentheses dropped — their whispering or shouting kept as
+     * the delivery — songs (♪) not spoken; a line in capitals or ending in ! shouted, its capitals made sentence case.
      */
     fun clean(words: String): Cleaned {
         var text = words.replace(Regex("""\{[^}]*}"""), "").replace(Regex("""<[^>]*>"""), "")
@@ -130,33 +130,87 @@ object Dub {
         return minOf(natural, room.toFloat() / spokenMs).coerceAtLeast(1f / MAX_SPEED)
     }
 
+    /** A voice that speaks a line (the platforms' Piper): mono samples at [sampleRate], −1 … 1. */
+    interface LineSpeaker : AutoCloseable {
+        val sampleRate: Int
+
+        /** [text] at [lengthScale] (1 the voice's pace, smaller faster) by [speaker]; null where it cannot. */
+        fun speak(text: String, lengthScale: Float, speaker: Int = 0): FloatArray?
+
+        override fun close() {}
+    }
+
+    /** How often a line is spoken again to fit: its length does not follow the length scale in proportion. */
+    private const val FIT_TRIES = 3
+    private const val FIT_MARGIN = 0.95f
+
     /**
-     * The spoken lines on the film's timeline at the output's [rate]: each [add]ed clip from its start, resampled from
-     * the voice's own rate (linearly: speech, nothing above a few kHz that matters). Thread-safe: lines are added as
-     * they are spoken while the sound plays.
+     * [line] spoken by [speaker] to fit before [nextStartMs] (null: no limit): at its delivery's pace first, then —
+     * where too long — again with the length scale cut by how much it ran over and a little more, up to [FIT_TRIES]
+     * times, never past [MAX_SPEED]; its delivery's loudness applied. The last try where none fits; null where the
+     * voice cannot speak it.
      */
-    class Track(private val rate: Int) {
-        private class Clip(val startFrame: Long, val pcm: FloatArray)
+    fun fit(line: Line, speaker: LineSpeaker, nextStartMs: Long?, voice: Int = 0): FloatArray? {
+        var scale = 1f / line.delivery.rate
+        var spoken = speaker.speak(line.text, scale, voice) ?: return null
+        val room = nextStartMs?.let { it - line.startMs }
+        repeat(FIT_TRIES - 1) {
+            val ms = spoken.size * 1000L / speaker.sampleRate
+            if (room == null || ms <= room || scale <= 1f / MAX_SPEED + 1e-4f) return@repeat
+            // A little more than it ran over: the pauses and the voice's own variation do not shrink with it.
+            scale = (scale * room / ms * FIT_MARGIN).coerceAtLeast(1f / MAX_SPEED)
+            spoken = speaker.speak(line.text, scale, voice) ?: return@repeat
+        }
+        val gain = Math.pow(10.0, line.delivery.gainDb / 20.0).toFloat()
+        return if (gain == 1f) spoken else FloatArray(spoken.size) { (spoken[it] * gain).coerceIn(-1f, 1f) }
+    }
+
+    /**
+     * Speaks a subtitle track's [lines] onto [track] as the film plays: [ahead] those starting from the position up to
+     * [AHEAD_MS] later that are not spoken yet, each fitted before the next line ([fit]), scaled to 16-bit. One line at
+     * a time, off the main thread; a seek simply speaks from the new position on.
+     */
+    class Speaking(private val lines: List<Line>, private val speaker: LineSpeaker, private val track: Track) {
+        private val spoken = HashSet<Int>()
+
+        /** Speaks what is due from [positionMs]; returns how many lines it spoke. Blocks. */
+        fun ahead(positionMs: Long, voice: Int = 0): Int {
+            var count = 0
+            for ((i, line) in lines.withIndex()) {
+                if (line.endMs < positionMs || i in spoken) continue
+                if (line.startMs > positionMs + AHEAD_MS) break
+                val next = lines.getOrNull(i + 1)?.startMs
+                val pcm = fit(line, speaker, next, voice)
+                spoken += i
+                if (pcm != null) {
+                    track.add(line.startMs, FloatArray(pcm.size) { pcm[it] * FULL_SCALE }, speaker.sampleRate)
+                    count++
+                }
+            }
+            return count
+        }
+    }
+
+    /** How far ahead of the position lines are spoken. */
+    const val AHEAD_MS = 20_000L
+    private const val FULL_SCALE = 32_767f
+
+    /**
+     * The spoken lines on the film's timeline, each [add]ed clip kept at the voice's own rate from its start and read
+     * at whatever rate the sound plays at ([voiceAt]), resampled linearly (speech: nothing above a few kHz matters),
+     * so one track serves every output. Thread-safe: lines are added as they are spoken while the sound plays.
+     */
+    class Track {
+        private class Clip(val startMs: Long, val pcm: FloatArray, val rate: Int)
 
         private val clips = ArrayList<Clip>()
 
-        /** [pcm] (mono, at [sourceRate]) from [startMs] on. */
-        fun add(startMs: Long, pcm: FloatArray, sourceRate: Int = rate) {
-            val samples = if (sourceRate == rate) {
-                pcm
-            } else {
-                val length = (pcm.size.toLong() * rate / sourceRate).toInt()
-                FloatArray(length) { i ->
-                    val at = i.toDouble() * sourceRate / rate
-                    val a = at.toInt().coerceAtMost(pcm.size - 1)
-                    val b = (a + 1).coerceAtMost(pcm.size - 1)
-                    val f = (at - a).toFloat()
-                    pcm[a] * (1 - f) + pcm[b] * f
-                }
-            }
+        /** [pcm] (mono, at [rate]) from [startMs] on. */
+        fun add(startMs: Long, pcm: FloatArray, rate: Int) {
+            if (pcm.isEmpty() || rate <= 0) return
             synchronized(clips) {
-                clips += Clip(startMs * rate / 1000, samples)
-                clips.sortBy { it.startFrame }
+                clips += Clip(startMs, pcm, rate)
+                clips.sortBy { it.startMs }
             }
         }
 
@@ -164,28 +218,31 @@ object Dub {
         fun clear() = synchronized(clips) { clips.clear() }
 
         /**
-         * The voice for [voice].size frames from [fromMs] into [voice], and where a line speaks into [speaking] (as
-         * long); whether any does.
+         * The voice for [voice].size frames at [rate] from [fromMs] into [voice], and where a line speaks into
+         * [speaking] (as long); whether any does.
          */
-        fun voiceAt(fromMs: Long, voice: FloatArray, speaking: BooleanArray? = null): Boolean =
-            fill(fromMs * rate / 1000, voice, speaking)
-
-        internal fun fill(fromFrame: Long, voice: FloatArray, speaking: BooleanArray?): Boolean {
+        fun voiceAt(fromMs: Long, rate: Int, voice: FloatArray, speaking: BooleanArray? = null): Boolean {
             voice.fill(0f)
             speaking?.fill(false)
             val n = voice.size
+            val fromFrame = fromMs * rate / 1000
             var any = false
             synchronized(clips) {
                 for (clip in clips) {
-                    val end = clip.startFrame + clip.pcm.size
-                    if (end <= fromFrame) continue
-                    if (clip.startFrame >= fromFrame + n) break
-                    val from = maxOf(fromFrame, clip.startFrame)
-                    val to = minOf(fromFrame + n, end)
+                    val start = clip.startMs * rate / 1000
+                    val length = clip.pcm.size.toLong() * rate / clip.rate
+                    if (start + length <= fromFrame) continue
+                    if (start >= fromFrame + n) break
+                    val from = maxOf(fromFrame, start)
+                    val to = minOf(fromFrame + n, start + length)
                     for (f in from until to) {
-                        val at = (f - fromFrame).toInt()
-                        voice[at] += clip.pcm[(f - clip.startFrame).toInt()]
-                        speaking?.set(at, true)
+                        val at = (f - start).toDouble() * clip.rate / rate
+                        val a = at.toInt().coerceAtMost(clip.pcm.size - 1)
+                        val b = (a + 1).coerceAtMost(clip.pcm.size - 1)
+                        val w = (at - a).toFloat()
+                        val k = (f - fromFrame).toInt()
+                        voice[k] += clip.pcm[a] * (1 - w) + clip.pcm[b] * w
+                        speaking?.set(k, true)
                     }
                     any = true
                 }
@@ -216,7 +273,7 @@ object Dub {
             }
             val v = if (voice.size == frames) voice else FloatArray(frames)
             val s = if (speaking.size == frames) speaking else BooleanArray(frames)
-            val any = track.fill(ptsMs * rate / 1000, v, s)
+            val any = track.voiceAt(ptsMs, rate, v, s)
             if (!any && gain == 1f) return
             for (f in 0 until frames) {
                 val target = if (s[f]) DUCK else 1f

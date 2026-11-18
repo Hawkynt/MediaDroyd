@@ -8,6 +8,7 @@ kotlin {
 
 dependencies {
     api(project(":core:library"))
+    implementation(libs.serialization.json)
     testImplementation(libs.junit)
 }
 

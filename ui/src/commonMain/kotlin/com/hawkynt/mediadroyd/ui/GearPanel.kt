@@ -232,6 +232,13 @@ fun SubtitleLookRows(
     onSync: (() -> Unit)? = null,
     /** What Sync is doing, or why it found nothing. */
     syncing: String? = null,
+    /** The voices the subtitles can be spoken in (Dub); none: no such row. */
+    voices: List<com.hawkynt.mediadroyd.player.PiperVoices.Entry> = emptyList(),
+    voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry? = null,
+    dubbing: Boolean = false,
+    onDubbing: (Boolean) -> Unit = {},
+    onVoice: (com.hawkynt.mediadroyd.player.PiperVoices.Entry) -> Unit = {},
+    dubStatus: String? = null,
 ) {
     PanelTitle("Subtitles")
     fun changeLook(changed: com.hawkynt.mediadroyd.player.SubtitleLook) = onLook(changed)
@@ -283,6 +290,38 @@ fun SubtitleLookRows(
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+    if (voices.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Speak the subtitles", fontSize = 16.sp)
+                Text(
+                    dubStatus ?: "A voice on this device reads the lines aloud, the film's dialogue stepping back.",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(checked = dubbing, onCheckedChange = onDubbing)
+        }
+        if (dubbing) {
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                voices.forEach { entry ->
+                    FilterChip(
+                        selected = entry == voice,
+                        onClick = { onVoice(entry) },
+                        label = { Text("${entry.label} · ${entry.language}", fontSize = 15.sp) },
+                    )
+                }
+            }
+            voice?.let {
+                Text(
+                    "${it.label}: ${it.licence}, ${it.download.bytes / 1_000_000} MB, fetched once.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     androidx.compose.foundation.layout.FlowRow(

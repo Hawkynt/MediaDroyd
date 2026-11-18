@@ -21,7 +21,7 @@ set "FULL="
 :args
 if "%~1"=="" goto run
 if /i "%~1"=="/build" set "MODE=build"
-if /i "%~1"=="/full" set "FULL=-PfullFfmpeg"
+if /i "%~1"=="/full" set "FULL=-PfullFfmpeg -Pespeak"
 if /i "%~1"=="/stable" set "STABLE=1"
 if /i "%~1"=="/uninstall" set "MODE=uninstall"
 if /i "%~1"=="/?" goto usage

@@ -68,6 +68,35 @@ class PlayerScreenState(
     /** The subtitle delay at the position now: the look's, with its drift (SubtitleLook.delayAt). */
     val subtitleDelayNow: Int get() = subtitleLook.delayAt(positionMs)
 
+    /** Whether the subtitles are spoken (Dub, #531), and what the voice is doing — fetching, or why it cannot. */
+    var dubbing by mutableStateOf(false)
+    var dubStatus by mutableStateOf<String?>(null)
+
+    /** The household's voice for spoken subtitles (PiperVoices id; "" none chosen yet). */
+    var dubVoiceId by mutableStateOf(store.data.settings.dubVoice)
+        private set
+
+    /** Speaks the subtitles in the voice [id] from now on, for every video. */
+    fun chooseDubVoice(id: String) {
+        dubVoiceId = id
+        store.data.settings.dubVoice = id
+        store.save()
+    }
+
+    /** The spoken lines, at the film's time, for the engine to mix in (PlaybackTuning.voiceOver). */
+    val dubTrack = com.hawkynt.mediadroyd.player.Dub.Track()
+    private val dubMixers = HashMap<Pair<Int, Int>, com.hawkynt.mediadroyd.player.Dub.Mixer>()
+
+    /** What the engines mix in while [dubbing]: the track, through a mixer per rate and channels. */
+    val voiceOver: com.hawkynt.mediadroyd.engine.VoiceOver? get() = if (!dubbing) null else dubVoiceOver
+
+    private val dubVoiceOver = com.hawkynt.mediadroyd.engine.VoiceOver { samples, offset, frames, channels, rate, at ->
+        val mixer = synchronized(dubMixers) {
+            dubMixers.getOrPut(rate to channels) { com.hawkynt.mediadroyd.player.Dub.Mixer(rate, channels) }
+        }
+        mixer.process(samples, offset, frames, at, dubTrack)
+    }
+
     /** What Sync is doing or found wrong, shown under its button; null when it is done (SubtitleSync, #450). */
     var syncing by mutableStateOf<String?>(null)
 

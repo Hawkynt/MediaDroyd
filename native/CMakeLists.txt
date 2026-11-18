@@ -67,6 +67,12 @@ if(NOT CHROMAPRINT_SOURCES)
 endif()
 add_subdirectory(chromaprint)
 
+# espeak-ng for the Piper voices, a GPL library of its own, only where its sources are handed over (-Pespeak).
+set(ESPEAK_SOURCES "" CACHE PATH "espeak-ng's release tree (native/build.gradle.kts, espeakSource); empty: none")
+if(ESPEAK_SOURCES)
+    add_subdirectory(espeak)
+endif()
+
 if(ANDROID)
     # The name the app loads (NeuralInterpolator.kt).
     add_library(mediadroyd_neural SHARED

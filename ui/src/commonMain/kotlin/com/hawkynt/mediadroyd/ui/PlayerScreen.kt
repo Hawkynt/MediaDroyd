@@ -38,6 +38,8 @@ import com.hawkynt.mediadroyd.library.FsFile
 import com.hawkynt.mediadroyd.library.Sidecars
 import com.hawkynt.mediadroyd.library.readTextOrNull
 import com.hawkynt.mediadroyd.player.SubtitleSync
+import com.hawkynt.mediadroyd.player.Dub
+import com.hawkynt.mediadroyd.player.PiperVoices
 import com.hawkynt.mediadroyd.player.ChapterSteps
 import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
@@ -91,6 +93,18 @@ interface PlayerPlatform {
      * long as decoding the sound takes: called off the main thread.
      */
     fun speech(location: String): BooleanArray? = null
+
+    /** Whether this build phonemises with espeak-ng: Piper's own voices (builds for one's own devices, #531). */
+    val espeak: Boolean get() = false
+
+    /** Whether [voice]'s files are in place. */
+    fun voiceReady(voice: PiperVoices.Entry): Boolean = false
+
+    /** Fetches [voice]'s files, telling [progress] (0 … 1); whether they are in place. Blocks. */
+    fun fetchVoice(voice: PiperVoices.Entry, progress: (Float) -> Unit): Boolean = false
+
+    /** [voice] ready to speak lines (Dub.LineSpeaker), or null where it cannot here. Blocks. */
+    fun speaker(voice: PiperVoices.Entry): Dub.LineSpeaker? = null
 
     /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
@@ -255,6 +269,60 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() } ?: continue
             finder.keep(step, found)
             session.applySkips()
+        }
+    }
+
+    // Spoken subtitles (Dub, #531): the lines of the subtitle file playing, spoken just ahead of the position by the
+    // household's voice (fetched the first time), at the times its delay and drift give them; afresh when the file,
+    // the voice or the timing changes.
+    val dubFile = syncableSubtitles(state)
+    LaunchedEffect(state.dubbing, dubFile, state.dubVoiceId, state.subtitleLook, session.index) {
+        state.dubTrack.clear()
+        if (!state.dubbing) {
+            state.dubStatus = null
+            return@LaunchedEffect
+        }
+        if (dubFile == null) {
+            state.dubStatus = "Only subtitles from a file beside the video can be spoken."
+            return@LaunchedEffect
+        }
+        val language = state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language
+        val voice = dubVoice(state, platform, language) ?: run {
+            state.dubStatus = "This build has no voice for these subtitles."
+            return@LaunchedEffect
+        }
+        if (!platform.voiceReady(voice)) {
+            state.dubStatus = "Fetching ${voice.label}…"
+            val fetched = withContext(Dispatchers.IO) {
+                platform.fetchVoice(voice) { done ->
+                    state.dubStatus = "Fetching ${voice.label}… ${(done * 100).toInt()} %"
+                }
+            }
+            if (!fetched) {
+                state.dubStatus = "${voice.label} could not be fetched."
+                return@LaunchedEffect
+            }
+        }
+        val speaker = withContext(Dispatchers.Default) { platform.speaker(voice) } ?: run {
+            state.dubStatus = "${voice.label} cannot speak in this build."
+            return@LaunchedEffect
+        }
+        val look = state.subtitleLook
+        val lines = withContext(Dispatchers.IO) { platform.fileOf(dubFile)?.readTextOrNull()?.let(Dub::lines) }
+            .orEmpty()
+            .map { line ->
+                fun at(ms: Long) = (ms * look.drift).toLong() + look.delayMs
+                line.copy(startMs = at(line.startMs), endMs = at(line.endMs))
+            }
+        state.dubStatus = null
+        val speaking = Dub.Speaking(lines, speaker, state.dubTrack)
+        try {
+            while (true) {
+                withContext(Dispatchers.Default) { speaking.ahead(state.positionMs) }
+                delay(DUB_PACE_MS)
+            }
+        } finally {
+            speaker.close()
         }
     }
 
@@ -563,6 +631,17 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     }
                 },
                 syncing = state.syncing,
+                // Spoken subtitles (Dub, #531): for a file beside the video, where the build has a voice.
+                voices = if (syncableSubtitles(state) != null) {
+                    PiperVoices.forLanguage(dubLanguage(state), platform.espeak)
+                } else {
+                    emptyList()
+                },
+                voice = dubVoice(state, platform, dubLanguage(state)),
+                dubbing = state.dubbing,
+                onDubbing = { state.dubbing = it },
+                onVoice = { voice -> state.chooseDubVoice(voice.id) },
+                dubStatus = state.dubStatus,
             )
             SleepChoice(state.session, ::monotonicMs)
             RepeatChoice(state.session.repeat) { state.session.repeat = it }
@@ -686,3 +765,16 @@ internal fun syncableSubtitles(state: PlayerScreenState): String? {
     if (track.source <= 0) return null
     return state.sidecars.filter { it.first.kind == Sidecars.Kind.SUBTITLES }.getOrNull(track.source - 1)?.second
 }
+
+/** How often the lines ahead of the position are looked at for speaking. */
+private const val DUB_PACE_MS = 500L
+
+/** The voice subtitles in [language] are spoken in: the household's where this build has it, else the first offered. */
+internal fun dubVoice(state: PlayerScreenState, platform: PlayerPlatform, language: String?): PiperVoices.Entry? {
+    val offered = PiperVoices.forLanguage(language, platform.espeak)
+    return offered.firstOrNull { it.id == state.dubVoiceId } ?: offered.firstOrNull()
+}
+
+/** The language of the subtitle track playing, as the engine names it. */
+internal fun dubLanguage(state: PlayerScreenState): String? =
+    state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language

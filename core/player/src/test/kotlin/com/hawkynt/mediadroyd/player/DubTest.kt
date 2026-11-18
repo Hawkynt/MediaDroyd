@@ -80,7 +80,7 @@ class DubTest {
             (if (i % 2 == 0) mid + side else mid - side).toInt().toShort()
         }
         // A spoken line of silence from 0.5 s to 1.5 s, so only the ducking shows.
-        val track = Dub.Track(rate).apply { add(500, FloatArray(rate)) }
+        val track = Dub.Track().apply { add(500, FloatArray(rate) { 0f }, rate) }
         val out = input.copyOf()
         Dub.Mixer(rate, 2).process(out, 0, frames, 0L, track)
         fun mid(s: ShortArray, a: Int, b: Int): Double {
@@ -107,7 +107,7 @@ class DubTest {
         val frames = rate
         val input = ShortArray(frames * channels) { i -> if (i % channels == 2) 8000 else 1000 }
         val voice = FloatArray(rate / 2) { (2000 * sin(2 * PI * 440 * it / rate)).toFloat() }
-        val track = Dub.Track(rate).apply { add(250, voice) }
+        val track = Dub.Track().apply { add(250, voice, rate) }
         val out = input.copyOf()
         Dub.Mixer(rate, channels).process(out, 0, frames, 0L, track)
         val inside = (rate * 0.4).toInt()
@@ -120,12 +120,46 @@ class DubTest {
 
     @Test
     fun `a clip at the voice's own rate is laid onto the track at the output's`() {
-        val track = Dub.Track(48_000)
-        track.add(1000, FloatArray(22_050) { 1000f }, sourceRate = 22_050)
+        val track = Dub.Track()
+        track.add(1000, FloatArray(22_050) { 1000f }, rate = 22_050)
         val out = FloatArray(10)
-        assertTrue(track.voiceAt(1000, out))
+        assertTrue(track.voiceAt(1000, 48_000, out))
         assertEquals(1000f, out[5], 1f)
-        assertTrue(!track.voiceAt(2100, out))
-        assertTrue(track.voiceAt(1990, out))
+        assertTrue(!track.voiceAt(2100, 48_000, out))
+        assertTrue(track.voiceAt(1990, 48_000, out))
+    }
+
+    // A voice whose length follows the scale only in part, as Piper's does: a fixed 300 ms and 100 ms a letter scaled.
+    private class FakeSpeaker : Dub.LineSpeaker {
+        override val sampleRate = 1000
+        val scales = ArrayList<Float>()
+        override fun speak(text: String, lengthScale: Float, speaker: Int): FloatArray {
+            scales += lengthScale
+            return FloatArray((300 + text.length * 100 * lengthScale).toInt()) { 0.5f }
+        }
+    }
+
+    @Test
+    fun `a line running over is spoken again faster until it fits, its delivery's loudness applied`() {
+        val speaker = FakeSpeaker()
+        // 10 letters: 1.3 s at its pace; 1.0 s of room before the next line.
+        val fitted = requireNotNull(Dub.fit(Dub.Line(0, 900, "abcdefghij"), speaker, nextStartMs = 1000))
+        assertTrue("${fitted.size} ms", fitted.size <= 1000)
+        assertTrue(speaker.scales.size >= 2 && speaker.scales.last() < 1f)
+        val whisper = requireNotNull(Dub.fit(Dub.Line(0, 900, "ab", delivery = Dub.WHISPER), FakeSpeaker(), null))
+        assertEquals(0.5f * Math.pow(10.0, -8 / 20.0).toFloat(), whisper[0], 1e-4f)
+    }
+
+    @Test
+    fun `lines are spoken ahead of the position onto the track, each once`() {
+        val lines = listOf(Dub.Line(1000, 2000, "one"), Dub.Line(5000, 6000, "two"), Dub.Line(40_000, 41_000, "far"))
+        val track = Dub.Track()
+        val speaking = Dub.Speaking(lines, FakeSpeaker(), track)
+        assertEquals(2, speaking.ahead(0))
+        assertEquals(0, speaking.ahead(500))
+        val voice = FloatArray(10)
+        assertTrue(track.voiceAt(1000, 1000, voice))
+        assertEquals(0.5f * 32_767, voice[0], 1f)
+        assertEquals(1, speaking.ahead(30_000))
     }
 }

@@ -227,6 +227,7 @@ class DesktopPlaybackEngine(
         var pictureMs = Long.MIN_VALUE
         var soundMs = Long.MIN_VALUE
         val tempo = Tempo()
+        var voiced = ShortArray(0)
         val pulldown = Film()
         // The household's sound settings, on the sound as it goes to the output (after Tempo).
         val chain = LoudnessChain(MediaReader.SAMPLE_RATE, 2)
@@ -349,6 +350,16 @@ class DesktopPlaybackEngine(
                         }
                     }
                     is MediaReader.Sound -> {
+                        // Spoken subtitles at the film's own time, before the speed (VoiceOver, #531).
+                        tuning.voiceOver?.let { over ->
+                            val count = item.pcm.size / 2
+                            if (voiced.size < count) voiced = ShortArray(count)
+                            val view = ByteBuffer.wrap(item.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                            view.get(voiced, 0, count)
+                            over.mix(voiced, 0, count / 2, 2, MediaReader.SAMPLE_RATE, item.ptsMs)
+                            view.clear()
+                            view.put(voiced, 0, count)
+                        }
                         val pcm = tempo.process(item.pcm)
                         if (pcm.isNotEmpty()) {
                             val t = tuning

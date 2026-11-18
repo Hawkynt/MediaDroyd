@@ -25,6 +25,9 @@ interface PlaybackTuning {
     /** The equalizer's gains in dB, one per band (Equalizer.HZ); empty or all 0: no band changed. */
     val equalizerBandsDb: List<Float> get() = emptyList()
 
+    /** Spoken subtitles mixed into the sound as it plays (Dub, #531); null for none. */
+    val voiceOver: VoiceOver? get() = null
+
     /** The knobs as values set directly. */
     class Mutable : PlaybackTuning {
         @Volatile override var loudnessDb: Float = 0f
@@ -33,6 +36,7 @@ interface PlaybackTuning {
         @Volatile override var audioDelayMs: Int = 0
         @Volatile override var subtitleDelayMs: Int = 0
         @Volatile override var voiceBoostDb: Float = 0f
+        @Volatile override var voiceOver: VoiceOver? = null
         @Volatile override var equalizerPreampDb: Float = 0f
         @Volatile override var equalizerBandsDb: List<Float> = emptyList()
     }
