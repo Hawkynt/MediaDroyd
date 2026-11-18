@@ -142,6 +142,9 @@ class ReadAhead<T>(
             }
         }
 
+        /** The next packet where one is read already (as [next] gives it); null — nothing taken — where not. */
+        fun nextIfReady(): T? = (next() as? Next.Item)?.item
+
         /** Waits up to [timeoutMs] for something to read. */
         fun await(timeoutMs: Long) = synchronized(owner.lock) { owner.lock.wait(timeoutMs) }
 

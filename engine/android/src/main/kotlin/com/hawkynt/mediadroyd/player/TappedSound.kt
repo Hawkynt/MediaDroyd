@@ -26,7 +26,8 @@ internal class TappedSound(
     private val decoder: FfmpegAudioDecoder? = if (raw) {
         null
     } else {
-        runCatching { FfmpegAudioDecoder(format, 1, 1, maxOf(format.maxInputSize, INPUT_BYTES), false) }.getOrNull()
+        runCatching { FfmpegAudioDecoder(format, BATCH, BATCH, maxOf(format.maxInputSize, INPUT_BYTES), false) }
+            .getOrNull()
     }
     private val mono = Mono16k()
 
@@ -40,8 +41,12 @@ internal class TappedSound(
         if (decoder == null && !(raw && format.pcmEncoding == C.ENCODING_PCM_16BIT)) return fallBack()
         while (!cancelled) {
             when (val got = cursor.next()) {
-                is ReadAhead.Next.Item -> runCatching { decode(got.item) }.getOrElse { return fallBack() }
-                    ?.let { return it }
+                is ReadAhead.Next.Item -> {
+                    // What else is read already goes along: the decoder takes several at once.
+                    val samples = arrayListOf(got.item)
+                    while (samples.size < BATCH) samples += (cursor.peekItem() ?: break)
+                    runCatching { decode(samples) }.getOrElse { return fallBack() }?.let { return it }
+                }
                 ReadAhead.Next.Wait -> cursor.await(WAIT_MS)
                 ReadAhead.Next.End -> return null
                 ReadAhead.Next.Lost -> return fallBack()
@@ -50,52 +55,77 @@ internal class TappedSound(
         return null
     }
 
+    // The next one read already, if any; else nothing taken.
+    private fun ReadAhead.Cursor<SoundCopies.Sample>.peekItem(): SoundCopies.Sample? = nextIfReady()
+
     private fun fallBack(): FloatArray? {
         cursor.close()
         own = fallback(next * 1000 / rate)
         return own?.read()
     }
 
-    // [sample] decoded and laid at its time: a gap of more than a fiftieth of a second filled with silence, an overlap
-    // dropped.
-    private fun decode(sample: SoundCopies.Sample): FloatArray? {
-        val (pcm, channels, inputRate) = pcmOf(sample) ?: return null
-        val samples = mono.feed(pcm, 0, pcm.size / channels, channels, inputRate)
-        if (samples.isEmpty()) return null
-        val at = sample.timeUs * rate / 1_000_000
-        val gap = at - next
-        val piece = when {
-            gap > rate / 50 && gap < MAX_GAP -> FloatArray(gap.toInt()) + samples
-            gap < -rate / 50 -> samples.copyOfRange((-gap).coerceAtMost(samples.size.toLong()).toInt(), samples.size)
-            else -> samples
+    // [samples] decoded and laid at their times: a gap of more than a fiftieth of a second filled with silence, an
+    // overlap dropped.
+    private fun decode(samples: List<SoundCopies.Sample>): FloatArray? {
+        var out = FloatArray(0)
+        for ((timeUs, pcm, channels, inputRate) in pcmOf(samples)) {
+            val heard = mono.feed(pcm, 0, pcm.size / channels, channels, inputRate)
+            if (heard.isEmpty()) continue
+            val gap = timeUs * rate / 1_000_000 - next
+            val piece = when {
+                gap > rate / 50 && gap < MAX_GAP -> FloatArray(gap.toInt()) + heard
+                gap < -rate / 50 -> heard.copyOfRange((-gap).coerceAtMost(heard.size.toLong()).toInt(), heard.size)
+                else -> heard
+            }
+            next += piece.size
+            out += piece
         }
-        next += piece.size
-        return piece.takeIf { it.isNotEmpty() }
+        return out.takeIf { it.isNotEmpty() }
     }
 
-    // The sample's sound as 16-bit interleaved PCM, its channels and rate; null where it gave none.
-    private fun pcmOf(sample: SoundCopies.Sample): Triple<ShortArray, Int, Int>? {
+    private data class Pcm(val timeUs: Long, val samples: ShortArray, val channels: Int, val rate: Int)
+
+    // The samples' sound as 16-bit interleaved PCM with its time, channels and rate; those that gave none left out.
+    // As many go into the decoder as it takes before their sound is taken out, in order.
+    private fun pcmOf(samples: List<SoundCopies.Sample>): List<Pcm> {
         if (decoder == null) {
-            val shorts = ShortArray(sample.data.size / 2)
-            java.nio.ByteBuffer.wrap(sample.data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts)
-            return Triple(shorts, format.channelCount.coerceAtLeast(1), format.sampleRate)
+            return samples.map { sample ->
+                val shorts = ShortArray(sample.data.size / 2)
+                java.nio.ByteBuffer.wrap(sample.data).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts)
+                Pcm(sample.timeUs, shorts, format.channelCount.coerceAtLeast(1), format.sampleRate)
+            }
         }
-        val input = waitFor { decoder.dequeueInputBuffer() }
-        input.ensureSpaceForWrite(sample.data.size)
-        input.data!!.put(sample.data)
-        input.timeUs = sample.timeUs
-        input.flip()
-        decoder.queueInputBuffer(input)
-        val output = waitFor { decoder.dequeueOutputBuffer() }
-        try {
-            val data = output.data
-            if (output.shouldBeSkipped || data == null || !data.hasRemaining()) return null
-            val shorts = ShortArray(data.remaining() / 2)
-            data.order(ByteOrder.nativeOrder()).asShortBuffer().get(shorts)
-            return Triple(shorts, decoder.channelCount.coerceAtLeast(1), decoder.sampleRate)
-        } finally {
-            output.release()
+        val out = ArrayList<Pcm>()
+        var queued = 0
+        var taken = 0
+        while (taken < samples.size) {
+            while (queued < samples.size) {
+                // The first waited for, the rest only where the decoder has room.
+                val input = if (queued == taken) {
+                    waitFor { decoder.dequeueInputBuffer() }
+                } else {
+                    decoder.dequeueInputBuffer() ?: break
+                }
+                val sample = samples[queued++]
+                input.ensureSpaceForWrite(sample.data.size)
+                input.data!!.put(sample.data)
+                input.timeUs = sample.timeUs
+                input.flip()
+                decoder.queueInputBuffer(input)
+            }
+            val output = waitFor { decoder.dequeueOutputBuffer() }
+            taken++
+            try {
+                val data = output.data
+                if (output.shouldBeSkipped || data == null || !data.hasRemaining()) continue
+                val shorts = ShortArray(data.remaining() / 2)
+                data.order(ByteOrder.nativeOrder()).asShortBuffer().get(shorts)
+                out += Pcm(output.timeUs, shorts, decoder.channelCount.coerceAtLeast(1), decoder.sampleRate)
+            } finally {
+                output.release()
+            }
         }
+        return out
     }
 
     // What [take] gives once it gives anything: the decoder works on a thread of its own.
@@ -104,7 +134,7 @@ internal class TappedSound(
         while (true) {
             take()?.let { return it }
             check(System.nanoTime() < until && !cancelled) { "the decoder gave nothing" }
-            Thread.sleep(1)
+            java.util.concurrent.locks.LockSupport.parkNanos(POLL_NS)
         }
     }
 
@@ -121,6 +151,10 @@ internal class TappedSound(
 
     private companion object {
         const val WAIT_MS = 100L
+
+        // Samples in the decoder at once, and how often it is looked at while it works.
+        const val BATCH = 16
+        const val POLL_NS = 100_000L
         const val INPUT_BYTES = 1 shl 16
         const val DECODE_TIMEOUT_NS = 2_000_000_000L
 

@@ -24,6 +24,7 @@ object SpeechReads {
      * it; else from the file. Null where its sound cannot be read with the app's FFmpeg.
      */
     fun open(context: Context, location: String, fromMs: Long, near: Boolean = false): FilmSound.Stream? {
+        android.util.Log.i(TAG, "sound from $fromMs ms asked for${if (near) " near playback" else ""}")
         if (near) {
             SoundCopies.open(playableUri(location).toString(), fromMs) { at ->
                 android.util.Log.i(TAG, "sound at $at ms read from the file: the copies moved on")

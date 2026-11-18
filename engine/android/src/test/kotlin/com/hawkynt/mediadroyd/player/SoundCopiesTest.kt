@@ -116,6 +116,8 @@ class SoundCopiesTest {
                 assertTrue(sound.samples.size > 10)
                 assertEquals(sound.samples.map { it.timeUs }, copied.map { it.timeUs })
                 for ((a, b) in sound.samples.zip(copied)) assertTrue(a.data.contentEquals(b.data))
+                // Read to the file's end, the copies end: a read past the last one ends instead of waiting.
+                assertEquals(ReadAhead.Next.End, cursor.next())
             }
         }
     }

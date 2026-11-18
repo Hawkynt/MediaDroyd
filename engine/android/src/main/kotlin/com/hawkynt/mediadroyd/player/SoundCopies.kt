@@ -51,6 +51,8 @@ object SoundCopies {
         }
 
         internal fun reset() = tracks.values.forEach { it.samples.reset() }
+
+        internal fun end() = tracks.values.forEach { it.samples.end() }
     }
 
     private val films = object : LinkedHashMap<String, Film>(4, 0.75f, true) {
@@ -92,7 +94,11 @@ object SoundCopies {
             })
         }
 
-        override fun read(input: ExtractorInput, seekPosition: PositionHolder): Int = inner.read(input, seekPosition)
+        // At the file's end the copies end too: a read of the last stretch then ends instead of waiting for more.
+        override fun read(input: ExtractorInput, seekPosition: PositionHolder): Int =
+            inner.read(input, seekPosition).also { result ->
+                if (result == Extractor.RESULT_END_OF_INPUT) film?.end()
+            }
 
         override fun seek(position: Long, timeUs: Long) {
             film?.reset()
@@ -174,8 +180,11 @@ object SoundCopies {
         return TappedSound(track.samples.cursor(fromMs), format, fromMs, fallback)
     }
 
-    /** How much of what Media3 read is kept: what Whisper hears ahead and its window, and some behind. */
-    const val TRAIL_MS = LiveCaptions.AHEAD_MS + LiveCaptions.WINDOW_MS + 30_000L
+    /**
+     * How much of what Media3 read is kept: the two minutes it reads ahead, and a minute and a half behind playback —
+     * a hearing that fell behind still finds the sound there.
+     */
+    const val TRAIL_MS = 210_000L
 
     // A sound track's copies at most: TrueHD's 18 Mbit/s for two minutes; AC3's 640 kbit/s keeps under 10 MB.
     private const val MAX_BYTES = 256L shl 20
