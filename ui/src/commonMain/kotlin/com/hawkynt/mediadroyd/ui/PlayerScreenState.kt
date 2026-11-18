@@ -65,6 +65,19 @@ class PlayerScreenState(
     /** Where the video stands, as last looked (twice a second): for the chapter it is in. */
     var positionMs by mutableLongStateOf(0L)
 
+    /** The subtitle delay at the position now: the look's, with its drift (SubtitleLook.delayAt). */
+    val subtitleDelayNow: Int get() = subtitleLook.delayAt(positionMs)
+
+    /** What Sync is doing or found wrong, shown under its button; null when it is done (SubtitleSync, #450). */
+    var syncing by mutableStateOf<String?>(null)
+
+    // The speech found in a video's sound, kept while the player is open: decoding it takes a while.
+    private var speech: Pair<String, BooleanArray>? = null
+
+    /** The speech in [video]'s sound, found by [find] the first time it is asked for. Blocks. */
+    fun speechFor(video: String, find: () -> BooleanArray?): BooleanArray? =
+        speech?.takeIf { it.first == video }?.second ?: find()?.also { speech = video to it }
+
     /** Whether it plays now, for what shows only while paused. */
     var playing by mutableStateOf(false)
 
