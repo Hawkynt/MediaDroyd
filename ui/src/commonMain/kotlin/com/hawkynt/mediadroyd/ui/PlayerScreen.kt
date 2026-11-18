@@ -43,6 +43,7 @@ import com.hawkynt.mediadroyd.player.PiperVoices
 import com.hawkynt.mediadroyd.player.LiveCaptions
 import com.hawkynt.mediadroyd.player.NativeWhisper
 import com.hawkynt.mediadroyd.player.WhisperModels
+import com.hawkynt.mediadroyd.player.Prosody
 import com.hawkynt.mediadroyd.player.CaptionRoute
 import com.hawkynt.mediadroyd.player.MarianTranslator
 import com.hawkynt.mediadroyd.player.NeuralModels
@@ -341,6 +342,16 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 if (heard == null || route.whisperTranslates) {
                     heard = whisper(route.whisperTranslates) ?: return@hear null
                 }
+                // Each line's tone from its own sound, before any translation, for the voice to keep (#534).
+                heard = heard.copy(
+                    segments = heard.segments.map { segment ->
+                        val rate = NativeWhisper.SAMPLE_RATE
+                        val from = (segment.startMs * rate / 1000).toInt().coerceIn(0, pcm.size)
+                        val to = (segment.endMs * rate / 1000).toInt().coerceIn(from, pcm.size)
+                        val letters = segment.text.count { it.isLetter() }
+                        segment.copy(tone = Prosody.measure(pcm.copyOfRange(from, to), rate, letters))
+                    },
+                )
                 if (route.translator != null && translator != null) {
                     heard = heard.copy(
                         segments = heard.segments.map { segment ->
@@ -442,8 +453,11 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         val found = async(Dispatchers.Default) { state.speechFor(video) { platform.speech(video) } }
         val lines: () -> List<Dub.Line> = {
             val raw = dubCaptions?.lines()?.mapNotNull { line ->
-                Dub.clean(line.text).takeIf { it.text.isNotEmpty() }
-                    ?.let { line.copy(text = it.text, speaker = it.speaker, delivery = it.delivery) }
+                // The tone heard in the line, its text's own hints on top (#534).
+                Dub.clean(line.text).takeIf { it.text.isNotEmpty() }?.let {
+                    val delivery = Prosody.combine(line.delivery, it.delivery)
+                    line.copy(text = it.text, speaker = it.speaker, delivery = delivery)
+                }
             } ?: fileLines
             val speech = if (found.isCompleted) runCatching { found.getCompleted() }.getOrNull() else null
             if (speech != null) Dub.align(raw, speech) else raw

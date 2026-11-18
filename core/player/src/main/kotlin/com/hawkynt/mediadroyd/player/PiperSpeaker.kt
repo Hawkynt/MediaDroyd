@@ -33,10 +33,11 @@ class PiperSpeaker(
     fun phonemes(text: String): String? = phonemize(text, voice)
 
     /**
-     * [text] spoken at [lengthScale] (1 the voice's pace, smaller faster) by [speaker] of a voice with several: mono
-     * samples at [sampleRate], −1 … 1; null where it cannot be phonemised or the network fails.
+     * [text] spoken at [lengthScale] (1 the voice's pace, smaller faster) by [speaker] of a voice with several, its
+     * noise — how much it varies — scaled by [liveliness]: mono samples at [sampleRate], −1 … 1; null where it cannot
+     * be phonemised or the network fails.
      */
-    override fun speak(text: String, lengthScale: Float, speaker: Int): FloatArray? {
+    override fun speak(text: String, lengthScale: Float, speaker: Int, liveliness: Float): FloatArray? {
         val ids = phonemes(text)?.let(voice::ids) ?: return null
         if (ids.size <= 3) return null
         return runCatching {
@@ -45,7 +46,9 @@ class PiperSpeaker(
             inputs["input_lengths"] =
                 OnnxTensor.createTensor(env, LongBuffer.wrap(longArrayOf(ids.size.toLong())), longArrayOf(1))
             inputs["scales"] = OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(floatArrayOf(voice.noiseScale, lengthScale, voice.noiseW)), longArrayOf(3),
+                env,
+                FloatBuffer.wrap(floatArrayOf(voice.noiseScale * liveliness, lengthScale, voice.noiseW * liveliness)),
+                longArrayOf(3),
             )
             if (voice.speakers > 1 && "sid" in session.inputNames) {
                 val id = speaker.coerceIn(0, voice.speakers - 1).toLong()

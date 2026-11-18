@@ -132,7 +132,9 @@ class DubTest {
     private class FakeSpeaker : Dub.LineSpeaker {
         override val sampleRate = 1000
         val scales = ArrayList<Float>()
-        override fun speak(text: String, lengthScale: Float, speaker: Int): FloatArray {
+        val livelinesses = ArrayList<Float>()
+        override fun speak(text: String, lengthScale: Float, speaker: Int, liveliness: Float): FloatArray {
+            livelinesses += liveliness
             scales += lengthScale
             return FloatArray((300 + text.length * 100 * lengthScale).toInt()) { 0.5f }
         }
@@ -142,10 +144,10 @@ class DubTest {
     fun `a line running over is spoken again faster until it fits, its delivery's loudness applied`() {
         val speaker = FakeSpeaker()
         // 10 letters: 1.3 s at its pace; 1.0 s of room before the next line.
-        val fitted = requireNotNull(Dub.fit(Dub.Line(0, 900, "abcdefghij"), speaker, nextStartMs = 1000))
+        val fitted = requireNotNull(Dub.fit(Dub.Line(0, 900, "abcdefghij"), speaker, nextStartMs = 1000)).pcm
         assertTrue("${fitted.size} ms", fitted.size <= 1000)
         assertTrue(speaker.scales.size >= 2 && speaker.scales.last() < 1f)
-        val whisper = requireNotNull(Dub.fit(Dub.Line(0, 900, "ab", delivery = Dub.WHISPER), FakeSpeaker(), null))
+        val whisper = requireNotNull(Dub.fit(Dub.Line(0, 900, "ab", delivery = Dub.WHISPER), FakeSpeaker(), null)).pcm
         assertEquals(0.5f * Math.pow(10.0, -8 / 20.0).toFloat(), whisper[0], 1e-4f)
     }
 
@@ -185,7 +187,7 @@ class DubTest {
     fun `a line fits into the speech it replaces, not past the next line`() {
         val speaker = FakeSpeaker()
         // 10 letters, 1.3 s at its pace; the original speech it replaces lasted 1.0 s, the next line is far off.
-        val fitted = requireNotNull(Dub.fit(Dub.Line(0, 1000, "abcdefghij", spokenMs = 1000), speaker, 9000))
+        val fitted = requireNotNull(Dub.fit(Dub.Line(0, 1000, "abcdefghij", spokenMs = 1000), speaker, 9000)).pcm
         assertTrue("${fitted.size} ms", fitted.size <= 1100)
     }
 
@@ -238,5 +240,17 @@ class DubTest {
         // Stereo's bass stays: what "the channel" would have removed is only the voice band here.
         val f = (rate * 0.8).toInt()
         assertTrue("${out[f * 2]} against ${input[f * 2]}", abs(out[f * 2] - input[f * 2]) < 800)
+    }
+
+    @Test
+    fun `a higher line is spoken slower and played faster, as long, its liveliness handed on (#534)`() {
+        val speaker = FakeSpeaker()
+        val line = Dub.Line(0, 5000, "abcde", delivery = Dub.Delivery(pitch = 12f, liveliness = 1.3f))
+        val said = requireNotNull(Dub.fit(line, speaker, null))
+        // An octave up: spoken at twice the length scale, played at twice the rate — as long as at its own pitch.
+        assertEquals(2f, speaker.scales.first(), 1e-4f)
+        assertEquals(2000, said.rate)
+        assertEquals((300 + 5 * 100 * 2) / 2.0, said.pcm.size * 1000.0 / said.rate, 1.0)
+        assertEquals(1.3f, speaker.livelinesses.first(), 1e-6f)
     }
 }

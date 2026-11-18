@@ -11,13 +11,16 @@ class LiveCaptions(
     private val hear: (fromMs: Long, toMs: Long) -> Heard?,
     private val durationMs: Long,
 ) {
-    /** One segment heard: from [startMs] to [endMs] of its window, its [text]. */
-    data class Segment(val startMs: Long, val endMs: Long, val text: String)
+    /** One segment heard: from [startMs] to [endMs] of its window, its [text], its [tone] where it was measured. */
+    data class Segment(val startMs: Long, val endMs: Long, val text: String, val tone: Prosody.Features? = null)
 
     /** What a window heard: its [language] (ISO 639-1, as Whisper names it) and its segments. */
     data class Heard(val language: String, val segments: List<Segment>)
 
     private val heard = ArrayList<Dub.Line>()
+
+    /** The film's own speech so far, which each line's tone is measured against (#534). */
+    private val baseline = Prosody.Baseline()
     private val covered = ArrayList<LongRange>()
 
     /** The language the speech was heard in, once any was. */
@@ -48,7 +51,8 @@ class LiveCaptions(
                 for (segment in kept) {
                     val text = segment.text.trim()
                     if (text.isEmpty()) continue
-                    val line = Dub.Line(cursor + segment.startMs, cursor + segment.endMs, text)
+                    val delivery = segment.tone?.let { baseline.add(it); baseline.delivery(it) } ?: Dub.Delivery()
+                    val line = Dub.Line(cursor + segment.startMs, cursor + segment.endMs, text, delivery = delivery)
                     if (heard.none { it.startMs < line.endMs && line.startMs < it.endMs }) heard += line
                 }
                 heard.sortBy { it.startMs }

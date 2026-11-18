@@ -15,8 +15,12 @@ object Dub {
     /** How much faster than its own pace a line may be spoken to fit: half as fast again. */
     const val MAX_SPEED = 1.5f
 
-    /** How a line is spoken: [gainDb] louder (or quieter), at [rate] its pace. */
-    data class Delivery(val gainDb: Float = 0f, val rate: Float = 1f)
+    /**
+     * How a line is spoken: [gainDb] louder (or quieter), at [rate] its pace, [pitch] semitones higher (or lower), its
+     * [liveliness] the voice's own variation scaled (more: livelier, less: flatter) — from the text's hints, and from
+     * the tone of the original line where it was heard (Prosody, #534).
+     */
+    data class Delivery(val gainDb: Float = 0f, val rate: Float = 1f, val pitch: Float = 0f, val liveliness: Float = 1f)
 
     /** A whisper: quieter and slower. A shout: louder and faster. */
     val WHISPER = Delivery(-8f, 0.9f)
@@ -181,8 +185,11 @@ object Dub {
     interface LineSpeaker : AutoCloseable {
         val sampleRate: Int
 
-        /** [text] at [lengthScale] (1 the voice's pace, smaller faster) by [speaker]; null where it cannot. */
-        fun speak(text: String, lengthScale: Float, speaker: Int = 0): FloatArray?
+        /**
+         * [text] at [lengthScale] (1 the voice's pace, smaller faster) by [speaker], its own variation scaled by
+         * [liveliness]; null where it cannot.
+         */
+        fun speak(text: String, lengthScale: Float, speaker: Int = 0, liveliness: Float = 1f): FloatArray?
 
         override fun close() {}
     }
@@ -191,27 +198,35 @@ object Dub {
     private const val FIT_TRIES = 3
     private const val FIT_MARGIN = 0.95f
 
+    /** A spoken line: its samples, to be played at [rate] (the voice's own, raised where its pitch is). */
+    class Spoken(val pcm: FloatArray, val rate: Int)
+
     /**
      * [line] spoken by [speaker] to fit before [nextStartMs] (null: no limit): at its delivery's pace first, then —
      * where too long — again with the length scale cut by how much it ran over and a little more, up to [FIT_TRIES]
-     * times, never past [MAX_SPEED]; its delivery's loudness applied. The last try where none fits; null where the
-     * voice cannot speak it.
+     * times, never past [MAX_SPEED]; its delivery's loudness and liveliness applied, and its pitch: spoken that much
+     * slower and played that much faster, so it sounds higher (or lower) and lasts as long. The last try where none
+     * fits; null where the voice cannot speak it.
      */
-    fun fit(line: Line, speaker: LineSpeaker, nextStartMs: Long?, voice: Int = 0): FloatArray? {
+    fun fit(line: Line, speaker: LineSpeaker, nextStartMs: Long?, voice: Int = 0): Spoken? {
+        val shift = Math.pow(2.0, line.delivery.pitch / 12.0).toFloat()
+        val rate = (speaker.sampleRate * shift).toInt()
+        val lively = line.delivery.liveliness
         var scale = 1f / line.delivery.rate
-        var spoken = speaker.speak(line.text, scale, voice) ?: return null
+        var spoken = speaker.speak(line.text, scale * shift, voice, lively) ?: return null
         val beforeNext = nextStartMs?.let { it - line.startMs }
         val asLong = line.spokenMs?.let { (it * OVERRUN).toLong() }
         val room = listOfNotNull(beforeNext, asLong).minOrNull()
         repeat(FIT_TRIES - 1) {
-            val ms = spoken.size * 1000L / speaker.sampleRate
+            val ms = spoken.size * 1000L / rate
             if (room == null || ms <= room || scale <= 1f / MAX_SPEED + 1e-4f) return@repeat
             // A little more than it ran over: the pauses and the voice's own variation do not shrink with it.
             scale = (scale * room / ms * FIT_MARGIN).coerceAtLeast(1f / MAX_SPEED)
-            spoken = speaker.speak(line.text, scale, voice) ?: return@repeat
+            spoken = speaker.speak(line.text, scale * shift, voice, lively) ?: return@repeat
         }
         val gain = Math.pow(10.0, line.delivery.gainDb / 20.0).toFloat()
-        return if (gain == 1f) spoken else FloatArray(spoken.size) { (spoken[it] * gain).coerceIn(-1f, 1f) }
+        val pcm = if (gain == 1f) spoken else FloatArray(spoken.size) { (spoken[it] * gain).coerceIn(-1f, 1f) }
+        return Spoken(pcm, rate)
     }
 
     /**
@@ -233,10 +248,11 @@ object Dub {
                 if (line.endMs < positionMs || line.startMs in spoken) continue
                 if (line.startMs > positionMs + AHEAD_MS) break
                 val next = now.getOrNull(i + 1)?.startMs
-                val pcm = fit(line, speaker, next, voice)
+                val said = fit(line, speaker, next, voice)
                 spoken += line.startMs
-                if (pcm != null) {
-                    track.add(line.startMs, FloatArray(pcm.size) { pcm[it] * FULL_SCALE }, speaker.sampleRate)
+                if (said != null) {
+                    val pcm = said.pcm
+                    track.add(line.startMs, FloatArray(pcm.size) { pcm[it] * FULL_SCALE }, said.rate)
                     count++
                 }
             }
