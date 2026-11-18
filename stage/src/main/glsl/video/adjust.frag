@@ -1,4 +1,6 @@
-// The video's colour correction, the stage's last pass onto the screen: saturation around grey with the Rec. 709
+// The video's colour correction, the stage's last pass onto the screen: temperature and tint as a matrix on linear
+// light (uWhite, where uWhiteOn is set; ColourBalance.whiteMatrix), hue as a matrix on the coded values (uHue,
+// ColourBalance.hueMatrix), saturation around grey with the Rec. 709
 // luma weights, contrast around mid grey plus brightness, then the true gamma curve — the order and weights of
 // PictureAdjustment.shaderUniforms. Each point of the screen first finds the point of the picture it shows
 // (ScreenWarp.source): where uWarped is set through the projective map uWarp — a projector's mirror and flip, the
@@ -14,6 +16,9 @@ uniform float uBrightness;
 uniform float uContrast;
 uniform float uSaturation;
 uniform float uInverseGamma;
+uniform mat3 uWhite;
+uniform float uWhiteOn;
+uniform mat3 uHue;
 uniform float uPanorama;
 uniform mat3 uWarp;
 uniform float uWarped;
@@ -45,6 +50,11 @@ void main() {
   }
   if (uPanorama > 1.0) at.x = panoramaSource(at.x);
   vec3 rgb = texture2D(uTex, at).rgb;
+  if (uWhiteOn > 0.5) {
+    // BT.1886's gamma of 2.4 on the way to light and back.
+    rgb = pow(clamp(uWhite * pow(max(rgb, 0.0), vec3(2.4)), 0.0, 1.0), vec3(1.0 / 2.4));
+  }
+  rgb = uHue * rgb;
   float luma = dot(rgb, vec3(0.213, 0.715, 0.072));
   rgb = mix(vec3(luma), rgb, uSaturation);
   rgb = (rgb - 0.5) * uContrast + 0.5 + uBrightness;

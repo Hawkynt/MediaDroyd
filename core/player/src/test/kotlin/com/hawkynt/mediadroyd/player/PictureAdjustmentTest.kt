@@ -103,11 +103,18 @@ class PictureAdjustmentTest {
         assertEquals(0.5f, u.inverseGamma, 1e-6f)
         assertEquals(3f, u.contrast, 1e-6f)
         assertEquals(0f, u.saturation, 1e-6f)
+        assertEquals(null, u.white)
+        val balanced = PictureAdjustment(hue = 30f, temperature = 5000f).shaderUniforms()
+        org.junit.Assert.assertArrayEquals(ColourBalance.hueMatrix(30f), balanced.hue, 0f)
+        org.junit.Assert.assertArrayEquals(ColourBalance.whiteMatrix(5000f, 0f), balanced.white, 0f)
     }
 
     @Test
     fun `any changed value is not neutral`() {
         assertFalse(PictureAdjustment(gamma = 1.2f).isNeutral)
         assertFalse(PictureAdjustment(brightness = -0.1f).isNeutral)
+        assertFalse(PictureAdjustment(hue = 10f).isColorNeutral)
+        assertFalse(PictureAdjustment(tint = 0.1f).isColorNeutral)
+        assertFalse(PictureAdjustment(temperature = 5500f).isColorNeutral)
     }
 }

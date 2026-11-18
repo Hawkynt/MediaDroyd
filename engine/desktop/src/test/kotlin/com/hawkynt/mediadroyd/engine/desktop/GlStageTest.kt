@@ -201,6 +201,27 @@ class GlStageTest {
         MediaReader.Picture(pts, 32, 24, ByteArray(32 * 24 * 4) { i -> if (i % 4 == 3) -1 else value.toByte() })
 
     @Test
+    fun `temperature warms or cools white, tint greens it, hue turns a colour and leaves grey (#447)`() {
+        fun rgbOf(p: PictureAdjustment, r: Int, g: Int, b: Int): List<Int> {
+            val picture = MediaReader.Picture(0, 32, 24, ByteArray(32 * 24 * 4) { i ->
+                when (i % 4) { 0 -> r; 1 -> g; 2 -> b; else -> 255 }.toByte()
+            })
+            val out = stage.process(Moment(picture), p, 32, 24).rgba
+            return (0..2).map { out[it].toInt() and 255 }
+        }
+        val warm = rgbOf(PictureAdjustment(temperature = 4000f), 235, 235, 235)
+        assertTrue("$warm", warm[0] > warm[1] && warm[1] > warm[2])
+        val cold = rgbOf(PictureAdjustment(temperature = 10_000f), 235, 235, 235)
+        assertTrue("$cold", cold[2] > cold[1] && cold[1] > cold[0])
+        val green = rgbOf(PictureAdjustment(tint = -1f), 200, 200, 200)
+        assertTrue("$green", green[1] > green[0] && green[1] > green[2])
+        val grey = rgbOf(PictureAdjustment(hue = 90f), 128, 128, 128)
+        assertTrue("$grey", grey.all { abs(it - 128) <= 1 })
+        val turned = rgbOf(PictureAdjustment(hue = 180f), 200, 60, 40)
+        assertTrue("$turned", turned[1] > turned[0] && turned[2] > turned[0])
+    }
+
+    @Test
     fun `blending High shows the two pictures mixed by the clock, Low only around the middle`() {
         // Two levels close enough to be one scene (a step of 8 % is no cut; SceneCuts).
         val a = flat(0, 100)
