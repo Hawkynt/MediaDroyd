@@ -22,6 +22,8 @@ val espeak = project(":native").extra["espeak"] as Boolean
 @Suppress("UNCHECKED_CAST")
 val espeakRoot = project(":native").extra["espeakRoot"] as Provider<Directory>
 @Suppress("UNCHECKED_CAST")
+val whisperRoot = project(":native").extra["whisperRoot"] as Provider<Directory>
+@Suppress("UNCHECKED_CAST")
 val espeakDataDir = project(":native").extra["espeakDataDir"] as Provider<Directory>
 
 android {
@@ -55,6 +57,7 @@ android {
                 arguments += "-DNCNN_ROOT=${ncnnRoot.get().asFile.absolutePath}"
                 arguments += "-DASS_SOURCES=${assRoot.get().asFile.absolutePath}"
                 arguments += "-DCHROMAPRINT_SOURCES=${chromaprintRoot.get().asFile.absolutePath}"
+                arguments += "-DWHISPER_SOURCES=${whisperRoot.get().asFile.absolutePath}"
                 arguments += "-DANDROID_STL=c++_static"
                 if (espeak) arguments += "-DESPEAK_SOURCES=${espeakRoot.get().asFile.absolutePath}"
                 // Only the app's own libraries: espeak-ng's tree also holds its data's target, which runs espeak-ng
@@ -104,7 +107,7 @@ android {
 
 tasks.configureEach {
     if (name.startsWith("configureCMake") || name.startsWith("buildCMake")) {
-        dependsOn(":native:ncnnAndroid", ":native:assSources", ":native:chromaprintSource")
+        dependsOn(":native:ncnnAndroid", ":native:assSources", ":native:chromaprintSource", ":native:whisperSource")
         if (espeak) dependsOn(":native:espeakSource")
     }
     // espeak-ng's data, made on this machine, as assets (-Pespeak).

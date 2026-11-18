@@ -178,6 +178,17 @@ tasks.register<SourceRelease>("chromaprintSource") {
     outputDir.set(chromaprintRoot)
 }
 
+// whisper.cpp (MIT) with its ggml: subtitles made from the speech (#529), inside the native library on every system.
+val whisperRoot = layout.buildDirectory.dir("whisper.cpp")
+extra["whisperRoot"] = whisperRoot
+tasks.register<SourceRelease>("whisperSource") {
+    group = "build"
+    description = "Fetches whisper.cpp for the native tree"
+    url.set("https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz")
+    sha256.set("ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720")
+    outputDir.set(whisperRoot)
+}
+
 // espeak-ng (GPL-3.0-or-later) for the spoken subtitles' Piper voices (#531): only with -Pespeak, for the household's
 // own devices, never in a release; its library is one of its own (native/espeak).
 val espeak = providers.gradleProperty("espeak").isPresent
@@ -285,7 +296,7 @@ fun cmake(): String {
 tasks.register("desktopLibrary") {
     group = "build"
     description = "Builds the native library (native/) for this desktop"
-    dependsOn(ncnnDesktop, "assSources", "chromaprintSource")
+    dependsOn(ncnnDesktop, "assSources", "chromaprintSource", "whisperSource")
     if (espeak) dependsOn("espeakSource")
     val sources = layout.projectDirectory
     inputs.files(sources.file("CMakeLists.txt"), sources.dir("src"), sources.dir("jni"), sources.dir("ass"))
@@ -300,6 +311,7 @@ tasks.register("desktopLibrary") {
     val ass = assRoot
     val chromaprint = chromaprintRoot
     val espeakSources = espeakRoot.takeIf { espeak }
+    val whisper = whisperRoot
     inputs.property("espeak", espeak)
     doLast {
         val wanted = checkNotNull(wantedForHost) { "ncnn has no release for $host" }
@@ -326,6 +338,7 @@ tasks.register("desktopLibrary") {
             "-DASS_SOURCES=${ass.get().asFile.path}",
             "-DCHROMAPRINT_SOURCES=${chromaprint.get().asFile.path}",
             "-DESPEAK_SOURCES=${espeakSources?.get()?.asFile?.path.orEmpty()}",
+            "-DWHISPER_SOURCES=${whisper.get().asFile.path}",
         )
         run("--build", build, "--config", "Release", "--parallel", jobs)
         // Without -Pespeak no espeak-ng is carried, not even one an earlier build left behind.

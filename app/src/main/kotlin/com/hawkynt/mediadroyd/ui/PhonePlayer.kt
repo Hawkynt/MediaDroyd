@@ -1108,6 +1108,24 @@ fun PhonePlayer(
         // Where the sound speaks, for Sync: the app's FFmpeg decoding the whole sound (SpeechReads).
         override fun speech(location: String) = com.hawkynt.mediadroyd.data.SpeechReads.of(context, location)
 
+        // Subtitles made from the speech (#529): the app's FFmpeg at 16 kHz, Whisper in the native library.
+        override fun soundAt(location: String, fromMs: Long, toMs: Long) =
+            com.hawkynt.mediadroyd.data.SpeechReads.soundAt(context, location, fromMs, toMs)
+
+        override fun whisperReady(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry) =
+            com.hawkynt.mediadroyd.data.ModelStore.ready(context, model.download)
+
+        override fun fetchWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry, progress: (Float) -> Unit) =
+            com.hawkynt.mediadroyd.data.ModelStore.fetch(context, model.download, progress)
+
+        override fun openWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry): Long =
+            if (!com.hawkynt.mediadroyd.player.AndroidNeural.loaded) {
+                0L
+            } else {
+                val dir = com.hawkynt.mediadroyd.data.ModelStore.folder(context, model.download)
+                com.hawkynt.mediadroyd.player.NativeWhisper.open(java.io.File(dir, model.file).path)
+            }
+
         // Spoken subtitles (#531): Piper's voices on ONNX Runtime; espeak-ng in builds for one's own phones.
         override val espeak get() = com.hawkynt.mediadroyd.data.AndroidVoices.espeak
 

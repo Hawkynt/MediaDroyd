@@ -68,6 +68,32 @@ class PlayerScreenState(
     /** The subtitle delay at the position now: the look's, with its drift (SubtitleLook.delayAt). */
     val subtitleDelayNow: Int get() = subtitleLook.delayAt(positionMs)
 
+    /**
+     * Subtitles made from the speech (#529): whether they are on, in English or as spoken, by which Whisper model (the
+     * household's), what it is doing, the lines heard, the one showing now and the language they are in.
+     */
+    var captioning by mutableStateOf(false)
+    var captionTranslate by mutableStateOf(store.data.settings.captionTranslate)
+        private set
+    var captionModel by mutableStateOf(store.data.settings.captionModel)
+        private set
+    var captionStatus by mutableStateOf<String?>(null)
+    var captions by mutableStateOf<com.hawkynt.mediadroyd.player.LiveCaptions?>(null)
+    var captionText by mutableStateOf<String?>(null)
+    var captionLanguage by mutableStateOf<String?>(null)
+
+    fun chooseCaptionTranslate(on: Boolean) {
+        captionTranslate = on
+        store.data.settings.captionTranslate = on
+        store.save()
+    }
+
+    fun chooseCaptionModel(id: String) {
+        captionModel = id
+        store.data.settings.captionModel = id
+        store.save()
+    }
+
     /** Whether the subtitles are spoken (Dub, #531), and what the voice is doing — fetching, or why it cannot. */
     var dubbing by mutableStateOf(false)
     var dubStatus by mutableStateOf<String?>(null)

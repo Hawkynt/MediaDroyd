@@ -403,3 +403,45 @@ fun RepeatChoice(
 fun PanelTitle(text: String) {
     Text(text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
 }
+
+/**
+ * Subtitles made from the speech (#529), in the gear's subtitles: on or off, in English whatever is spoken, and the
+ * Whisper model that hears — larger hears better and needs a faster device — with what it is doing.
+ */
+@Composable
+fun CaptionRows(
+    on: Boolean,
+    onOn: (Boolean) -> Unit,
+    english: Boolean,
+    onEnglish: (Boolean) -> Unit,
+    model: com.hawkynt.mediadroyd.player.WhisperModels.Entry,
+    onModel: (com.hawkynt.mediadroyd.player.WhisperModels.Entry) -> Unit,
+    status: String?,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text("Subtitles from the speech", fontSize = 16.sp)
+            Text(
+                status ?: "Heard on this device as the film plays, a minute ahead — for films without subtitles.",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        androidx.compose.material3.Switch(checked = on, onCheckedChange = onOn)
+    }
+    if (!on) return
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text("Translate into English", fontSize = 15.sp, modifier = Modifier.weight(1f))
+        androidx.compose.material3.Switch(checked = english, onCheckedChange = onEnglish)
+    }
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        com.hawkynt.mediadroyd.player.WhisperModels.ALL.forEach { entry ->
+            FilterChip(
+                selected = entry == model,
+                onClick = { onModel(entry) },
+                label = { Text("${entry.label} · ${entry.download.bytes / 1_000_000} MB", fontSize = 15.sp) },
+            )
+        }
+    }
+}

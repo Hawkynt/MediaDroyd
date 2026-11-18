@@ -62,4 +62,40 @@ object SpeechReads {
             runCatching { local?.close() }
         }
     }
+
+    /**
+     * The video at [location]'s sound from [fromMs] to [toMs] as Whisper hears it (subtitles made from the speech,
+     * #529): its main audio track decoded by the app's FFmpeg as one channel at NativeWhisper.SAMPLE_RATE, as floats,
+     * the first at [fromMs] (what the decoder hands out before it dropped, a gap silent). Null where it cannot be read.
+     */
+    fun soundAt(context: Context, location: String, fromMs: Long, toMs: Long): FloatArray? {
+        if (!FfmpegDemuxer.isAvailable()) return null
+        val local = if (location.startsWith("/")) runCatching { RandomAccessFile(location, "r") }.getOrNull() else null
+        return try {
+            val input = when {
+                local != null -> FfmpegInputs.local(local)
+                location.startsWith("/") -> return null
+                else -> FfmpegInputs.remote(SourceAccess.resolve(context, location) ?: return null)
+            }
+            val demuxer = FfmpegDemuxer.open(input) ?: return null
+            try {
+                val rate = com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE
+                val first = LongArray(1)
+                val pcm = demuxer.sound(fromMs * 1000, toMs * 1000, rate, first) ?: return null
+                val skip = ((fromMs * 1000 - first[0]) * rate / 1_000_000L).toInt()
+                val wanted = ((toMs - fromMs) * rate / 1000).toInt()
+                // A skip below 0 is a gap before the first sample: silence there.
+                FloatArray(minOf(wanted, pcm.size - skip).coerceAtLeast(0)) { i ->
+                    val at = i + skip
+                    if (at in pcm.indices) pcm[at] / 32_768f else 0f
+                }.takeIf { it.isNotEmpty() }
+            } finally {
+                demuxer.close()
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { local?.close() }
+        }
+    }
 }

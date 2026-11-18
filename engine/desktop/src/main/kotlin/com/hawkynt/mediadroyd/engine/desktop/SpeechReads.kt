@@ -29,4 +29,44 @@ object SpeechReads {
             if (read) speech.result() else null
         }
     }.getOrNull()
+
+    /**
+     * The video at [path]'s sound from [fromMs] to [toMs] as Whisper hears it (subtitles made from the speech, #529):
+     * mono floats at NativeWhisper.SAMPLE_RATE, the first at [fromMs] — FFmpeg's 48 kHz stereo mixed to one channel
+     * and every three samples averaged into one. Null where it cannot be read.
+     */
+    fun soundAt(path: String, from: FsFile?, fromMs: Long, toMs: Long): FloatArray? = runCatching {
+        MediaReader(path, from, decoders = emptyList(), pictures = false).use { reader ->
+            if (fromMs > 0) reader.seek(fromMs)
+            val rate = MediaReader.SAMPLE_RATE
+            val step = rate / com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE
+            val out = ArrayList<Float>()
+            var skip = -1L
+            var sum = 0f
+            var count = 0
+            loop@ while (true) {
+                val sound = reader.read() ?: break
+                if (sound !is MediaReader.Sound) continue
+                if (sound.ptsMs >= toMs) break
+                // What a seek hands out before fromMs is dropped.
+                if (skip < 0) skip = ((fromMs - sound.ptsMs).coerceAtLeast(0) * rate / 1000)
+                val shorts = ByteBuffer.wrap(sound.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                while (shorts.remaining() >= 2) {
+                    val mono = (shorts.get() + shorts.get()) / 65_536f
+                    if (skip > 0) {
+                        skip--
+                        continue
+                    }
+                    sum += mono
+                    if (++count == step) {
+                        out += sum / step
+                        sum = 0f
+                        count = 0
+                    }
+                }
+                if (out.size >= (toMs - fromMs) * com.hawkynt.mediadroyd.player.NativeWhisper.SAMPLE_RATE / 1000) break@loop
+            }
+            if (out.isEmpty()) null else out.toFloatArray()
+        }
+    }.getOrNull()
 }

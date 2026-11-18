@@ -214,22 +214,26 @@ object Dub {
     }
 
     /**
-     * Speaks a subtitle track's [lines] onto [track] as the film plays: [ahead] those starting from the position up to
-     * [AHEAD_MS] later that are not spoken yet, each fitted before the next line ([fit]), scaled to 16-bit. One line at
-     * a time, off the main thread; a seek simply speaks from the new position on.
+     * Speaks the [lines] of a subtitle track — a file's, or those made from the speech as it is heard, so the list may
+     * grow — onto [track] as the film plays: [ahead] those starting from the position up to [AHEAD_MS] later that are
+     * not spoken yet (known by their start), each fitted before the next line ([fit]), scaled to 16-bit. One line at a
+     * time, off the main thread; a seek simply speaks from the new position on.
      */
-    class Speaking(private val lines: List<Line>, private val speaker: LineSpeaker, private val track: Track) {
-        private val spoken = HashSet<Int>()
+    class Speaking(private val lines: () -> List<Line>, private val speaker: LineSpeaker, private val track: Track) {
+        constructor(lines: List<Line>, speaker: LineSpeaker, track: Track) : this({ lines }, speaker, track)
+
+        private val spoken = HashSet<Long>()
 
         /** Speaks what is due from [positionMs]; returns how many lines it spoke. Blocks. */
         fun ahead(positionMs: Long, voice: Int = 0): Int {
             var count = 0
-            for ((i, line) in lines.withIndex()) {
-                if (line.endMs < positionMs || i in spoken) continue
+            val now = lines()
+            for ((i, line) in now.withIndex()) {
+                if (line.endMs < positionMs || line.startMs in spoken) continue
                 if (line.startMs > positionMs + AHEAD_MS) break
-                val next = lines.getOrNull(i + 1)?.startMs
+                val next = now.getOrNull(i + 1)?.startMs
                 val pcm = fit(line, speaker, next, voice)
-                spoken += i
+                spoken += line.startMs
                 if (pcm != null) {
                     track.add(line.startMs, FloatArray(pcm.size) { pcm[it] * FULL_SCALE }, speaker.sampleRate)
                     count++

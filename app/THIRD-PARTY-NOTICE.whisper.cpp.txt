@@ -1,0 +1,10 @@
+whisper.cpp v1.9.5, with ggml
+https://github.com/ggml-org/whisper.cpp
+
+MIT License. Copyright (c) 2023-2026 The ggml authors.
+
+Built from its release source (native/whisper; native/build.gradle.kts fetches and checks it) into MediaDroyd's native
+library, unmodified, to make subtitles from the speech as a film plays.
+
+The models are OpenAI's Whisper (MIT License, Copyright (c) 2022 OpenAI), as whisper.cpp's quantised ggml files from
+https://huggingface.co/ggerganov/whisper.cpp at a fixed revision, fetched when chosen and checked against their digests.
