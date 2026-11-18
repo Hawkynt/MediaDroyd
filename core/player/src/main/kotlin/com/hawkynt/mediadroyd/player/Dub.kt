@@ -255,7 +255,12 @@ object Dub {
         constructor(lines: List<Line>, speaker: LineSpeaker, track: Track) : this({ lines }, { speaker }, track)
         constructor(lines: () -> List<Line>, speaker: LineSpeaker, track: Track) : this(lines, { speaker }, track)
 
-        private val spoken = HashSet<Long>()
+        // The lines spoken, by start and text: a line laid on the speech anew (Dub.align, as more of it is found)
+        // moves by some milliseconds and is still the one spoken.
+        private val spoken = ArrayList<Pair<Long, String>>()
+
+        private fun said(line: Line) =
+            spoken.any { (at, text) -> text == line.text && kotlin.math.abs(at - line.startMs) <= ALIGN_MS }
 
         /** Told of each line as it is spoken: how long its voice took, and whether it could be spoken at all. */
         var onSpoken: ((line: Line, tookMs: Long, spoken: Boolean) -> Unit)? = null
@@ -265,13 +270,19 @@ object Dub {
             var count = 0
             val now = lines()
             for ((i, line) in now.withIndex()) {
-                if (line.endMs < positionMs || line.startMs in spoken) continue
+                if (line.endMs < positionMs || said(line)) continue
                 if (line.startMs > positionMs + AHEAD_MS) break
+                // Under way already (the voice-over came on, or the line was heard, too late): left out, not spoken
+                // from its middle.
+                if (line.startMs < positionMs - LATE_MS) {
+                    spoken += line.startMs to line.text
+                    continue
+                }
                 val next = now.getOrNull(i + 1)?.startMs
                 val began = System.nanoTime()
                 val said = fit(line, speakerFor(line), next, voice)
                 onSpoken?.invoke(line, (System.nanoTime() - began) / 1_000_000, said != null)
-                spoken += line.startMs
+                spoken += line.startMs to line.text
                 if (said != null) {
                     val pcm = said.pcm
                     track.add(line.startMs, FloatArray(pcm.size) { pcm[it] * FULL_SCALE }, said.rate)
@@ -282,6 +293,9 @@ object Dub {
             return count
         }
     }
+
+    /** How far a line may be under way and still be spoken: past it, it is left out. */
+    const val LATE_MS = 300L
 
     /** How far ahead of the position lines are spoken. */
     const val AHEAD_MS = 20_000L

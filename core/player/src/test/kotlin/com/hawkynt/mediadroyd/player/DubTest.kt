@@ -164,6 +164,29 @@ class DubTest {
         assertEquals(1, speaking.ahead(30_000))
     }
 
+    @Test
+    fun `a line moved a little by more of the speech found is not spoken a second time`() {
+        var lines = listOf(Dub.Line(10_000, 12_000, "one"), Dub.Line(15_000, 16_000, "two"))
+        val speaking = Dub.Speaking({ lines }, FakeSpeaker(), Dub.Track())
+        assertEquals(2, speaking.ahead(5_000))
+        // Laid on the speech once more of it is found: the same lines, some milliseconds apart.
+        lines = listOf(
+            Dub.Line(9_960, 12_000, "one"), Dub.Line(15_040, 16_000, "two"), Dub.Line(17_000, 18_000, "three"),
+        )
+        assertEquals(1, speaking.ahead(5_000))
+    }
+
+    @Test
+    fun `a line already under way when it is reached is left out rather than spoken from its middle`() {
+        val spoken = ArrayList<Boolean>()
+        val lines = listOf(Dub.Line(10_000, 14_000, "under way"), Dub.Line(10_000 + 13_000, 24_000, "ahead"))
+        val speaking = Dub.Speaking({ lines }, FakeSpeaker(), Dub.Track()).apply {
+            onSpoken = { _, _, said -> spoken += said }
+        }
+        assertEquals(1, speaking.ahead(11_000))
+        assertEquals(listOf(true), spoken)
+    }
+
     // Speech verdicts (SubtitleSync.RATE a second) true over [runs] (ms), over [seconds].
     private fun speech(seconds: Int, vararg runs: LongRange) = BooleanArray(seconds * SubtitleSync.RATE) { i ->
         val ms = i * 1000L / SubtitleSync.RATE
