@@ -50,6 +50,7 @@ import com.hawkynt.mediadroyd.player.PlaybackChain
 import com.hawkynt.mediadroyd.player.PlaybackMath
 import com.hawkynt.mediadroyd.state.SkipFinder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -315,13 +316,27 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 line.copy(startMs = at(line.startMs), endMs = at(line.endMs))
             }
         state.dubStatus = null
-        val speaking = Dub.Speaking(lines, speaker, state.dubTrack)
+        // Spoken at the cues' times at once; once the film's own speech is found (decoding its sound takes a while,
+        // kept for Sync too), every line moved onto the speech it belongs to and spoken again there (Dub.align).
+        val video = session.current.videoPath
+        var speaking = Dub.Speaking(lines, speaker, state.dubTrack)
+        val found = async(Dispatchers.Default) { state.speechFor(video) { platform.speech(video) } }
+        var aligned = false
         try {
             while (true) {
-                withContext(Dispatchers.Default) { speaking.ahead(state.positionMs) }
+                if (!aligned && found.isCompleted) {
+                    aligned = true
+                    found.await()?.let { speech ->
+                        state.dubTrack.clear()
+                        speaking = Dub.Speaking(Dub.align(lines, speech), speaker, state.dubTrack)
+                    }
+                }
+                val current = speaking
+                withContext(Dispatchers.Default) { current.ahead(state.positionMs) }
                 delay(DUB_PACE_MS)
             }
         } finally {
+            found.cancel()
             speaker.close()
         }
     }
@@ -641,6 +656,8 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 dubbing = state.dubbing,
                 onDubbing = { state.dubbing = it },
                 onVoice = { voice -> state.chooseDubVoice(voice.id) },
+                original = state.dubOriginal,
+                onOriginal = state::chooseDubOriginal,
                 dubStatus = state.dubStatus,
             )
             SleepChoice(state.session, ::monotonicMs)

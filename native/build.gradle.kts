@@ -192,6 +192,41 @@ tasks.register<SourceRelease>("espeakSource") {
     outputDir.set(espeakRoot)
 }
 
+// espeak-ng's phoneme tables and dictionaries made on this machine (they are the same on every system), for the app to
+// carry as assets in its -Pespeak builds: ./gradlew :native:espeakData → native/build/espeak-data/espeak-ng-data.
+val espeakDataDir = layout.buildDirectory.dir("espeak-data")
+extra["espeakDataDir"] = espeakDataDir
+tasks.register("espeakData") {
+    group = "build"
+    description = "Builds espeak-ng's data for the app's -Pespeak builds"
+    dependsOn("espeakSource")
+    inputs.dir(espeakRoot)
+    outputs.dir(espeakDataDir)
+    val source = espeakRoot
+    val out = espeakDataDir
+    val work = layout.buildDirectory.dir("espeak-data-cmake")
+    doLast {
+        val cmake = cmake()
+        fun run(vararg args: String) {
+            val started = ProcessBuilder(cmake, *args).redirectErrorStream(true).start()
+            started.outputStream.close()
+            started.inputStream.bufferedReader().forEachLine { println(it) }
+            check(started.waitFor() == 0) { "cmake ${args.joinToString(" ")} failed" }
+        }
+        // espeak-ng compiles its data into its own build folder; that folder's path must stay short (160 characters
+        // with the data's own names on Linux), so the folder sits right under build/.
+        val build = work.get().asFile.path
+        run(
+            "-S", source.get().asFile.path, "-B", build, "-DCMAKE_BUILD_TYPE=Release", "-DUSE_MBROLA=OFF",
+            "-DUSE_LIBSONIC=OFF", "-DUSE_LIBPCAUDIO=OFF", "-DUSE_ASYNC=OFF", "-DESPEAK_BUILD_MANPAGES=OFF",
+        )
+        run("--build", build, "--target", "data", "--parallel", Runtime.getRuntime().availableProcessors().toString())
+        val target = File(out.get().asFile, "espeak-ng-data")
+        target.deleteRecursively()
+        File(build, "espeak-ng-data").copyRecursively(target)
+    }
+}
+
 // The desktop this build runs on, as the library is named for it: linux-x64, linux-arm64 or windows-x64.
 val hostSystem = if (System.getProperty("os.name").startsWith("Windows")) "windows" else "linux"
 val hostArch = when (System.getProperty("os.arch")) {

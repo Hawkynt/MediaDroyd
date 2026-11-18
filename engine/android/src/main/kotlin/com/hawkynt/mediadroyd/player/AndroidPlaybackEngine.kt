@@ -249,6 +249,7 @@ class AndroidPlaybackEngine(
                                         { tuning.voiceBoostDb },
                                         { tuning.equalizerPreampDb },
                                         { tuning.equalizerBandsDb },
+                                        { tuning.voiceOver },
                                     ),
                                 ),
                             )

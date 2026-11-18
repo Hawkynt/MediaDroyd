@@ -72,10 +72,10 @@ class DubTest {
     @Test
     fun `under a spoken line stereo's middle steps back, the sides and the rest stay`() {
         val frames = rate * 2
-        // A centred voice (mid) at 300 Hz and a side sound (L − R) at 2 kHz, two seconds.
+        // A centred voice (mid) at 900 Hz and a side sound (L − R) at 2 kHz, two seconds.
         val input = ShortArray(frames * 2) { i ->
             val t = (i / 2).toDouble() / rate
-            val mid = 6000 * sin(2 * PI * 300 * t)
+            val mid = 6000 * sin(2 * PI * 900 * t)
             val side = 3000 * sin(2 * PI * 2000 * t)
             (if (i % 2 == 0) mid + side else mid - side).toInt().toShort()
         }
@@ -95,7 +95,7 @@ class DubTest {
         }
         val during = (rate * 0.7).toInt() until (rate * 1.3).toInt()
         assertEquals(Dub.DUCK.toDouble(), mid(out, during.first, during.last) / mid(input, during.first, during.last),
-            0.02)
+            0.1)
         assertEquals(1.0, side(out, during.first, during.last) / side(input, during.first, during.last), 0.01)
         val before = 0 until (rate * 0.4).toInt()
         assertEquals(1.0, mid(out, before.first, before.last) / mid(input, before.first, before.last), 0.01)
@@ -161,5 +161,69 @@ class DubTest {
         assertTrue(track.voiceAt(1000, 1000, voice))
         assertEquals(0.5f * 32_767, voice[0], 1f)
         assertEquals(1, speaking.ahead(30_000))
+    }
+
+    // Speech verdicts (SubtitleSync.RATE a second) true over [runs] (ms), over [seconds].
+    private fun speech(seconds: Int, vararg runs: LongRange) = BooleanArray(seconds * SubtitleSync.RATE) { i ->
+        val ms = i * 1000L / SubtitleSync.RATE
+        runs.any { ms in it }
+    }
+
+    @Test
+    fun `a line is moved onto the speech it belongs to, from its first word to its last`() {
+        // The cue says 10.0 … 12.5 s; the actor speaks 10.4 … 11.9 s.
+        val lines = listOf(Dub.Line(10_000, 12_500, "Where were you?"), Dub.Line(20_000, 21_000, "Here."))
+        val aligned = Dub.align(lines, speech(30, 10_400L..11_900L, 20_100L..20_800L))
+        assertEquals(10_400.0, aligned[0].startMs.toDouble(), 10.0)
+        assertEquals(11_900.0, aligned[0].endMs.toDouble(), 20.0)
+        assertEquals(20_100.0, aligned[1].startMs.toDouble(), 10.0)
+        // No speech near a cue: it keeps its own times.
+        val alone = Dub.align(listOf(Dub.Line(5000, 6000, "Hm.")), speech(30, 20_000L..21_000L))
+        assertEquals(5000L, alone[0].startMs)
+    }
+
+    @Test
+    fun `a line fits into the speech it replaces, not past the next line`() {
+        val speaker = FakeSpeaker()
+        // 10 letters, 1.3 s at its pace; the original speech it replaces lasted 1.0 s, the next line is far off.
+        val fitted = requireNotNull(Dub.fit(Dub.Line(0, 1000, "abcdefghij", spokenMs = 1000), speaker, 9000))
+        assertTrue("${fitted.size} ms", fitted.size <= 1100)
+    }
+
+    @Test
+    fun `muted, the whole original sound goes quiet under a line`() {
+        val frames = rate
+        val input = ShortArray(frames * 2) { 4000 }
+        val track = Dub.Track().apply { add(200, FloatArray(rate / 2) { 0f }, rate) }
+        val out = input.copyOf()
+        Dub.Mixer(rate, 2, Dub.Original.MUTE).process(out, 0, frames, 0L, track)
+        val inside = (rate * 0.4).toInt()
+        assertEquals(0, out[inside * 2].toInt())
+        assertEquals(4000, out[(rate * 0.1).toInt() * 2].toInt())
+    }
+
+    @Test
+    fun `lowered, stereo loses the speech band of its middle and keeps its bass`() {
+        val frames = rate * 2
+        // A centred 1 kHz voice and a centred 60 Hz bass.
+        val input = ShortArray(frames * 2) { i ->
+            val t = (i / 2).toDouble() / rate
+            (5000 * sin(2 * PI * 1000 * t) + 5000 * sin(2 * PI * 60 * t)).toInt().toShort()
+        }
+        val track = Dub.Track().apply { add(0, FloatArray(frames) { 0f }, rate) }
+        val out = input.copyOf()
+        Dub.Mixer(rate, 2).process(out, 0, frames, 0L, track)
+        // What is left: the bass alone, near enough; a 1 kHz voice mostly gone.
+        val from = rate
+        var bass = 0.0
+        var left = 0.0
+        for (f in from until frames) {
+            val t = f.toDouble() / rate
+            val b = 5000 * sin(2 * PI * 60 * t)
+            bass += b * b
+            val residual = out[f * 2] - b
+            left += residual * residual
+        }
+        assertTrue("residual ${sqrt(left / bass)}", sqrt(left / bass) < 0.35)
     }
 }

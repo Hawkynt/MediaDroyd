@@ -28,14 +28,63 @@ object Dub {
     /** A cue's spoken part: its [text], who says it where the cue names them ([speaker]), and its [delivery]. */
     data class Cleaned(val text: String, val speaker: String? = null, val delivery: Delivery = Delivery())
 
-    /** One line to speak: from [startMs] to [endMs], [text] by [speaker] with [delivery]. */
+    /**
+     * One line to speak: from [startMs] to [endMs], [text] by [speaker] with [delivery]; [spokenMs] how long the film's
+     * own speech it replaces lasted, where [align] found it (its spoken line is fitted into that).
+     */
     data class Line(
         val startMs: Long,
         val endMs: Long,
         val text: String,
         val speaker: String? = null,
         val delivery: Delivery = Delivery(),
+        val spokenMs: Long? = null,
     )
+
+    /** How far from its cue a line's speech is looked for. */
+    const val ALIGN_MS = 700L
+
+    /** How much longer than the speech it replaces a spoken line may run, before the next line allows no more. */
+    private const val OVERRUN = 1.1
+
+    /**
+     * [lines] moved onto the film's own speech ([speech]: SubtitleSync.Speech's verdicts, SubtitleSync.RATE a second):
+     * each from the first word to the last of the speech in its cue — speech starting up to [ALIGN_MS] before it or
+     * running on up to as long after it — never back into the line before; a line with no speech near it keeps its
+     * cue's times. So a dubbed line starts where the actor's did and lasts as long ([Line.spokenMs]).
+     */
+    fun align(lines: List<Line>, speech: BooleanArray): List<Line> {
+        val step = 1000L / SubtitleSync.RATE
+        fun spoken(ms: Long) = (ms / step).toInt().let { it in speech.indices && speech[it] }
+        val out = ArrayList<Line>(lines.size)
+        var floor = 0L
+        for (line in lines) {
+            val from = maxOf(floor, line.startMs - ALIGN_MS)
+            val to = line.endMs + ALIGN_MS
+            // The speech runs inside the cue, or reaching into it from just before or after.
+            var first = -1L
+            var last = -1L
+            var ms = from
+            while (ms <= to) {
+                if (spoken(ms)) {
+                    var end = ms
+                    while (end + step <= to && spoken(end + step)) end += step
+                    val overlaps = end >= line.startMs - ALIGN_MS && ms <= line.endMs
+                    if (overlaps) {
+                        if (first < 0) first = ms
+                        last = end + step
+                    }
+                    ms = end + step
+                } else {
+                    ms += step
+                }
+            }
+            val moved = if (first < 0) line else line.copy(startMs = first, endMs = last, spokenMs = last - first)
+            out += moved
+            floor = moved.endMs
+        }
+        return out
+    }
 
     private val TIMED = Regex(
         """(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{3})\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{3})""",
@@ -153,7 +202,9 @@ object Dub {
     fun fit(line: Line, speaker: LineSpeaker, nextStartMs: Long?, voice: Int = 0): FloatArray? {
         var scale = 1f / line.delivery.rate
         var spoken = speaker.speak(line.text, scale, voice) ?: return null
-        val room = nextStartMs?.let { it - line.startMs }
+        val beforeNext = nextStartMs?.let { it - line.startMs }
+        val asLong = line.spokenMs?.let { (it * OVERRUN).toLong() }
+        val room = listOfNotNull(beforeNext, asLong).minOrNull()
         repeat(FIT_TRIES - 1) {
             val ms = spoken.size * 1000L / speaker.sampleRate
             if (room == null || ms <= room || scale <= 1f / MAX_SPEED + 1e-4f) return@repeat
@@ -251,45 +302,70 @@ object Dub {
         }
     }
 
+    /** What becomes of the film's own sound under a spoken line. */
+    enum class Original {
+        /**
+         * Its voices stepped back: a 5.1 file's centre channel (where films put the dialogue) to [DUCK], in stereo the
+         * speech band (200 Hz … 4 kHz) of its middle — the bass, the highs and the sides staying as they were.
+         */
+        LOWER,
+
+        /** All of it silent while a line speaks. */
+        MUTE,
+    }
+
     /**
      * The spoken lines of a [Track] mixed into the film's sound (interleaved 16-bit, [channels] at [rate]): while a
-     * line speaks the dialogue steps back to [DUCK] over [RAMP_MS] — a file's centre channel where its channels arrive
-     * unmixed (3, 5.1, 7.1: front left, front right, centre, …), else stereo's middle, (L + R) / 2, the sides staying —
-     * and the voice goes where the dialogue was. Near full scale a soft knee bends the peaks.
+     * line speaks the original steps back as [original] says, over [RAMP_MS] either way, and the voice goes where the
+     * dialogue was — the centre channel where a file's channels arrive unmixed (3, 5.1, 7.1: front left, front right,
+     * centre, …), else the middle of both. Near full scale a soft knee bends the peaks.
      */
-    class Mixer(private val rate: Int, channels: Int) {
+    class Mixer(private val rate: Int, channels: Int, private val original: Original = Original.LOWER) {
         private val channels = channels.coerceAtLeast(1)
         private val step = 1f / (rate * RAMP_MS / 1000f)
         private var gain = 1f
         private var voice = FloatArray(0)
         private var speaking = BooleanArray(0)
+        private val centred = channels == 3 || channels >= 5
+
+        // Stereo's speech band, kept running so a line starting finds them settled.
+        private val highPass = Biquad.highPass(rate, VoiceBoost.LOW_HZ)
+        private val lowPass = Biquad.lowPass(rate, VoiceBoost.HIGH_HZ)
+        private val banded = original == Original.LOWER && !centred && this.channels >= 2
 
         /** Mixes [track] into [frames] frames of [samples] from [offset], the first of them at [ptsMs]. */
         fun process(samples: ShortArray, offset: Int, frames: Int, ptsMs: Long, track: Track) {
             if (frames <= 0) return
-            if (voice.size < frames) {
+            if (voice.size != frames) {
                 voice = FloatArray(frames)
                 speaking = BooleanArray(frames)
             }
-            val v = if (voice.size == frames) voice else FloatArray(frames)
-            val s = if (speaking.size == frames) speaking else BooleanArray(frames)
-            val any = track.voiceAt(ptsMs, rate, v, s)
-            if (!any && gain == 1f) return
+            val any = track.voiceAt(ptsMs, rate, voice, speaking)
+            if (!any && gain == 1f && !banded) return
+            val floor = if (original == Original.MUTE) 0f else DUCK
             for (f in 0 until frames) {
-                val target = if (s[f]) DUCK else 1f
+                val target = if (speaking[f]) floor else 1f
                 gain = if (gain < target) minOf(target, gain + step) else maxOf(target, gain - step)
                 val at = offset + f * channels
+                val v = voice[f]
                 when {
-                    channels == 1 -> samples[at] = SoftKnee.apply(samples[at] * gain + v[f])
-                    channels == 3 || channels >= 5 -> samples[at + CENTRE] =
-                        SoftKnee.apply(samples[at + CENTRE] * gain + v[f])
+                    original == Original.MUTE -> {
+                        for (c in 0 until channels) {
+                            val spoken = if (channels == 1 || (centred && c == CENTRE) || (!centred && c < 2)) v else 0f
+                            samples[at + c] = SoftKnee.apply(samples[at + c] * gain + spoken)
+                        }
+                    }
+                    channels == 1 -> samples[at] = SoftKnee.apply(samples[at] * gain + v)
+                    centred -> samples[at + CENTRE] = SoftKnee.apply(samples[at + CENTRE] * gain + v)
                     else -> {
                         val l = samples[at].toFloat()
                         val r = samples[at + 1].toFloat()
-                        val mid = (l + r) / 2 * gain + v[f]
+                        val mid = (l + r) / 2
+                        val band = lowPass.next(highPass.next(mid))
+                        val out = mid - band * (1 - gain) + v
                         val side = (l - r) / 2
-                        samples[at] = SoftKnee.apply(mid + side)
-                        samples[at + 1] = SoftKnee.apply(mid - side)
+                        samples[at] = SoftKnee.apply(out + side)
+                        samples[at + 1] = SoftKnee.apply(out - side)
                     }
                 }
             }

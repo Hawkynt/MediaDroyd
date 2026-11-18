@@ -239,6 +239,8 @@ fun SubtitleLookRows(
     onDubbing: (Boolean) -> Unit = {},
     onVoice: (com.hawkynt.mediadroyd.player.PiperVoices.Entry) -> Unit = {},
     dubStatus: String? = null,
+    original: com.hawkynt.mediadroyd.player.Dub.Original = com.hawkynt.mediadroyd.player.Dub.Original.LOWER,
+    onOriginal: (com.hawkynt.mediadroyd.player.Dub.Original) -> Unit = {},
 ) {
     PanelTitle("Subtitles")
     fun changeLook(changed: com.hawkynt.mediadroyd.player.SubtitleLook) = onLook(changed)
@@ -313,6 +315,20 @@ fun SubtitleLookRows(
                         label = { Text("${entry.label} · ${entry.language}", fontSize = 15.sp) },
                     )
                 }
+            }
+            Text("The film's own voices while a line speaks", fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(
+                    selected = original == com.hawkynt.mediadroyd.player.Dub.Original.LOWER,
+                    onClick = { onOriginal(com.hawkynt.mediadroyd.player.Dub.Original.LOWER) },
+                    label = { Text("Taken out", fontSize = 15.sp) },
+                )
+                FilterChip(
+                    selected = original == com.hawkynt.mediadroyd.player.Dub.Original.MUTE,
+                    onClick = { onOriginal(com.hawkynt.mediadroyd.player.Dub.Original.MUTE) },
+                    label = { Text("All sound muted", fontSize = 15.sp) },
+                )
             }
             voice?.let {
                 Text(

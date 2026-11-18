@@ -1108,6 +1108,18 @@ fun PhonePlayer(
         // Where the sound speaks, for Sync: the app's FFmpeg decoding the whole sound (SpeechReads).
         override fun speech(location: String) = com.hawkynt.mediadroyd.data.SpeechReads.of(context, location)
 
+        // Spoken subtitles (#531): Piper's voices on ONNX Runtime; espeak-ng in builds for one's own phones.
+        override val espeak get() = com.hawkynt.mediadroyd.data.AndroidVoices.espeak
+
+        override fun voiceReady(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
+            com.hawkynt.mediadroyd.data.ModelStore.ready(context, voice.download)
+
+        override fun fetchVoice(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry, progress: (Float) -> Unit) =
+            com.hawkynt.mediadroyd.data.ModelStore.fetch(context, voice.download, progress)
+
+        override fun speaker(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
+            com.hawkynt.mediadroyd.data.AndroidVoices.speaker(context, voice)
+
         // Media3's own controls take play, pause and seeking; a remote's keys reach them.
         override val commands = PHONE_COMMANDS
         override val subtitlesByTrack = false

@@ -76,6 +76,19 @@ class PlayerScreenState(
     var dubVoiceId by mutableStateOf(store.data.settings.dubVoice)
         private set
 
+    /** What becomes of the film's own sound under a spoken line (Dub.Original), the household's. */
+    var dubOriginal by mutableStateOf(
+        runCatching { com.hawkynt.mediadroyd.player.Dub.Original.valueOf(store.data.settings.dubOriginal) }
+            .getOrDefault(com.hawkynt.mediadroyd.player.Dub.Original.LOWER),
+    )
+        private set
+
+    fun chooseDubOriginal(original: com.hawkynt.mediadroyd.player.Dub.Original) {
+        dubOriginal = original
+        store.data.settings.dubOriginal = original.name
+        store.save()
+    }
+
     /** Speaks the subtitles in the voice [id] from now on, for every video. */
     fun chooseDubVoice(id: String) {
         dubVoiceId = id
@@ -85,14 +98,18 @@ class PlayerScreenState(
 
     /** The spoken lines, at the film's time, for the engine to mix in (PlaybackTuning.voiceOver). */
     val dubTrack = com.hawkynt.mediadroyd.player.Dub.Track()
-    private val dubMixers = HashMap<Pair<Int, Int>, com.hawkynt.mediadroyd.player.Dub.Mixer>()
+    private val dubMixers =
+        HashMap<Triple<Int, Int, com.hawkynt.mediadroyd.player.Dub.Original>, com.hawkynt.mediadroyd.player.Dub.Mixer>()
 
     /** What the engines mix in while [dubbing]: the track, through a mixer per rate and channels. */
     val voiceOver: com.hawkynt.mediadroyd.engine.VoiceOver? get() = if (!dubbing) null else dubVoiceOver
 
     private val dubVoiceOver = com.hawkynt.mediadroyd.engine.VoiceOver { samples, offset, frames, channels, rate, at ->
         val mixer = synchronized(dubMixers) {
-            dubMixers.getOrPut(rate to channels) { com.hawkynt.mediadroyd.player.Dub.Mixer(rate, channels) }
+            val original = dubOriginal
+            dubMixers.getOrPut(Triple(rate, channels, original)) {
+                com.hawkynt.mediadroyd.player.Dub.Mixer(rate, channels, original)
+            }
         }
         mixer.process(samples, offset, frames, at, dubTrack)
     }

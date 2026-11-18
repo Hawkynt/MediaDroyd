@@ -701,13 +701,7 @@ fun DesktopPlayer(
 
         override fun speaker(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry):
             com.hawkynt.mediadroyd.player.Dub.LineSpeaker? = runCatching {
-            val piper = com.hawkynt.mediadroyd.engine.desktop.PiperSpeaker(neural.folder(voice.download), voice)
-            object : com.hawkynt.mediadroyd.player.Dub.LineSpeaker {
-                override val sampleRate = piper.voice.sampleRate
-                override fun speak(text: String, lengthScale: Float, speaker: Int) =
-                    piper.speak(text, lengthScale, speaker)
-                override fun close() = piper.close()
-            }
+            com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.speaker(neural.folder(voice.download), voice)
         }.getOrNull()
 
         // Where the sound speaks, for Sync: FFmpeg decoding the whole sound (SpeechReads).

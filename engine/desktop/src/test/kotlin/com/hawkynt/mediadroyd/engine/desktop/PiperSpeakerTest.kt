@@ -22,9 +22,9 @@ class PiperSpeakerTest {
         val entry = requireNotNull(PiperVoices.of("de_DE-thorsten-medium"))
         val dir = File(models, entry.download.folder)
         if (!ModelFolder.ready(dir, entry.download)) assertTrue("not fetched", ModelFolder.fetch(dir, entry.download, {}))
-        PiperSpeaker(dir, entry).use { speaker ->
+        EspeakLibrary.speaker(dir, entry).use { speaker ->
             assertEquals("vˌoː vɑːɾst duː ɡˈɛstɜn ˈɑːbənt?", speaker.phonemes("Wo warst du gestern Abend?"))
-            val line = requireNotNull(speaker.speak("Wo warst du gestern Abend?"))
+            val line = requireNotNull(speaker.speak("Wo warst du gestern Abend?", 1f))
             val seconds = line.size / speaker.voice.sampleRate.toDouble()
             assertTrue("$seconds s", seconds in 1.0..3.0)
             val rms = sqrt(line.sumOf { (it * it).toDouble() } / line.size)

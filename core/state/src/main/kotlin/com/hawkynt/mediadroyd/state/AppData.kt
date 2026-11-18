@@ -164,6 +164,7 @@ data class Settings(
     var loudness: Float = 0f,                 // dB, -12..12
     var voices: Float = 0f,                   // dB the dialogue is raised by, 0..12 (VoiceBoost, #452)
     var dubVoice: String = "",               // the voice subtitles are spoken in (PiperVoices id), "" none chosen
+    var dubOriginal: String = "LOWER",       // Dub.Original name: the film's voices lowered, or all muted
     var equalizer: EqualizerSetting = EqualizerSetting(), // the household's, where an output keeps none (#451)
     var evenLoudness: Boolean = false,        // every file at the same loudness: ReplayGain, else measured (R128)
     var matchRefreshRate: Boolean = false,    // TV boxes: switch the display to a multiple of the film's frame rate
