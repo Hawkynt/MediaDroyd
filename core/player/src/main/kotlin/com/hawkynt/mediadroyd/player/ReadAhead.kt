@@ -106,7 +106,8 @@ class ReadAhead<T>(
      */
     fun cursor(fromMs: Long, streams: Set<Int>? = null, holds: Boolean = false): Cursor<T> = synchronized(lock) {
         val index = entries.indexOfFirst { it.ms >= fromMs && (streams == null || it.stream in streams) }
-        Cursor(this, streams, holds, if (index < 0) base + entries.size else base + index, fromMs).also { cursors += it }
+        val place = if (index < 0) base + entries.size else base + index
+        Cursor(this, streams, holds, place, fromMs).also { cursors += it }
     }
 
     /** One reader of the packets: playback's, or a tap's. */

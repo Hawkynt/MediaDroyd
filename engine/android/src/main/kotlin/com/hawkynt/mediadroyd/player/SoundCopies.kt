@@ -151,7 +151,8 @@ object SoundCopies {
             val end = length - offset
             val start = end - size
             if (start >= 0 && size > 0) {
-                track.samples.offer(Sample(pending.copyOfRange(start, end), timeUs), timeUs / 1000, size, track.id, true)
+                val sample = Sample(pending.copyOfRange(start, end), timeUs)
+                track.samples.offer(sample, timeUs / 1000, size, track.id, key = true)
             }
             System.arraycopy(pending, end.coerceAtLeast(0), pending, 0, offset.coerceAtMost(length))
             length = offset.coerceAtMost(length)

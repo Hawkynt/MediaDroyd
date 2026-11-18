@@ -10,7 +10,8 @@ class ReadAheadTest {
 
     // A film's packets: a picture every 40 ms (stream 0, a key frame every second), a sound every 32 ms (stream 1).
     private fun film(untilMs: Long): List<Triple<String, Long, Int>> =
-        ((0 until untilMs step 40).map { Triple("v$it", it, 0) } + (0 until untilMs step 32).map { Triple("a$it", it, 1) })
+        ((0 until untilMs step 40).map { Triple("v$it", it, 0) } +
+            (0 until untilMs step 32).map { Triple("a$it", it, 1) })
             .sortedWith(compareBy({ it.second }, { it.third }))
 
     private fun buffer(aheadMs: Long = 60_000, maxBytes: Long = Long.MAX_VALUE, behindMs: Long = 5_000) =
