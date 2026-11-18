@@ -163,6 +163,19 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
         save()
     }
 
+    /** The equalizer of the audio output [outputKey]: the one the gear set for it, else the household's (#451). */
+    fun equalizerFor(outputKey: String): EqualizerSetting = data.equalizers[outputKey] ?: data.settings.equalizer
+
+    /** Keeps [setting] for the audio output [outputKey]; the household's own is kept as none of its own. */
+    fun saveEqualizer(outputKey: String, setting: EqualizerSetting) {
+        if (setting == data.settings.equalizer) {
+            data.equalizers.remove(outputKey)
+        } else {
+            data.equalizers[outputKey] = setting
+        }
+        save()
+    }
+
     /** The order the [section]'s wall was last sorted by; A–Z until one is chosen. */
     fun sortFor(section: LibrarySection): SortOrder =
         data.sorts[section.name]?.let { name -> SortOrder.entries.firstOrNull { it.name == name } } ?: SortOrder.TITLE

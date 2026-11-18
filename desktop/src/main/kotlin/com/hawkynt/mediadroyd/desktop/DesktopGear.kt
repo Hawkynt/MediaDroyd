@@ -42,7 +42,7 @@ val DesktopNeuralModels: (PictureAdjustment.Upscaler) -> Boolean = DesktopNeural
 fun trackName(track: Track): String? =
     track.label?.takeIf { it.isNotBlank() } ?: track.language?.let(Languages::label)
 
-/** Loudness, even loudness, night mode and the audio delay of this computer's output, worded as on Android. */
+/** Loudness, even loudness, night mode, the equalizer and the audio delay of this computer's output, as on Android. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ColumnScope.DesktopSoundRows(
@@ -68,6 +68,9 @@ fun ColumnScope.DesktopSoundRows(
         sound.evenLoudness,
     ) { onSound(sound.copy(evenLoudness = it)) }
     SwitchRow("Night mode", "Quiet dialogue comes up, loud scenes come down.", nightMode, onNightMode)
+    PanelTitle("Equalizer")
+    com.hawkynt.mediadroyd.ui.EqualizerControls(sound.equalizer, { onSound(sound.copy(equalizer = it)) })
+    Hint("Kept for this computer's output; Settings sets the household's.")
     PanelTitle("Audio delay")
     fun nudge(steps: Int) = onSound(sound.copy(audioDelayMs = PlaybackMath.nudgeAudioDelay(sound.audioDelayMs, steps)))
     // Wraps rather than squeezes: a button pressed narrower than its word shows it a letter a line.

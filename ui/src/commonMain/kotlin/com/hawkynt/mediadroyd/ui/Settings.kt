@@ -324,6 +324,15 @@ fun SettingsScreen(
             valueText = if (settings.voices < 0.5f) "off" else "+${kotlin.math.round(settings.voices).toInt()} dB",
             onValueChange = { v -> update { it.voices = kotlin.math.round(v) } },
         )
+        // The equalizer (#451): the household's; the gear changes it for the output playing, which keeps that.
+        Spacer(Modifier.height(8.dp))
+        Text("Equalizer", fontSize = 18.sp)
+        Text(
+            "Every output plays this until the gear changes it for that output — the speaker, a headset.",
+            fontSize = 15.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        EqualizerControls(settings.equalizer, { e -> update { it.equalizer = e } })
         SwitchRow(
             label = "Even loudness",
             detail = "Every film and song plays about as loud as the last: by its ReplayGain tags where it has them, " +

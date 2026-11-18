@@ -464,6 +464,15 @@ class DesktopPlaybackEngineTest {
     }
 
     @Test
+    fun `the equalizer's preamp and bands reach the sound on its way to the output (#451)`() {
+        val untouched = decodedPeak(clip)
+        val raised = playedPeak(clip, PlaybackTuning.Mutable().apply { equalizerPreampDb = 6f })
+        assertTrue("$raised against $untouched", raised > untouched * 16 / 10)
+        val lowered = playedPeak(clip, PlaybackTuning.Mutable().apply { equalizerBandsDb = List(10) { -12f } })
+        assertTrue("$lowered against $untouched", lowered < untouched * 6 / 10)
+    }
+
+    @Test
     fun `with even loudness a file plays at its ReplayGain`() {
         val tagged = fixture("replaygain.flac")
         val untouched = decodedPeak(tagged)
