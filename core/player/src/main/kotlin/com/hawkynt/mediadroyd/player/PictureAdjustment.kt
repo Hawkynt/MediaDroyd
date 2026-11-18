@@ -97,6 +97,12 @@ data class PictureAdjustment(
     val dotCrawl: Float = 0f,
     /** The colour system of a composite capture, which the dot-crawl comb follows ([ColourSystem]): this video's. */
     val colourSystem: ColourSystem = ColourSystem.AUTO,
+    /** Hue in degrees, −180 … 180: the colour turned round the grey axis (ColourBalance, #447). */
+    val hue: Float = 0f,
+    /** Tint, −1 (green) … 1 (magenta): the white moved across the daylight locus. */
+    val tint: Float = 0f,
+    /** Colour temperature in kelvin, 4000 (warm) … 10000 (cold): the white D65 is shown as; 6504 leaves it. */
+    val temperature: Float = ColourBalance.D65_KELVIN,
 ) {
     /** The share of plain scaling mixed over the [upscaler]'s picture: 0 at full strength, 1 with it off. */
     val plainShare: Float get() = 1f - upscalerStrength.coerceIn(0f, 1f)
@@ -374,9 +380,10 @@ data class PictureAdjustment(
     /** The film grain [noise] asks for, as an amplitude on the 0..1 scale. */
     val grain: Float get() = noise.coerceIn(0f, 1f) * MAX_GRAIN
 
-    /** No colour correction: brightness, gamma, contrast and saturation all neutral. */
+    /** No colour correction: brightness, gamma, contrast, saturation, hue, tint and temperature all neutral. */
     val isColorNeutral: Boolean
-        get() = brightness == 0f && gamma == 1f && contrast == 1f && saturation == 1f
+        get() = brightness == 0f && gamma == 1f && contrast == 1f && saturation == 1f && hue == 0f && tint == 0f &&
+            temperature == ColourBalance.D65_KELVIN
 
     /**
      * Something is set that the GL stage runs (see the app's VideoFilterStage) — the colour correction too: the
@@ -391,12 +398,17 @@ data class PictureAdjustment(
             colorize != Colorize.OFF ||
             !isColorNeutral
 
-    /** The correction as a GPU shader applies it: saturation, contrast, brightness, then the true gamma curve. */
-    data class ShaderUniforms(
+    /**
+     * The correction as a GPU shader applies it: the [white] matrix on linear light (temperature and tint; null leaves
+     * it), the [hue] matrix, saturation, contrast, brightness, then the true gamma curve. Matrices row-major.
+     */
+    class ShaderUniforms(
         val brightness: Float,
         val contrast: Float,
         val saturation: Float,
         val inverseGamma: Float,
+        val white: FloatArray? = null,
+        val hue: FloatArray = ColourBalance.hueMatrix(0f),
     )
 
     fun shaderUniforms(): ShaderUniforms = ShaderUniforms(
@@ -404,6 +416,12 @@ data class PictureAdjustment(
         contrast = contrast,
         saturation = saturation,
         inverseGamma = 1f / gamma,
+        white = if (tint == 0f && temperature == ColourBalance.D65_KELVIN) {
+            null
+        } else {
+            ColourBalance.whiteMatrix(temperature, tint)
+        },
+        hue = ColourBalance.hueMatrix(hue),
     )
 
     companion object {

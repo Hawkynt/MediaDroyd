@@ -496,6 +496,9 @@ internal data class PictureSettings(
     val shader: String? = null,
     val temporalDenoise: Float = PictureAdjustment.Neutral.temporalDenoise,
     val dotCrawl: Float = PictureAdjustment.Neutral.dotCrawl,
+    val hue: Float = PictureAdjustment.Neutral.hue,
+    val tint: Float = PictureAdjustment.Neutral.tint,
+    val temperature: Float = PictureAdjustment.Neutral.temperature,
 ) {
     fun toAdjustment(): PictureAdjustment {
         val p = PictureAdjustment.Neutral
@@ -525,6 +528,9 @@ internal data class PictureSettings(
             shader = shader,
             temporalDenoise = temporalDenoise,
             dotCrawl = dotCrawl,
+            hue = hue,
+            tint = tint,
+            temperature = temperature,
         )
     }
 
@@ -553,6 +559,9 @@ internal data class PictureSettings(
             shader = p.shader,
             temporalDenoise = p.temporalDenoise,
             dotCrawl = p.dotCrawl,
+            hue = p.hue,
+            tint = p.tint,
+            temperature = p.temperature,
         )
     }
 }
