@@ -239,7 +239,9 @@ fun SubtitleLookRows(
     onDubbing: (Boolean) -> Unit = {},
     onVoice: (com.hawkynt.mediadroyd.player.PiperVoices.Entry) -> Unit = {},
     dubStatus: String? = null,
-    original: com.hawkynt.mediadroyd.player.Dub.Original = com.hawkynt.mediadroyd.player.Dub.Original.LOWER,
+    original: com.hawkynt.mediadroyd.player.Dub.Original = com.hawkynt.mediadroyd.player.Dub.Original.BAND,
+    /** Whether the sound has a dialogue channel of its own to remove (5.1 and the like). */
+    centreChannel: Boolean = false,
     onOriginal: (com.hawkynt.mediadroyd.player.Dub.Original) -> Unit = {},
 ) {
     PanelTitle("Subtitles")
@@ -319,16 +321,26 @@ fun SubtitleLookRows(
             Text("The film's own voices while a line speaks", fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
             @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(
-                    selected = original == com.hawkynt.mediadroyd.player.Dub.Original.LOWER,
-                    onClick = { onOriginal(com.hawkynt.mediadroyd.player.Dub.Original.LOWER) },
-                    label = { Text("Taken out", fontSize = 15.sp) },
-                )
-                FilterChip(
-                    selected = original == com.hawkynt.mediadroyd.player.Dub.Original.MUTE,
-                    onClick = { onOriginal(com.hawkynt.mediadroyd.player.Dub.Original.MUTE) },
-                    label = { Text("All sound muted", fontSize = 15.sp) },
-                )
+                val choices = buildList {
+                    if (centreChannel) {
+                        add(com.hawkynt.mediadroyd.player.Dub.Original.CHANNEL to "Remove the dialogue channel")
+                    }
+                    add(com.hawkynt.mediadroyd.player.Dub.Original.BAND to "Suppress the voice band")
+                    add(com.hawkynt.mediadroyd.player.Dub.Original.MUTE to "Mute the sound")
+                }
+                // Removing the channel where there is none works as suppressing the band, and shows so.
+                val shown = if (original == com.hawkynt.mediadroyd.player.Dub.Original.CHANNEL && !centreChannel) {
+                    com.hawkynt.mediadroyd.player.Dub.Original.BAND
+                } else {
+                    original
+                }
+                choices.forEach { (choice, label) ->
+                    FilterChip(
+                        selected = shown == choice,
+                        onClick = { onOriginal(choice) },
+                        label = { Text(label, fontSize = 15.sp) },
+                    )
+                }
             }
             voice?.let {
                 Text(

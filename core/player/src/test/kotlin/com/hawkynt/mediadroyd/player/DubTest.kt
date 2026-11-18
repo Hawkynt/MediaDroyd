@@ -94,8 +94,7 @@ class DubTest {
             return sqrt(sum / (b - a))
         }
         val during = (rate * 0.7).toInt() until (rate * 1.3).toInt()
-        assertEquals(Dub.DUCK.toDouble(), mid(out, during.first, during.last) / mid(input, during.first, during.last),
-            0.1)
+        assertEquals(0.0, mid(out, during.first, during.last) / mid(input, during.first, during.last), 0.2)
         assertEquals(1.0, side(out, during.first, during.last) / side(input, during.first, during.last), 0.01)
         val before = 0 until (rate * 0.4).toInt()
         assertEquals(1.0, mid(out, before.first, before.last) / mid(input, before.first, before.last), 0.01)
@@ -109,12 +108,12 @@ class DubTest {
         val voice = FloatArray(rate / 2) { (2000 * sin(2 * PI * 440 * it / rate)).toFloat() }
         val track = Dub.Track().apply { add(250, voice, rate) }
         val out = input.copyOf()
-        Dub.Mixer(rate, channels).process(out, 0, frames, 0L, track)
+        Dub.Mixer(rate, channels, Dub.Original.CHANNEL).process(out, 0, frames, 0L, track)
         val inside = (rate * 0.4).toInt()
-        // The front left keeps its sound, the centre is ducked and the voice added on it.
+        // The front left keeps its sound, the centre is removed and carries the voice instead.
         assertEquals(1000, out[inside * channels].toInt())
         val centre = out[inside * channels + 2].toInt()
-        val expected = 8000 * Dub.DUCK + voice[inside - rate / 4]
+        val expected = voice[inside - rate / 4]
         assertTrue("$centre against $expected", abs(centre - expected) < 2)
     }
 
@@ -225,5 +224,19 @@ class DubTest {
             left += residual * residual
         }
         assertTrue("residual ${sqrt(left / bass)}", sqrt(left / bass) < 0.35)
+    }
+
+    @Test
+    fun `removing the dialogue channel needs one, stereo falls back to the voice band`() {
+        assertTrue(Dub.hasCentre(6) && Dub.hasCentre(8) && Dub.hasCentre(3))
+        assertTrue(!Dub.hasCentre(2) && !Dub.hasCentre(1))
+        val frames = rate
+        val input = ShortArray(frames * 2) { i -> (5000 * sin(2 * PI * 60 * (i / 2).toDouble() / rate)).toInt().toShort() }
+        val track = Dub.Track().apply { add(0, FloatArray(frames) { 0f }, rate) }
+        val out = input.copyOf()
+        Dub.Mixer(rate, 2, Dub.Original.CHANNEL).process(out, 0, frames, 0L, track)
+        // Stereo's bass stays: what "the channel" would have removed is only the voice band here.
+        val f = (rate * 0.8).toInt()
+        assertTrue("${out[f * 2]} against ${input[f * 2]}", abs(out[f * 2] - input[f * 2]) < 800)
     }
 }

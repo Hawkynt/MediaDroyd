@@ -657,6 +657,7 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 onDubbing = { state.dubbing = it },
                 onVoice = { voice -> state.chooseDubVoice(voice.id) },
                 original = state.dubOriginal,
+                centreChannel = com.hawkynt.mediadroyd.player.Dub.hasCentre(state.dubChannels),
                 onOriginal = state::chooseDubOriginal,
                 dubStatus = state.dubStatus,
             )

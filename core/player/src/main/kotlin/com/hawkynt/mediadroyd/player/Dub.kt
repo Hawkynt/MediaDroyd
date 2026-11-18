@@ -9,9 +9,6 @@ package com.hawkynt.mediadroyd.player
  * platforms'.
  */
 object Dub {
-    /** How far the film's own dialogue steps back under a spoken line: to an eighth. */
-    const val DUCK = 0.125f
-
     /** How long the dialogue takes to step back or return. */
     const val RAMP_MS = 50L
 
@@ -305,33 +302,44 @@ object Dub {
     /** What becomes of the film's own sound under a spoken line. */
     enum class Original {
         /**
-         * Its voices stepped back: a 5.1 file's centre channel (where films put the dialogue) to [DUCK], in stereo the
-         * speech band (200 Hz … 4 kHz) of its middle — the bass, the highs and the sides staying as they were.
+         * The dialogue channel removed: a file whose channels arrive unmixed (3, 5.1, 7.1: front left, front right,
+         * centre, …) has its centre channel — where films put the dialogue — silent while a line speaks. Where the
+         * sound has no centre channel it falls back to [BAND].
          */
-        LOWER,
+        CHANNEL,
 
-        /** All of it silent while a line speaks. */
+        /**
+         * The voice band suppressed: the speech band (200 Hz … 4 kHz) taken out of where the dialogue is — the centre
+         * channel, else stereo's middle (L + R), else the one channel — the bass, the highs and the sides staying.
+         */
+        BAND,
+
+        /** All of the film's sound silent while a line speaks. */
         MUTE,
     }
+
+    /** Whether sound of [channels] channels has a centre channel of its own (Original.CHANNEL can remove it). */
+    fun hasCentre(channels: Int): Boolean = channels == 3 || channels >= 5
 
     /**
      * The spoken lines of a [Track] mixed into the film's sound (interleaved 16-bit, [channels] at [rate]): while a
      * line speaks the original steps back as [original] says, over [RAMP_MS] either way, and the voice goes where the
-     * dialogue was — the centre channel where a file's channels arrive unmixed (3, 5.1, 7.1: front left, front right,
-     * centre, …), else the middle of both. Near full scale a soft knee bends the peaks.
+     * dialogue was — the centre channel where there is one, else the middle of both, else the one channel. Near full
+     * scale a soft knee bends the peaks.
      */
-    class Mixer(private val rate: Int, channels: Int, private val original: Original = Original.LOWER) {
+    class Mixer(private val rate: Int, channels: Int, original: Original = Original.BAND) {
         private val channels = channels.coerceAtLeast(1)
+        private val centred = hasCentre(this.channels)
+        private val original = if (original == Original.CHANNEL && !centred) Original.BAND else original
         private val step = 1f / (rate * RAMP_MS / 1000f)
         private var gain = 1f
         private var voice = FloatArray(0)
         private var speaking = BooleanArray(0)
-        private val centred = channels == 3 || channels >= 5
 
-        // Stereo's speech band, kept running so a line starting finds them settled.
+        // The speech band of where the dialogue is, kept running so a line starting finds them settled.
         private val highPass = Biquad.highPass(rate, VoiceBoost.LOW_HZ)
         private val lowPass = Biquad.lowPass(rate, VoiceBoost.HIGH_HZ)
-        private val banded = original == Original.LOWER && !centred && this.channels >= 2
+        private val banded = this.original == Original.BAND
 
         /** Mixes [track] into [frames] frames of [samples] from [offset], the first of them at [ptsMs]. */
         fun process(samples: ShortArray, offset: Int, frames: Int, ptsMs: Long, track: Track) {
@@ -342,21 +350,24 @@ object Dub {
             }
             val any = track.voiceAt(ptsMs, rate, voice, speaking)
             if (!any && gain == 1f && !banded) return
-            val floor = if (original == Original.MUTE) 0f else DUCK
             for (f in 0 until frames) {
-                val target = if (speaking[f]) floor else 1f
+                val target = if (speaking[f]) 0f else 1f
                 gain = if (gain < target) minOf(target, gain + step) else maxOf(target, gain - step)
                 val at = offset + f * channels
                 val v = voice[f]
                 when {
-                    original == Original.MUTE -> {
-                        for (c in 0 until channels) {
-                            val spoken = if (channels == 1 || (centred && c == CENTRE) || (!centred && c < 2)) v else 0f
-                            samples[at + c] = SoftKnee.apply(samples[at + c] * gain + spoken)
-                        }
+                    original == Original.MUTE -> for (c in 0 until channels) {
+                        val spoken = if (channels == 1 || (centred && c == CENTRE) || (!centred && c < 2)) v else 0f
+                        samples[at + c] = SoftKnee.apply(samples[at + c] * gain + spoken)
                     }
-                    channels == 1 -> samples[at] = SoftKnee.apply(samples[at] * gain + v)
-                    centred -> samples[at + CENTRE] = SoftKnee.apply(samples[at + CENTRE] * gain + v)
+                    original == Original.CHANNEL ->
+                        samples[at + CENTRE] = SoftKnee.apply(samples[at + CENTRE] * gain + v)
+                    centred || channels == 1 -> {
+                        val c = if (centred) CENTRE else 0
+                        val x = samples[at + c].toFloat()
+                        val band = lowPass.next(highPass.next(x))
+                        samples[at + c] = SoftKnee.apply(x - band * (1 - gain) + v)
+                    }
                     else -> {
                         val l = samples[at].toFloat()
                         val r = samples[at + 1].toFloat()

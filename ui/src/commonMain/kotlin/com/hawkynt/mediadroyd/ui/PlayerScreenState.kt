@@ -79,7 +79,7 @@ class PlayerScreenState(
     /** What becomes of the film's own sound under a spoken line (Dub.Original), the household's. */
     var dubOriginal by mutableStateOf(
         runCatching { com.hawkynt.mediadroyd.player.Dub.Original.valueOf(store.data.settings.dubOriginal) }
-            .getOrDefault(com.hawkynt.mediadroyd.player.Dub.Original.LOWER),
+            .getOrDefault(com.hawkynt.mediadroyd.player.Dub.Original.BAND),
     )
         private set
 
@@ -104,7 +104,12 @@ class PlayerScreenState(
     /** What the engines mix in while [dubbing]: the track, through a mixer per rate and channels. */
     val voiceOver: com.hawkynt.mediadroyd.engine.VoiceOver? get() = if (!dubbing) null else dubVoiceOver
 
+    /** How many channels the sound reaches the voice-over with: a centre channel to remove only from 3 on. */
+    var dubChannels by mutableStateOf(0)
+        private set
+
     private val dubVoiceOver = com.hawkynt.mediadroyd.engine.VoiceOver { samples, offset, frames, channels, rate, at ->
+        if (channels != dubChannels) dubChannels = channels
         val mixer = synchronized(dubMixers) {
             val original = dubOriginal
             dubMixers.getOrPut(Triple(rate, channels, original)) {
