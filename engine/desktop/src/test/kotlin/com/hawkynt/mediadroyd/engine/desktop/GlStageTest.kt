@@ -202,17 +202,29 @@ class GlStageTest {
 
     @Test
     fun `blending High shows the two pictures mixed by the clock, Low only around the middle`() {
-        val a = flat(0, 40)
-        val b = flat(40, 200)
+        // Two levels close enough to be one scene (a step of 8 % is no cut; SceneCuts).
+        val a = flat(0, 100)
+        val b = flat(40, 120)
         val high = PictureAdjustment(interpolation = PictureAdjustment.Interpolation.HIGH)
         fun at(phase: Float, p: PictureAdjustment = high) =
             stage.process(Moment(a, next = b, phase = phase), p, 32, 24).rgba[0].toInt() and 255
-        assertEquals(40, at(0f))
-        assertTrue("${at(0.5f)}", abs(at(0.5f) - 120) <= 1)
-        assertEquals(200, at(1f))
+        assertEquals(100, at(0f))
+        assertTrue("${at(0.5f)}", abs(at(0.5f) - 110) <= 1)
+        assertEquals(120, at(1f))
         val low = high.copy(interpolation = PictureAdjustment.Interpolation.LOW)
-        assertEquals(40, at(0.3f, low))
-        assertEquals(200, at(0.7f, low))
+        assertEquals(100, at(0.3f, low))
+        assertEquals(120, at(0.7f, low))
+    }
+
+    @Test
+    fun `across a scene cut the picture before stays until the next is due, never a mix (#442)`() {
+        val a = flat(0, 40)
+        val b = flat(40, 200)
+        val high = PictureAdjustment(interpolation = PictureAdjustment.Interpolation.HIGH)
+        fun at(phase: Float) = stage.process(Moment(a, next = b, phase = phase), high, 32, 24).rgba[0].toInt() and 255
+        assertEquals(40, at(0.5f))
+        assertEquals(40, at(0.9f))
+        assertEquals(200, at(1f))
     }
 
     @Test
