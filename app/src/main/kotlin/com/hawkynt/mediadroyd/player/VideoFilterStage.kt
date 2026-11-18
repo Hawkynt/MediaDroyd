@@ -478,6 +478,11 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
     private val blendTimeline = BlendTimeline()
     private val keptSteady = LongArray(3)
     private var kept = 0
+
+    // Whether each kept frame is a scene cut after the one before it (SceneCuts, #442): neither blended nor bridged
+    // by a network; oldest first as keptAt.
+    private val keptCut = BooleanArray(3)
+    private val cuts = SceneCuts()
     private var blending = false
     private val vsync by lazy { android.view.Choreographer.getInstance() }
 
@@ -2015,12 +2020,27 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         keptAt[1] = keptAt[2]
         keptSteady[0] = keptSteady[1]
         keptSteady[1] = keptSteady[2]
+        keptCut[0] = keptCut[1]
+        keptCut[1] = keptCut[2]
         val target = frames[keptRing[2]].ensure(keptWidth, keptHeight)
         restoration.sharpen(source, target, picture.sharpness, picture.clarity)
         keptAt[2] = System.nanoTime()
         keptSteady[2] = blendTimeline.arrived(keptAt[2])
         kept = minOf(kept + 1, 3)
-        if (picture.interpolation.isNeural && kept >= 2) {
+        // A cut after the frame before, judged by a small luma read-back of each kept frame — for blending and the
+        // networks; Motion's own search judges its pairs.
+        keptCut[2] = kept >= 2 && !picture.interpolation.isMotionCompensated &&
+            picture.interpolation != PictureAdjustment.Interpolation.OFF &&
+            cuts.isCut(keptAt[1], keptAt[2]) { id ->
+                val at = if (id == keptAt[2]) 2 else if (id == keptAt[1]) 1 else -1
+                if (at < 0) {
+                    null
+                } else {
+                    val step = (keptWidth / SceneCuts.COLUMNS).coerceAtLeast(1)
+                    packedLuma(frames[keptRing[at]], keptWidth, keptHeight, step, step)
+                }
+            }
+        if (picture.interpolation.isNeural && kept >= 2 && !keptCut[2]) {
             rifeBetween(
                 picture.interpolation, frames[keptRing[1]], frames[keptRing[2]], keptWidth, keptHeight,
                 before = frames[keptRing[0]].takeIf { kept >= 3 },
@@ -2241,12 +2261,15 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             val due = if (motion && slot >= 0 && vectorsCut[slot]) 0.5f else 1f
             weight = if (phase < due) 0f else 1f
         }
+        // Across a scene cut neither a blend nor a network's in-between: the earlier frame until the later is due.
+        val cut = !picture.interpolation.isMotionCompensated && kept >= 2 && keptCut[later]
+        if (cut) weight = if (phase < 1f) 0f else 1f
         EGL14.eglMakeCurrent(display, idle, idle, context)
         if (picture.interpolation.isNeural) collectRife()
         // RIFE: through the in-between at the half (see NeuralInterpolation.mix), where it is in for this pair.
         var previousTexture = frames[previous].texture
         var currentTexture = frames[current].texture
-        val rifeSlot = if (picture.interpolation.isNeural && kept >= 2) rifeFor.indexOf(keptAt[later]) else -1
+        val rifeSlot = if (picture.interpolation.isNeural && kept >= 2 && !cut) rifeFor.indexOf(keptAt[later]) else -1
         if (rifeSlot >= 0) {
             val mix = NeuralInterpolation.mix(phase)
             val middle = if (rifeWarpedSlot[rifeSlot]) rifeWarped[rifeSlot].texture else rifeTextures[rifeSlot]
