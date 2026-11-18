@@ -101,6 +101,7 @@ class StateStoreTest {
             upscaler = PictureAdjustment.Upscaler.FSR, colorize = PictureAdjustment.Colorize.DDCOLOR,
             cropBlackBars = true, stereo = PictureAdjustment.Stereo.LEFT, aspect = AspectOverride.SIXTEEN_NINE,
             logo = LogoMask(LogoMask.Corner.TOP_LEFT, 0.1f, LogoMask.Mode.BLUR), shader = "crt.glsl",
+            hue = 12f, tint = -0.3f, temperature = 5200f,
         )
         StateStore(file).saveDefaultPicture(picture)
         assertEquals(
@@ -115,8 +116,13 @@ class StateStoreTest {
         store.saveDefaultPicture(PictureAdjustment(brightness = 0.2f, cropBlackBars = true))
         store.savePicture("/v/a.mkv", store.defaultPicture())
         assertNull(store.ownPictureOf("/v/a.mkv"))
-        store.savePicture("/v/a.mkv", store.defaultPicture().copy(gamma = 1.5f))
+        store.savePicture("/v/a.mkv", store.defaultPicture().copy(gamma = 1.5f, temperature = 7000f, hue = -20f))
         assertEquals(1.5f, store.pictureFor("/v/a.mkv").gamma)
+        assertEquals(7000f, store.pictureFor("/v/a.mkv").temperature)
+        assertEquals(-20f, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/a.mkv").hue)
+        store.savePicture("/v/a.mkv", store.defaultPicture().copy(gamma = 1.5f, chromaShiftX = -1.25f))
+        assertEquals(1.5f, store.pictureFor("/v/a.mkv").gamma)
+        assertEquals(-1.25f, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/a.mkv").chromaShiftX)
         assertEquals(0.2f, store.pictureFor("/v/b.mkv").brightness)
     }
 

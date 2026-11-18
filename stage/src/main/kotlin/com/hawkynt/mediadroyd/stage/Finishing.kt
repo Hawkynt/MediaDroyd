@@ -88,11 +88,17 @@ class Finishing(private val passes: Passes) {
             set("uContrast", u.contrast)
             set("uSaturation", u.saturation)
             set("uInverseGamma", u.inverseGamma)
+            set("uWhiteOn", if (u.white != null) 1f else 0f)
+            // Row-major as ColourBalance makes them, GL reads columns.
+            matrix3("uWhite", columns(u.white ?: u.hue))
+            matrix3("uHue", columns(u.hue))
             set("uPanorama", warp.panorama)
             matrix3("uWarp", warp.matrix)
             set("uWarped", 1f)
         }
     }
+
+    private fun columns(m: FloatArray) = FloatArray(9) { m[(it % 3) * 3 + it / 3] }
 
     /**
      * [from] (in half floats) dithered to 8 bits into [into] with libplacebo's blue noise: GLSL ES 3.00's pass, which

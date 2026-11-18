@@ -128,6 +128,14 @@ data class PictureOverride(
     val colorize: String = "OFF",
     /** PictureAdjustment.ColourSystem name: a composite capture's colour system, kept per video or folder only. */
     val colourSystem: String = "AUTO",
+    /** Hue in degrees, tint −1..1 and temperature in kelvin (ColourBalance, #447). */
+    val hue: Float = 0f,
+    val tint: Float = 0f,
+    val temperature: Float = 6504f,
+    /** The colour moved against the brightness in pixels, or found as it plays (ChromaShift, #444). */
+    val chromaShiftX: Float = 0f,
+    val chromaShiftY: Float = 0f,
+    val chromaShiftAuto: Boolean = false,
 )
 
 /** How one output screen is set up (see [com.hawkynt.mediadroyd.player.ScreenSetup]); names, as kept. */
@@ -166,6 +174,9 @@ data class Settings(
     var gamma: Float = 1.0f,                  // 0.5..2
     var contrast: Float = 1.0f,               // 0.5..2
     var saturation: Float = 1.0f,             // 0..2
+    var hue: Float = 0f,                      // degrees, -180..180 (ColourBalance, #447)
+    var tint: Float = 0f,                     // -1 green .. 1 magenta
+    var temperature: Float = 6504f,           // kelvin, 4000..10000; 6504 leaves the white
     var sharpness: Float = 0f,                // 0..1, the picture filters' household default
     var clarity: Float = 0f,                  // 0..1
     var denoise: Int = 0,                     // 0..3, before the noise slider

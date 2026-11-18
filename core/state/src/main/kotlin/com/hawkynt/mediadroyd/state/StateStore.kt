@@ -237,6 +237,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             temporalDenoise = temporalDenoise,
             dotCrawl = dotCrawl,
             colorize = colorizeOf(colorize),
+            hue = hue,
+            tint = tint,
+            temperature = temperature,
         )
     }
 
@@ -250,6 +253,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             gamma = picture.gamma
             contrast = picture.contrast
             saturation = picture.saturation
+            hue = picture.hue
+            tint = picture.tint
+            temperature = picture.temperature
             sharpness = picture.sharpness
             clarity = picture.clarity
             noise = picture.noise
@@ -451,6 +457,12 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             colorize = colorizeOf(it.colorize),
             colourSystem = runCatching { PictureAdjustment.ColourSystem.valueOf(it.colourSystem) }
                 .getOrDefault(PictureAdjustment.ColourSystem.AUTO),
+            hue = it.hue,
+            tint = it.tint,
+            temperature = it.temperature,
+            chromaShiftX = it.chromaShiftX,
+            chromaShiftY = it.chromaShiftY,
+            chromaShiftAuto = it.chromaShiftAuto,
         )
 
         /** A picture as kept, the choices by name. */
@@ -482,6 +494,12 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             dotCrawl = picture.dotCrawl,
             colorize = picture.colorize.name,
             colourSystem = picture.colourSystem.name,
+            hue = picture.hue,
+            tint = picture.tint,
+            temperature = picture.temperature,
+            chromaShiftX = picture.chromaShiftX,
+            chromaShiftY = picture.chromaShiftY,
+            chromaShiftAuto = picture.chromaShiftAuto,
         )
 
         private fun chromaOf(name: String) =

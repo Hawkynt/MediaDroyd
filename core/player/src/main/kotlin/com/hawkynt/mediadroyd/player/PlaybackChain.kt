@@ -219,6 +219,9 @@ object PlaybackChain {
         if (picture.contrast != 1f) add("contrast ${number(picture.contrast * 100)} %")
         if (picture.saturation != 1f) add("saturation ${number(picture.saturation * 100)} %")
         if (picture.gamma != 1f) add("gamma ${number(picture.gamma)}")
+        if (picture.hue != 0f) add("hue ${signed(picture.hue)}°")
+        if (picture.tint != 0f) add("tint ${signed(picture.tint * 100)} %")
+        if (picture.temperature != ColourBalance.D65_KELVIN) add("${number(picture.temperature)} K")
     }
 
     private fun sound(audio: Audio): Path {
