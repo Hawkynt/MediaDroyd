@@ -88,4 +88,20 @@ class ReadAheadTest {
         ahead.fill(film(50_000).filter { it.second >= 45_000 })
         assertEquals("v45000", playback.take(1).single())
     }
+
+    @Test
+    fun `trailing what another reader buffers, it never refuses and keeps only the last stretch (#535)`() {
+        val copies = ReadAhead<String>(aheadMs = 0, maxBytes = 1000L * 1000, behindMs = 0, trailMs = 10_000) {
+            released += it
+        }
+        val sound = film(30_000).filter { it.third == 1 }
+        for ((name, ms, stream) in sound) assertTrue(copies.offer(name, ms, 1000, stream, key = true))
+        assertTrue("a19968" in released && "a20000" !in released)
+        val tap = copies.cursor(25_000)
+        assertEquals("a25024", tap.take(1).single())
+        // A tap the trail passes loses its place.
+        val behind = copies.cursor(20_000)
+        for (ms in 30_000L until 40_000 step 32) copies.offer("a$ms", ms, 1000, 1, key = true)
+        assertEquals(ReadAhead.Next.Lost, behind.next())
+    }
 }

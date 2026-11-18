@@ -1109,7 +1109,7 @@ fun PhonePlayer(
 
         // The film's sound read once for every analysis of it (FilmSound, #535): the app's FFmpeg at 16 kHz.
         override fun openSound(location: String, fromMs: Long, near: Boolean) =
-            com.hawkynt.mediadroyd.data.SpeechReads.open(context, location, fromMs)
+            com.hawkynt.mediadroyd.data.SpeechReads.open(context, location, fromMs, near)
 
         override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
             com.hawkynt.mediadroyd.data.ModelStore.folder(context, download)

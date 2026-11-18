@@ -4,19 +4,33 @@ import android.content.Context
 import com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer
 import com.hawkynt.mediadroyd.player.FfmpegInputs
 import com.hawkynt.mediadroyd.player.FilmSound
+import com.hawkynt.mediadroyd.player.SoundCopies
+import com.hawkynt.mediadroyd.player.playableUri
 import java.io.RandomAccessFile
 
 /**
  * A film's sound read once on Android for everything that analyses it (PlayerPlatform.openSound, FilmSound, #535): its
  * main audio track decoded by the app's own FFmpeg (FfmpegDemuxer.sound, one channel at FilmSound.RATE) a stretch of
  * [PIECE_US] at a time from one open demuxer, each laid where it belongs (what the decoder hands out before it dropped,
- * a gap filled with silence), handed on piece by piece.
+ * a gap filled with silence), handed on piece by piece. Near the position of the film playing, decoded from the copies
+ * of what Media3 read ahead instead (SoundCopies), the file not read again.
  */
 object SpeechReads {
     private const val PIECE_US = 10_000_000L
 
-    /** The video at [location] read from [fromMs]; null where its sound cannot be read with the app's FFmpeg. */
-    fun open(context: Context, location: String, fromMs: Long): FilmSound.Stream? {
+    /**
+     * The video at [location] read from [fromMs]: where [near], from what Media3 read ahead of playback where it plays
+     * it; else from the file. Null where its sound cannot be read with the app's FFmpeg.
+     */
+    fun open(context: Context, location: String, fromMs: Long, near: Boolean = false): FilmSound.Stream? {
+        if (near) {
+            SoundCopies.open(playableUri(location).toString(), fromMs) { at -> own(context, location, at) }
+                ?.let { return it }
+        }
+        return own(context, location, fromMs)
+    }
+
+    private fun own(context: Context, location: String, fromMs: Long): FilmSound.Stream? {
         if (!FfmpegDemuxer.isAvailable()) return null
         val local = if (location.startsWith("/")) runCatching { RandomAccessFile(location, "r") }.getOrNull() else null
         return try {

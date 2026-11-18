@@ -52,8 +52,10 @@ object AviAudioFraming {
 
         override fun createExtractors(): Array<Extractor> = wrap(media3().createExtractors(), null, withTeletext)
 
+        // Whichever takes the file, its sound copied for the analysis on the way (SoundCopies, #535).
         override fun createExtractors(uri: Uri, responseHeaders: Map<String, List<String>>): Array<Extractor> =
-            wrap(media3().createExtractors(uri, responseHeaders), uri, withTeletext) + FfmpegExtractor(uri, remote)
+            (wrap(media3().createExtractors(uri, responseHeaders), uri, withTeletext) + FfmpegExtractor(uri, remote))
+                .map { SoundCopies.tapping(it, uri.toString()) }.toTypedArray()
     }
 
     /** The file behind a network location, for FFmpeg's demuxers; the app points this at its sources. */

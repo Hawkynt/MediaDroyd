@@ -326,10 +326,11 @@ and denoised. How the networks are checked on a desktop:
   read? A voice-over speaks every line where the actor spoke it, keeping its tone, the film's own voices making way:
   Japanese or English speech becomes a German voice-over. Subtitle files that run early, late or drift sync to the
   speech by themselves. Nothing leaves the device; models fetched once, checked against their digests.
-  Each film is read once for all of it: playback reads the file a minute and a half ahead (at most 512 MB, ten seconds
-  kept behind, so a short seek either way reads nothing again), and its sound is decoded once more, at 16 kHz, for
-  Whisper, the speech found, each line's tone and Sync — straight from those packets, the file never opened twice
-  (on the desktop so far; Sync's look over the whole film reads it for itself).
+  Each film is read once for all of it: playback reads the file ahead — on the desktop a minute and a half (at most
+  512 MB, ten seconds kept behind, so a short seek either way reads nothing again), on Android the two minutes Media3
+  loads — and its sound is decoded once more, at 16 kHz, for Whisper, the speech found and each line's tone, straight
+  from what playback read (on Android a copy of each sound sample as Media3's extractor hands it over, decoded by
+  Media3's FFmpeg decoder), the file never opened twice; only Sync's look over the whole film reads it for itself.
 
 <details>
 <summary>Any film in your language in detail</summary>

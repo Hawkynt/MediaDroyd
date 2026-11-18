@@ -9,11 +9,15 @@ package com.hawkynt.mediadroyd.player
  * that far behind is told it lost its place ([Next.Lost]) and reads for itself. A tap is handed its own reference to
  * each packet ([share]), which it gives back itself, so nothing it holds is given back under it. Thread-safe: the
  * reader, playback and the taps each on a thread of their own.
+ *
+ * With [trailMs] it trails another reader's buffer instead (Media3's, on Android): it never refuses a packet, keeps
+ * only the last [trailMs] before the newest (and within [maxBytes]), and a tap the trail passes loses its place.
  */
 class ReadAhead<T>(
     private val aheadMs: Long,
     private val maxBytes: Long,
     private val behindMs: Long,
+    private val trailMs: Long = -1,
     private val share: (T) -> T = { it },
     private val release: (T) -> Unit,
 ) {
@@ -56,9 +60,15 @@ class ReadAhead<T>(
      * false where the minute ahead or the memory is full — the reader then waits ([awaitRoom]) and offers it again.
      */
     fun offer(item: T, ms: Long, bytes: Int, stream: Int, key: Boolean): Boolean = synchronized(lock) {
-        if (entries.isNotEmpty() && (ms - positionMs() > aheadMs || this.bytes + bytes > maxBytes)) return false
+        val trails = trailMs >= 0
+        if (!trails && entries.isNotEmpty() && (ms - positionMs() > aheadMs || this.bytes + bytes > maxBytes)) {
+            return false
+        }
         entries.addLast(Entry(item, ms, bytes, stream, key))
         this.bytes += bytes
+        if (trails) {
+            while (entries.size > 1 && (entries.first().ms < ms - trailMs || this.bytes > maxBytes)) dropFirst()
+        }
         lock.notifyAll()
         true
     }
@@ -169,10 +179,14 @@ class ReadAhead<T>(
         while (entries.isNotEmpty()) {
             val first = entries.first()
             if (first.ms >= position - behindMs || held.any { it.place <= base }) break
-            entries.removeFirst()
-            base++
-            bytes -= first.bytes
-            release(first.item)
+            dropFirst()
         }
+    }
+
+    private fun dropFirst() {
+        val first = entries.removeFirst()
+        base++
+        bytes -= first.bytes
+        release(first.item)
     }
 }
