@@ -46,6 +46,24 @@ class StateStoreTest {
     }
 
     @Test
+    fun `each audio output keeps its own equalizer, the others play the household's (#451)`() {
+        val file = Memory()
+        val rock = EqualizerSetting.of(com.hawkynt.mediadroyd.player.EqualizerPreset.ROCK)
+        val pop = EqualizerSetting.of(com.hawkynt.mediadroyd.player.EqualizerPreset.POP)
+        StateStore(file).apply {
+            assertEquals(EqualizerSetting(), equalizerFor("speaker"))
+            data.settings.equalizer = rock
+            saveEqualizer("headset", pop)
+        }
+        val again = StateStore(file)
+        assertEquals(rock, again.equalizerFor("speaker"))
+        assertEquals(pop, again.equalizerFor("headset"))
+        assertEquals("Pop", again.equalizerFor("headset").name)
+        again.saveEqualizer("headset", rock)
+        assertFalse("headset" in again.data.equalizers)
+    }
+
+    @Test
     fun `the Android app's file of before the shared model reads as it was`() {
         val file = Memory(
             """{"rootPath":"/storage/emulated/0/Movies","watched":["/a.mkv"],"resume":{"/b.mkv":""" +

@@ -128,10 +128,14 @@ class DesktopStore internal constructor(
 
     /** The household's sound: the loudness gain, even loudness and the lip-sync delay of this machine's output. */
     var sound: SoundSettings
-        get() = SoundSettings(data.settings.loudness, data.settings.evenLoudness, state.audioDelayFor(AUDIO_OUTPUT))
+        get() = SoundSettings(
+            data.settings.loudness, data.settings.evenLoudness, state.audioDelayFor(AUDIO_OUTPUT),
+            state.equalizerFor(AUDIO_OUTPUT),
+        )
         set(value) {
             data.settings.loudness = value.loudnessDb
             data.settings.evenLoudness = value.evenLoudness
+            state.saveEqualizer(AUDIO_OUTPUT, value.equalizer)
             state.saveAudioDelay(AUDIO_OUTPUT, value.audioDelayMs)
         }
 
@@ -440,14 +444,16 @@ internal data class ScreenKept(
 
 /**
  * The household's sound as kept, as Android's Settings and its gear keep it: the loudness gain in dB (-12..12),
- * even loudness from file to file, and the audio delay in ms (positive: the sound later). Night mode is not kept: as on
- * Android it is switched on for an evening, and the next player starts without it.
+ * even loudness from file to file, the audio delay in ms (positive: the sound later) and this output's equalizer
+ * (#451). Night mode is not kept: as on Android it is switched on for an evening, and the next player starts without
+ * it.
  */
 @Serializable
 data class SoundSettings(
     val loudnessDb: Float = 0f,
     val evenLoudness: Boolean = false,
     val audioDelayMs: Int = 0,
+    val equalizer: com.hawkynt.mediadroyd.state.EqualizerSetting = com.hawkynt.mediadroyd.state.EqualizerSetting(),
 )
 
 /** A station logo as kept: LogoMask's choices by name; one this version does not know is dropped. */

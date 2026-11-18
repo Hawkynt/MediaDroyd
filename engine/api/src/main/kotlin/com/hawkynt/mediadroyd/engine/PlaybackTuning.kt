@@ -5,7 +5,8 @@ package com.hawkynt.mediadroyd.engine
  * loudness gain in dB ([loudnessDb]: Settings plus a volume swipe past the device's maximum), night mode ([nightMode],
  * NightModeCompressor), even loudness from file to file ([normalizeLoudness]: ReplayGain tags, else EBU R128 measured
  * as it plays — LoudnessNormalization), the lip-sync delay for the current output ([audioDelayMs]) and the subtitle
- * delay ([subtitleDelayMs]) and the voices raised ([voiceBoostDb]). The engine reads them on its own threads, as often
+ * delay ([subtitleDelayMs]), the voices raised ([voiceBoostDb]) and the equalizer ([equalizerPreampDb],
+ * [equalizerBandsDb]). The engine reads them on its own threads, as often
  * as it needs, so an implementation answers from live state; [Mutable] holds them as plain values.
  */
 interface PlaybackTuning {
@@ -18,6 +19,12 @@ interface PlaybackTuning {
     /** How much the voices are raised in dB (VoiceBoost, #452): 0 leaves the sound as it is. */
     val voiceBoostDb: Float get() = 0f
 
+    /** The equalizer's preamp in dB (Equalizer, #451): 0 leaves the sound as it is. */
+    val equalizerPreampDb: Float get() = 0f
+
+    /** The equalizer's gains in dB, one per band (Equalizer.HZ); empty or all 0: no band changed. */
+    val equalizerBandsDb: List<Float> get() = emptyList()
+
     /** The knobs as values set directly. */
     class Mutable : PlaybackTuning {
         @Volatile override var loudnessDb: Float = 0f
@@ -26,5 +33,7 @@ interface PlaybackTuning {
         @Volatile override var audioDelayMs: Int = 0
         @Volatile override var subtitleDelayMs: Int = 0
         @Volatile override var voiceBoostDb: Float = 0f
+        @Volatile override var equalizerPreampDb: Float = 0f
+        @Volatile override var equalizerBandsDb: List<Float> = emptyList()
     }
 }

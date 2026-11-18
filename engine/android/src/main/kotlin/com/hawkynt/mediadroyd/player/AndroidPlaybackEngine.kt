@@ -247,6 +247,8 @@ class AndroidPlaybackEngine(
                                         { tuning.normalizeLoudness },
                                         { fileLoudness },
                                         { tuning.voiceBoostDb },
+                                        { tuning.equalizerPreampDb },
+                                        { tuning.equalizerBandsDb },
                                     ),
                                 ),
                             )
