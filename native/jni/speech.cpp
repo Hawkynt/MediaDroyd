@@ -41,6 +41,9 @@ Java_com_hawkynt_mediadroyd_player_NativeWhisper_transcribe(
     params.print_special = false;
     params.print_timestamps = false;
     params.suppress_nst = true;
+    // Translating, a small model caught in a loop stays in it at every temperature: the retries only double the time
+    // (#540, measured on a Chinese film: 11.7 s against 1.6 s a window); the loops are left out by LiveCaptions.
+    if (translate) params.temperature_inc = 0.0f;
 
     const jsize count = env->GetArrayLength(samples);
     jfloat* pcm = env->GetFloatArrayElements(samples, nullptr);

@@ -39,6 +39,31 @@ class LiveCaptionsTest {
     }
 
     @Test
+    fun `a model caught in a loop is heard once, not line after line (#541)`() {
+        val loop = "the only one who's the only one who's the only one who's the only one who's the only one who's"
+        val window = listOf(
+            LiveCaptions.Segment(0, 2000, " No, no, no!"),
+            LiveCaptions.Segment(2000, 4000, " No, no, no, no!"),
+            LiveCaptions.Segment(4000, 6000, " No, no, no!"),
+            LiveCaptions.Segment(6000, 9000, " It's the last time I've seen you, but I have no idea what you're doing."),
+            LiveCaptions.Segment(9000, 12_000, " It's the last time I've seen you, but I still have no idea what you're doing."),
+            LiveCaptions.Segment(12_000, 15_000, " $loop"),
+            LiveCaptions.Segment(15_000, 17_000, " Let's go."),
+            LiveCaptions.Segment(17_000, 19_000, " 我看你是不是被你撐掉了嗎?"),
+            LiveCaptions.Segment(19_000, 21_000, " 我看你是不是被你撐掉了嗎?"),
+        )
+        val captions = LiveCaptions({ _, _ -> LiveCaptions.Heard("en", window) }, durationMs = 21_000)
+        captions.ahead(0)
+        val once = listOf(
+            "No, no, no!", "It's the last time I've seen you, but I have no idea what you're doing.", "Let's go.",
+            "我看你是不是被你撐掉了嗎?",
+        )
+        assertEquals(once, captions.lines().map { it.text })
+        // The same before translating, so a loop of hundreds of words is not translated first.
+        assertEquals(once, Loops.drop(window).map { it.text.trim() })
+    }
+
+    @Test
     fun `a seek beyond what is heard starts hearing there`() {
         val captions = LiveCaptions(::hear, durationMs = 600_000)
         captions.ahead(0)

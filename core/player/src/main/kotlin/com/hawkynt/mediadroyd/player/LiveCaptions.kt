@@ -5,7 +5,10 @@ package com.hawkynt.mediadroyd.player
  * of up to [WINDOW_MS] — what Whisper hears at once — each kept up to its last segment that ended before the window's
  * end (a word cut at the edge is heard again whole by the next window), until [AHEAD_MS] past the position is heard;
  * a seek outside what is heard starts hearing there. [hear] gives a window's segments (Whisper, NativeWhisper), times
- * from the window's start; null where the sound cannot be read. Thread-safe to read while one caller hears.
+ * from the window's start; null where the sound cannot be read. A model caught in a loop (#541) — the same words
+ * over and over inside a line ([Loops.repeats]), or the same line again and again — is heard once: such lines are left
+ * out, so the voice-over neither repeats them nor falls behind speaking them. Thread-safe to read while one caller
+ * hears.
  */
 class LiveCaptions(
     private val hear: (fromMs: Long, toMs: Long) -> Heard?,
@@ -27,6 +30,9 @@ class LiveCaptions(
     private val women = Prosody.Baseline()
     private val anyone = Prosody.Baseline()
     private val covered = ArrayList<LongRange>()
+
+    // The words of the last lines kept, for knowing a line said again by a model caught in a loop.
+    private val recent = ArrayDeque<Set<String>>()
 
     /** The language the speech was heard in, once any was. */
     @Volatile
@@ -58,7 +64,9 @@ class LiveCaptions(
             synchronized(heard) {
                 for (segment in kept) {
                     val text = segment.text.trim()
-                    if (text.isEmpty()) continue
+                    if (text.isEmpty() || Loops.repeats(text)) continue
+                    val words = Loops.words(text)
+                    if (recent.any { Loops.same(it, words) }) continue
                     val tone = segment.tone
                     val baseline = when {
                         tone == null || tone.pitchHz <= 0 -> anyone
@@ -70,7 +78,11 @@ class LiveCaptions(
                         cursor + segment.startMs, cursor + segment.endMs, text, delivery = delivery,
                         heardPitchHz = tone?.pitchHz?.takeIf { it > 0 },
                     )
-                    if (heard.none { it.startMs < line.endMs && line.startMs < it.endMs }) heard += line
+                    if (heard.none { it.startMs < line.endMs && line.startMs < it.endMs }) {
+                        heard += line
+                        recent.addLast(words)
+                        if (recent.size > Loops.LOOKBACK) recent.removeFirst()
+                    }
                 }
                 heard.sortBy { it.startMs }
                 cover(cursor until maxOf(next, cursor + 1))
@@ -118,5 +130,77 @@ data class CaptionRoute(val whisperTranslates: Boolean, val translator: String?)
             target == spoken -> CaptionRoute(false, null)
             else -> CaptionRoute(spoken != "en", target)
         }
+    }
+}
+
+/**
+ * A speech model caught in a loop (#541): Whisper, small ones above all and when translating, sometimes writes the same
+ * words over and over — inside a segment, or as segment after segment. OpenAI's Whisper (MIT) takes a segment whose
+ * text compresses (zlib) to less than 1 / [COMPRESSION_RATIO] of its length for such a loop ([repeats]); a line whose
+ * words are nearly those of one of the [LOOKBACK] lines before it ([same]) is the loop across lines.
+ */
+object Loops {
+    /** OpenAI Whisper's compression_ratio_threshold. */
+    const val COMPRESSION_RATIO = 2.4
+
+    /** How many lines back a line said again is looked for. */
+    const val LOOKBACK = 3
+
+    // How much of two lines' words they must share to be the same line said again (Jaccard).
+    private const val SAME = 0.8
+
+    /** Whether [text] repeats itself: its UTF-8 bytes compress by more than [COMPRESSION_RATIO]. */
+    fun repeats(text: String): Boolean {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        if (bytes.isEmpty()) return false
+        val deflater = java.util.zip.Deflater()
+        try {
+            deflater.setInput(bytes)
+            deflater.finish()
+            val out = ByteArray(bytes.size + 64)
+            var size = 0
+            while (!deflater.finished()) size += deflater.deflate(out)
+            return bytes.size.toDouble() / size > COMPRESSION_RATIO
+        } finally {
+            deflater.end()
+        }
+    }
+
+    /** [text]'s words, lowercase, without punctuation; a script written without spaces (Chinese) by its letters. */
+    fun words(text: String): Set<String> {
+        val unspaced = text.any { Character.UnicodeScript.of(it.code) in UNSPACED }
+        if (unspaced) return text.filter { it.isLetterOrDigit() }.lowercase().map { it.toString() }.toSet()
+        return text.lowercase().split(Regex("[^\\p{L}\\p{N}']+")).filter { it.isNotEmpty() }.toSet()
+    }
+
+    // Scripts written without spaces between words: their lines are compared by their letters.
+    private val UNSPACED = setOf(
+        Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA,
+        Character.UnicodeScript.THAI, Character.UnicodeScript.LAO, Character.UnicodeScript.KHMER,
+        Character.UnicodeScript.MYANMAR,
+    )
+
+    /**
+     * [segments] without the loops among them: those repeating themselves, and those nearly the same as one of the
+     * [LOOKBACK] kept before them — before they are translated, which a loop of hundreds of words would hold up for a
+     * minute.
+     */
+    fun drop(segments: List<LiveCaptions.Segment>): List<LiveCaptions.Segment> {
+        val recent = ArrayDeque<Set<String>>()
+        return segments.filter { segment ->
+            val text = segment.text.trim()
+            if (text.isEmpty() || repeats(text)) return@filter false
+            val words = words(text)
+            if (recent.any { same(it, words) }) return@filter false
+            recent.addLast(words)
+            if (recent.size > LOOKBACK) recent.removeFirst()
+            true
+        }
+    }
+
+    /** Whether two lines' [a] and [b] words are nearly the same. */
+    fun same(a: Set<String>, b: Set<String>): Boolean {
+        if (a.isEmpty() || b.isEmpty()) return false
+        return (a intersect b).size.toDouble() / (a union b).size >= SAME
     }
 }
