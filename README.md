@@ -330,8 +330,10 @@ and denoised. How the networks are checked on a desktop:
   Each film is read once for all of it: playback reads the file ahead — on the desktop a minute and a half (at most
   512 MB, ten seconds kept behind, so a short seek either way reads nothing again), on Android the two minutes Media3
   loads — and its sound is decoded once more, at 16 kHz, for Whisper, the speech found and each line's tone, straight
-  from what playback read (on Android a copy of each sound sample as Media3's extractor hands it over, decoded by
-  Media3's FFmpeg decoder), the file never opened twice; only Sync's look over the whole film reads it for itself.
+  from what playback read (on Android a copy of each sample of the sound track playing as Media3's extractor hands it
+  over, at most 32 MB a film and let go once another film plays, decoded by Media3's FFmpeg decoder — a lossless track
+  that outruns that is read from the file where the hearing falls behind), the file otherwise never opened twice; only
+  Sync's look over the whole film reads it for itself.
 
 <details>
 <summary>Any film in your language in detail</summary>

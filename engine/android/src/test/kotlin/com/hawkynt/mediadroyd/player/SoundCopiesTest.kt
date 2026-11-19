@@ -110,7 +110,7 @@ class SoundCopiesTest {
             val sounds = tracks.filter { it.value.type == C.TRACK_TYPE_AUDIO }
             assertTrue(sounds.isNotEmpty())
             assertEquals(sounds.keys.min(), film.playing()?.id)
-            for ((id, sound) in sounds) {
+            for ((id, sound) in sounds.filterKeys { it == film.playing()?.id }) {
                 val cursor = requireNotNull(film.tracks[id]).samples.cursor(Long.MIN_VALUE)
                 val copied = generateSequence { (cursor.next() as? ReadAhead.Next.Item)?.item }.toList()
                 assertTrue(sound.samples.size > 10)
@@ -120,6 +120,48 @@ class SoundCopiesTest {
                 assertEquals(ReadAhead.Next.End, cursor.next())
             }
         }
+    }
+
+    // A sound track's output that takes everything and keeps nothing.
+    private object Nowhere : TrackOutput {
+        override fun format(format: Format) = Unit
+        override fun sampleData(input: DataReader, length: Int, allowEndOfInput: Boolean, sampleDataPart: Int) = length
+        override fun sampleData(data: ParsableByteArray, length: Int, sampleDataPart: Int) = data.skipBytes(length)
+        override fun sampleMetadata(t: Long, f: Int, size: Int, offset: Int, c: TrackOutput.CryptoData?) = Unit
+    }
+
+    private fun sound(id: Int) = Format.Builder().setId(id.toString()).setSampleMimeType(MimeTypes.AUDIO_AC3).build()
+
+    // [count] samples of [bytes] each, a tenth of a second apart, handed to [output].
+    private fun feed(output: TrackOutput, count: Int, bytes: Int) = repeat(count) { i ->
+        output.sampleData(ParsableByteArray(ByteArray(bytes)), bytes, TrackOutput.SAMPLE_DATA_PART_MAIN)
+        output.sampleMetadata(i * 100_000L, C.BUFFER_FLAG_KEY_FRAME, bytes, 0, null)
+    }
+
+    @Test
+    fun `only the sound track playing is copied (#537)`() {
+        val film = SoundCopies.of("test://two-tracks")
+        val outputs = (1..2).map { id ->
+            val track = film.tracks.getOrPut(id) { SoundCopies.Track(id) }
+            SoundCopies.Copying(Nowhere, track, film).apply { format(sound(id)) }
+        }
+        SoundCopies.select("test://two-tracks", "2")
+        outputs.forEach { feed(it, 20, 100) }
+        assertEquals(0L, film.tracks.getValue(1).samples.heldBytes)
+        assertTrue(film.tracks.getValue(2).samples.heldBytes >= 2000)
+    }
+
+    @Test
+    fun `the copies stay within their memory however big the sound, and a film left lets go of them (#537)`() {
+        val film = SoundCopies.of("test://big")
+        val track = film.tracks.getOrPut(1) { SoundCopies.Track(1) }
+        // TrueHD's peak: some 230 kB a tenth of a second, for two minutes.
+        feed(SoundCopies.Copying(Nowhere, track, film).apply { format(sound(1)) }, 1200, 230_000)
+        assertTrue(track.samples.heldBytes <= SoundCopies.MAX_BYTES)
+        assertTrue(track.samples.heldBytes > SoundCopies.MAX_BYTES / 2)
+        SoundCopies.of("test://next")
+        SoundCopies.select("test://next", null)
+        assertEquals(0L, track.samples.heldBytes)
     }
 
     @Test
