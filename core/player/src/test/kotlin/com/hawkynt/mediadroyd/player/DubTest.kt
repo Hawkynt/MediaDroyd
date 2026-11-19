@@ -118,6 +118,28 @@ class DubTest {
     }
 
     @Test
+    fun `the voice runs on seamlessly from buffer to buffer, their times given in whole milliseconds (#541)`() {
+        val rate = 48_000
+        val clip = FloatArray(rate * 2) { (it % 1000).toFloat() }
+        val track = Dub.Track().apply { add(0, clip, rate) }
+        val mixer = Dub.Mixer(rate, 1, Dub.Original.MUTE)
+        val frames = 1024
+        val out = ShortArray(rate)
+        var at = 0
+        while (at + frames <= out.size) {
+            // The engine's time of the buffer: its first frame's, cut to whole milliseconds (21.333 ms a buffer).
+            mixer.process(out, at, frames, at * 1000L / rate, track)
+            at += frames
+        }
+        val jumps = (1 until at).count { out[it] - out[it - 1] != 1 && out[it] != 0.toShort() }
+        assertEquals(0, jumps)
+        // A seek: the time jumps and the voice follows.
+        val after = ShortArray(frames)
+        mixer.process(after, 0, frames, 1500, track)
+        assertEquals((1500 * rate / 1000 % 1000).toShort(), after[0])
+    }
+
+    @Test
     fun `a clip at the voice's own rate is laid onto the track at the output's`() {
         val track = Dub.Track()
         track.add(1000, FloatArray(22_050) { 1000f }, rate = 22_050)

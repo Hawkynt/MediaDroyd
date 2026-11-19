@@ -337,11 +337,14 @@ object Dub {
          * The voice for [voice].size frames at [rate] from [fromMs] into [voice], and where a line speaks into
          * [speaking] (as long); whether any does.
          */
-        fun voiceAt(fromMs: Long, rate: Int, voice: FloatArray, speaking: BooleanArray? = null): Boolean {
+        fun voiceAt(fromMs: Long, rate: Int, voice: FloatArray, speaking: BooleanArray? = null): Boolean =
+            voiceAtFrame(fromMs * rate / 1000, rate, voice, speaking)
+
+        /** As [voiceAt], from frame [fromFrame] of the film at [rate]. */
+        fun voiceAtFrame(fromFrame: Long, rate: Int, voice: FloatArray, speaking: BooleanArray? = null): Boolean {
             voice.fill(0f)
             speaking?.fill(false)
             val n = voice.size
-            val fromFrame = fromMs * rate / 1000
             var any = false
             synchronized(clips) {
                 for (clip in clips) {
@@ -415,6 +418,11 @@ object Dub {
         private var voice = FloatArray(0)
         private var speaking = BooleanArray(0)
 
+        // The film's frame the next buffer starts at, where it follows on: the engines give a buffer's time in whole
+        // milliseconds, which a buffer's length is not — taken as it is, the voice would jump back and forth by up
+        // to a millisecond's frames at every buffer, and crack (#541).
+        private var nextFrame = Long.MIN_VALUE
+
         // What is left of where the dialogue is without its voice band: below it and above it, each through two
         // sections (Linkwitz–Riley, 24 dB an octave), kept running so a line starting finds them settled. Faded to
         // rather than the band subtracted: a filter's phase would make a subtraction boost the band's edges.
@@ -432,7 +440,11 @@ object Dub {
                 voice = FloatArray(frames)
                 speaking = BooleanArray(frames)
             }
-            val any = track.voiceAt(ptsMs, rate, voice, speaking)
+            val told = ptsMs * rate / 1000
+            val follows = nextFrame != Long.MIN_VALUE && kotlin.math.abs(told - nextFrame) <= rate * FOLLOW_MS / 1000
+            val fromFrame = if (follows) nextFrame else told
+            nextFrame = fromFrame + frames
+            val any = track.voiceAtFrame(fromFrame, rate, voice, speaking)
             if (!any && gain == 1f && !banded) return
             for (f in 0 until frames) {
                 val target = if (speaking[f]) 0f else 1f
@@ -466,6 +478,9 @@ object Dub {
 
         private companion object {
             const val CENTRE = 2
+
+            // How far a buffer's time may lie from where the last one ended and still follow on: more is a seek.
+            const val FOLLOW_MS = 5L
         }
     }
 }
