@@ -38,6 +38,18 @@ import com.hawkynt.mediadroyd.library.FsFile
 import com.hawkynt.mediadroyd.library.Sidecars
 import com.hawkynt.mediadroyd.library.readTextOrNull
 import com.hawkynt.mediadroyd.player.SubtitleSync
+import com.hawkynt.mediadroyd.player.Dub
+import com.hawkynt.mediadroyd.player.PiperVoices
+import com.hawkynt.mediadroyd.player.LiveCaptions
+import com.hawkynt.mediadroyd.player.NativeWhisper
+import com.hawkynt.mediadroyd.player.WhisperModels
+import com.hawkynt.mediadroyd.player.Prosody
+import com.hawkynt.mediadroyd.player.FilmSound
+import com.hawkynt.mediadroyd.player.CaptionRoute
+import com.hawkynt.mediadroyd.player.MarianTranslator
+import com.hawkynt.mediadroyd.player.NeuralModels
+import com.hawkynt.mediadroyd.player.ModelFolder
+import com.hawkynt.mediadroyd.player.TranslationModels
 import com.hawkynt.mediadroyd.player.ChapterSteps
 import com.hawkynt.mediadroyd.player.CreditText
 import com.hawkynt.mediadroyd.player.IntroCredits
@@ -48,6 +60,9 @@ import com.hawkynt.mediadroyd.player.PlaybackChain
 import com.hawkynt.mediadroyd.player.PlaybackMath
 import com.hawkynt.mediadroyd.state.SkipFinder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,10 +87,14 @@ interface PlayerPlatform {
     /**
      * Gray frames of [location] for finding its intro and credits by their pictures where the sound does not
      * (PictureCues, SkipFinder): its opening (IntroCredits.openingMs) at PictureCues' hash size every OPENING_STEP_MS,
-     * or where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS; null where the
-     * platform cannot read them. Blocks: called off the main thread.
+     * or where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS — decoded once, the
+     * text reader's frames kept (PictureCues.closing, #535) where [recognise] can read them; null where the platform
+     * cannot read them. Blocks: called off the main thread.
      */
     fun pictures(location: String, closing: Boolean): PictureCues.Frames? = null
+
+    /** The lines the platform's text recogniser reads in [gray] (CreditText's size); null where it cannot. Blocks. */
+    fun recognise(gray: ByteArray): List<CreditText.Line>? = null
 
     /**
      * [location]'s frames read for their text, for credits recognised by it (CreditText, SkipFinder): at each time [at]
@@ -86,11 +105,33 @@ interface PlayerPlatform {
         null
 
     /**
-     * Where [location]'s sound speaks, for moving subtitles onto it (SubtitleSync, #450): the whole sound decoded and
-     * judged, SubtitleSync.RATE verdicts a second ([SubtitleSync.Speech]); null where it cannot be read. Blocks for as
-     * long as decoding the sound takes: called off the main thread.
+     * [location]'s sound read from [fromMs] on, mono floats at FilmSound.RATE, the first at [fromMs] — the one reader
+     * every analysis of a film's sound shares (FilmSound, #535): Whisper's windows, the speech found, each line's tone;
+     * where [near], served from the packets playback reads ahead where the platform can (ReadAhead), waiting where
+     * playback has not read yet; else from the file itself. Null where it cannot be read. Blocks: off the main thread.
      */
-    fun speech(location: String): BooleanArray? = null
+    fun openSound(location: String, fromMs: Long, near: Boolean): FilmSound.Stream? = null
+
+    /** A line for the platform's diagnostics log (how the hearing and the voice keep up); nowhere by default. */
+    fun log(message: String) {}
+
+    /** The folder [download]'s files are kept in (models fetched when chosen); null where this build keeps none. */
+    fun modelFolder(download: NeuralModels.Download): java.io.File? = null
+
+    /** [model] loaded into the native library (NativeWhisper.open); 0 where it cannot here. Blocks. */
+    fun openWhisper(model: WhisperModels.Entry): Long = 0L
+
+    /** Whether this build phonemises with espeak-ng: Piper's own voices (builds for one's own devices, #531). */
+    val espeak: Boolean get() = false
+
+    /** Whether [voice]'s files are in place. */
+    fun voiceReady(voice: PiperVoices.Entry): Boolean = false
+
+    /** Fetches [voice]'s files, telling [progress] (0 … 1); whether they are in place. Blocks. */
+    fun fetchVoice(voice: PiperVoices.Entry, progress: (Float) -> Unit): Boolean = false
+
+    /** [voice] ready to speak lines (Dub.LineSpeaker), or null where it cannot here. Blocks. */
+    fun speaker(voice: PiperVoices.Entry): Dub.LineSpeaker? = null
 
     /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
@@ -249,12 +290,255 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             state.store,
             pictures = platform::pictures,
             text = platform::readText,
+            recognise = platform::recognise,
             print = platform::soundPrint,
         )
         for (step in finder.steps(session.queue.map { it.videoPath }, session.index)) {
             val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() } ?: continue
             finder.keep(step, found)
             session.applySkips()
+        }
+    }
+
+    // Subtitles made from the speech (#529): the sound ahead of the position heard by Whisper (the household's model,
+    // fetched the first time); in the language wanted (#530) — as spoken, Whisper's English, or that English translated
+    // by OPUS-MT (CaptionRoute); shown over the picture, and spoken where the dub is on.
+    LaunchedEffect(state.captioning, state.captionTarget, state.captionModel, session.index) {
+        state.captions = null
+        state.captionText = null
+        state.captionSpoken = null
+        if (!state.captioning) {
+            state.captionStatus = null
+            return@LaunchedEffect
+        }
+        val model = WhisperModels.of(state.captionModel)
+        if (!fetched(platform, model.download, "Whisper ${model.label}") { state.captionStatus = it }) {
+            return@LaunchedEffect
+        }
+        val target = state.captionTarget
+        val translation = TranslationModels.into(target)
+        if (translation != null &&
+            !fetched(platform, translation.download, "the ${translation.label} translator") { state.captionStatus = it }
+        ) {
+            return@LaunchedEffect
+        }
+        val handle = withContext(Dispatchers.Default) { platform.openWhisper(model) }
+        if (handle == 0L) {
+            state.captionStatus = "Whisper cannot run in this build."
+            return@LaunchedEffect
+        }
+        val translator = translation?.let { entry ->
+            withContext(Dispatchers.Default) {
+                platform.modelFolder(entry.download)?.let { runCatching { MarianTranslator(it) }.getOrNull() }
+            }
+        }
+        val video = session.current.videoPath
+        val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
+        // The fast cores only: a phone's little ones slow ggml down (FastCores).
+        val threads = com.hawkynt.mediadroyd.player.FastCores.count()
+        var spoken: String? = null
+        // How long the last window took to hear, for telling the household when the model cannot keep up.
+        var tookMs = 0L
+        var windowMs = 0L
+        val captions = LiveCaptions(
+            hear = hear@{ fromMs, toMs ->
+                val began = System.nanoTime()
+                val startedAt = state.positionMs
+                platform.log("hearing ${fromMs / 1000}…${toMs / 1000} s asked for at ${startedAt / 1000} s")
+                val pcm = sound.samples(fromMs, toMs) ?: return@hear null.also { platform.log("no sound there") }
+                val readMs = (System.nanoTime() - began) / 1_000_000
+                var whisperMs = 0L
+                fun whisper(translate: Boolean): LiveCaptions.Heard? {
+                    val t = System.nanoTime()
+                    return NativeWhisper.transcribe(handle, pcm, spoken ?: "auto", translate, threads)?.let(::heardOf)
+                        .also { whisperMs += (System.nanoTime() - t) / 1_000_000 }
+                }
+                // The language spoken from the first window, written as spoken; then by the route to the target.
+                var heard = if (spoken == null) whisper(false)?.also { spoken = it.language } else null
+                val route = CaptionRoute.of(target, spoken)
+                if (heard == null || route.whisperTranslates) {
+                    heard = whisper(route.whisperTranslates) ?: return@hear null
+                }
+                // Each line's tone from its own sound, before any translation, for the voice to keep (#534).
+                heard = heard.copy(
+                    segments = heard.segments.map { segment ->
+                        val rate = NativeWhisper.SAMPLE_RATE
+                        val from = (segment.startMs * rate / 1000).toInt().coerceIn(0, pcm.size)
+                        val to = (segment.endMs * rate / 1000).toInt().coerceIn(from, pcm.size)
+                        val letters = segment.text.count { it.isLetter() }
+                        segment.copy(tone = Prosody.measure(pcm.copyOfRange(from, to), rate, letters))
+                    },
+                )
+                val translated = System.nanoTime()
+                // The window's lines translated together (MarianTranslator.translateAll): the steps of the longest.
+                if (route.translator != null && translator != null) {
+                    val texts = translator.translateAll(heard.segments.map { it.text.trim() })
+                    heard = heard.copy(
+                        segments = heard.segments.mapIndexed { i, segment ->
+                            segment.copy(text = texts?.getOrNull(i)?.takeIf { it.isNotEmpty() } ?: segment.text)
+                        },
+                    )
+                }
+                tookMs = (System.nanoTime() - began) / 1_000_000
+                windowMs = toMs - fromMs
+                platform.log(
+                    "hearing ${fromMs / 1000}…${toMs / 1000} s: read ${readMs} ms, whisper ${whisperMs} ms, " +
+                        "translate ${(System.nanoTime() - translated) / 1_000_000} ms, " +
+                        "${heard.segments.size} lines, ${heard.segments.sumOf { it.text.split(' ').size }} words; " +
+                        "${(fromMs - startedAt) / 1000} s ahead when begun, " +
+                        "${(toMs - state.positionMs) / 1000} s at the end",
+                )
+                heard.copy(language = spoken ?: heard.language)
+            },
+            durationMs = engine.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE,
+        )
+        state.captions = captions
+        state.captionStatus = "Listening…"
+        try {
+            coroutineScope {
+                launch {
+                    while (true) {
+                        state.captionText = captions.lineAt(state.positionMs)?.text
+                        // Behind the film: what plays is not heard yet — say how slow the model is here.
+                        val heardNow = captions.heardAt(state.positionMs)
+                        if (!heardNow && tookMs > 0) {
+                            state.captionStatus = "Behind the film: Whisper ${model.label} took ${tookMs / 1000} s " +
+                                "for ${windowMs / 1000} s of sound here — a smaller model keeps up."
+                        } else if (heardNow && state.captionStatus?.startsWith("Behind") == true) {
+                            state.captionStatus = null
+                        }
+                        delay(CAPTION_PACE_MS)
+                    }
+                }
+                var told = ""
+                while (true) {
+                    val at = state.positionMs
+                    val heard = withContext(Dispatchers.Default) {
+                        runCatching { captions.ahead(at) }
+                            .onFailure { state.captionStatus = "The speech could not be heard: ${it.message ?: it}" }
+                            .getOrDefault(false)
+                    }
+                    val round = "hearing round at ${at / 1000} s of ${engine.durationMs / 1000} s: " +
+                        if (heard) "heard" else "nothing to hear (heard there: ${captions.heardAt(at)})"
+                    if (round.substringAfter(": ") != told) platform.log(round)
+                    told = round.substringAfter(": ")
+                    if (heard) {
+                        state.captionStatus = null
+                        state.captionSpoken = spoken
+                        state.captionLanguage = target.ifEmpty { spoken }
+                    }
+                    delay(DUB_PACE_MS)
+                }
+            }
+        } finally {
+            withContext(NonCancellable + Dispatchers.Default) {
+                NativeWhisper.close(handle)
+                translator?.close()
+            }
+        }
+    }
+
+    // Spoken subtitles (Dub, #531): the lines of the subtitle file playing, spoken just ahead of the position by the
+    // household's voice (fetched the first time), at the times its delay and drift give them; afresh when the file,
+    // the voice or the timing changes.
+    val dubFile = syncableSubtitles(state)
+    val dubCaptions = state.captions.takeIf { dubFile == null }
+    LaunchedEffect(state.dubbing, dubFile, dubCaptions, state.dubVoiceId, state.subtitleLook, session.index) {
+        state.dubTrack.clear()
+        if (!state.dubbing) {
+            state.dubStatus = null
+            return@LaunchedEffect
+        }
+        if (dubFile == null && dubCaptions == null) {
+            state.dubStatus = "Pick a subtitle file beside the video, or turn on subtitles made from the speech."
+            return@LaunchedEffect
+        }
+        val language = if (dubCaptions != null) {
+            state.captionLanguage ?: state.captionTarget.ifEmpty { null }
+        } else {
+            state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language
+        }
+        // Auto: a man's and a woman's voice, each line spoken by the one its speaker's voice calls for (#532);
+        // else the one voice chosen.
+        val pair = dubPair(state, platform, language)
+        val voices = pair?.toList() ?: listOfNotNull(dubVoice(state, platform, language))
+        if (voices.isEmpty()) {
+            state.dubStatus = "This build has no voice for these subtitles."
+            return@LaunchedEffect
+        }
+        for (voice in voices) {
+            if (platform.voiceReady(voice)) continue
+            state.dubStatus = "Fetching ${voice.label}…"
+            val fetched = withContext(Dispatchers.IO) {
+                platform.fetchVoice(voice) { done ->
+                    state.dubStatus = "Fetching ${voice.label}… ${(done * 100).toInt()} %"
+                }
+            }
+            if (!fetched) {
+                state.dubStatus = "${voice.label} could not be fetched."
+                return@LaunchedEffect
+            }
+        }
+        val speakers = voices.map { voice ->
+            withContext(Dispatchers.Default) { platform.speaker(voice) } ?: run {
+                state.dubStatus = "${voice.label} cannot speak in this build."
+                return@LaunchedEffect
+            }
+        }
+        val speakerFor: (Dub.Line) -> Dub.LineSpeaker = if (speakers.size == 2) {
+            { line -> if (Dub.womanSpoke(line) == true) speakers[1] else speakers[0] }
+        } else {
+            { speakers[0] }
+        }
+        // A file's lines at the times its delay and drift give them; made ones as they are heard.
+        val look = state.subtitleLook
+        val fileLines = if (dubFile != null) {
+            withContext(Dispatchers.IO) { platform.fileOf(dubFile)?.readTextOrNull()?.let(Dub::lines) }.orEmpty()
+                .map { line ->
+                    fun at(ms: Long) = (ms * look.drift).toLong() + look.delayMs
+                    line.copy(startMs = at(line.startMs), endMs = at(line.endMs))
+                }
+        } else {
+            emptyList()
+        }
+        state.dubStatus = null
+        // Every line on the film's own speech (Dub.align), found in the film's shared sound (FilmSound, #535) — kept
+        // decoded a minute ahead of the position, so each line is placed before it is spoken.
+        val video = session.current.videoPath
+        val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
+        val lines: () -> List<Dub.Line> = {
+            val raw = dubCaptions?.lines()?.mapNotNull { line ->
+                // The tone heard in the line, its text's own hints on top (#534).
+                Dub.clean(line.text).takeIf { it.text.isNotEmpty() }?.let {
+                    val delivery = Prosody.combine(line.delivery, it.delivery)
+                    line.copy(text = it.text, speaker = it.speaker, delivery = delivery)
+                }
+            } ?: fileLines
+            Dub.align(raw, sound.speech())
+        }
+        val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack).apply {
+            onSpoken = { line, took, said ->
+                val lead = line.startMs - state.positionMs
+                platform.log(
+                    "voice ${line.startMs / 1000.0} s: ${if (said) "spoken" else "not spoken"} in $took ms, " +
+                        if (lead >= 0) "${lead / 1000.0} s before it is due" else "${-lead / 1000.0} s late",
+                )
+            }
+        }
+        try {
+            while (true) {
+                // A line that cannot be spoken says so in the gear; it never takes the player down.
+                withContext(Dispatchers.Default) {
+                    runCatching {
+                        // The sound a minute ahead decoded (once, shared), so the lines due are placed on the speech.
+                        sound.samples(state.positionMs, state.positionMs + LiveCaptions.AHEAD_MS)
+                        speaking.ahead(state.positionMs)
+                    }.onFailure { state.dubStatus = "A line could not be spoken: ${it.message ?: it}" }
+                }
+                delay(DUB_PACE_MS)
+            }
+        } finally {
+            speakers.forEach { it.close() }
         }
     }
 
@@ -453,6 +737,20 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 screens = { with(platform) { TopBarButtons() } },
             )
         }
+        // Subtitles made from the speech (#529), over the picture where the household reads subtitles; while what plays
+        // is not heard yet, what the hearing is doing instead — listening, or running behind with a model too slow.
+        val captionShown = state.captionText ?: state.captionStatus?.takeIf { state.captioning && !state.panelOpen }
+        captionShown?.takeIf { !platform.pictureOnly }?.let { text ->
+            Text(
+                text,
+                fontSize = if (state.captionText != null) 22.sp else 15.sp,
+                color = androidx.compose.ui.graphics.Color.White,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp, start = 32.dp, end = 32.dp)
+                    .background(androidx.compose.ui.graphics.Color(0x99000000))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
         if (!platform.pictureOnly) with(platform) { Controls() }
         if (state.panelOpen) {
             // Tapping beside the panel closes it, like the players everyone knows.
@@ -542,6 +840,36 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         sections = { with(platform) { GearSections() } },
         afterPictureSize = { with(platform) { GearAfterPictureSize() } },
         end = {
+            CaptionRows(
+                on = state.captioning,
+                onOn = { state.captioning = it },
+                target = state.captionTarget,
+                onTarget = state::chooseCaptionTarget,
+                model = WhisperModels.of(state.captionModel),
+                onModel = { state.chooseCaptionModel(it.id) },
+                status = state.captionStatus,
+            )
+            VoiceOverRows(
+                voices = if (syncableSubtitles(state) != null || state.captioning) {
+                    PiperVoices.forLanguage(dubLanguage(state), platform.espeak)
+                } else {
+                    emptyList()
+                },
+                voice = dubVoice(state, platform, dubLanguage(state))
+                    .takeIf { dubPair(state, platform, dubLanguage(state)) == null },
+                pair = PiperVoices.pair(dubLanguage(state), platform.espeak).let { (man, woman) ->
+                    if (man != null && woman != null) man to woman else null
+                },
+                auto = dubPair(state, platform, dubLanguage(state)) != null,
+                onAuto = { state.chooseDubVoice(PiperVoices.AUTO) },
+                dubbing = state.dubbing,
+                onDubbing = { state.dubbing = it },
+                onVoice = { voice -> state.chooseDubVoice(voice.id) },
+                original = state.dubOriginal,
+                centreChannel = com.hawkynt.mediadroyd.player.Dub.hasCentre(state.dubChannels),
+                onOriginal = state::chooseDubOriginal,
+                dubStatus = state.dubStatus,
+            )
             SubtitleLookRows(
                 state.subtitleLook, onLook = state::look, onReset = state::resetLook,
                 // Sync for a subtitle file beside the video (SubtitleSync, #450): its cues laid over the speech.
@@ -552,8 +880,15 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                             val video = state.session.current.videoPath
                             val fit = withContext(Dispatchers.Default) {
                                 val cues = platform.fileOf(file)?.readTextOrNull()?.let(SubtitleSync::cues)
-                                val speech = state.speechFor(video) { platform.speech(video) }
-                                if (cues != null && speech != null) SubtitleSync.fit(speech, cues) else null
+                                // All of the film's speech, from its shared sound: only what is not decoded yet is.
+                                val sound = state.soundOf(video, state.engine.durationMs) { from, near ->
+                                    platform.openSound(video, from, near)
+                                }
+                                sound.decodeAll { part ->
+                                    state.syncing = "Listening to the sound… ${(part * 100).toInt()} %"
+                                }
+                                val speech = sound.speech()
+                                if (cues != null && speech.any { it }) SubtitleSync.fit(speech, cues) else null
                             }
                             state.syncing = if (fit == null) "No speech or no lines found to match." else null
                             if (fit != null) {
@@ -582,7 +917,31 @@ private fun Dialogs(state: PlayerScreenState, platform: PlayerPlatform) {
             report = engine.report,
             tracks = engine.tracks,
             videoPath = session.current.videoPath,
-            graph = PlaybackChain.of(platform.facts()),
+            graph = PlaybackChain.of(
+                platform.facts().copy(
+                    made = PlaybackChain.Made(
+                        WhisperModels.of(state.captionModel).label, state.captionSpoken,
+                        translation = captionTranslation(state),
+                    ).takeIf { state.captioning },
+                    voiceOver = if (state.dubbing) {
+                        val voice = dubPair(state, platform, dubLanguage(state))
+                            ?.let { (man, woman) -> "Auto: ${man.label} for men, ${woman.label} for women" }
+                            ?: dubVoice(state, platform, dubLanguage(state))?.label ?: "no voice"
+                        val original = when (state.dubOriginal) {
+                            Dub.Original.CHANNEL -> if (Dub.hasCentre(state.dubChannels)) {
+                                "the dialogue channel removed"
+                            } else {
+                                "the voice band suppressed"
+                            }
+                            Dub.Original.BAND -> "the voice band suppressed"
+                            Dub.Original.MUTE -> "the sound muted"
+                        }
+                        "$voice (Piper), $original under each line"
+                    } else {
+                        null
+                    },
+                ),
+            ),
             statisticsShown = state.statisticsShown,
             onStatistics = { state.statisticsShown = it },
             onDismiss = { state.infoOpen = false },
@@ -685,4 +1044,85 @@ internal fun syncableSubtitles(state: PlayerScreenState): String? {
     val track = state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second } ?: return null
     if (track.source <= 0) return null
     return state.sidecars.filter { it.first.kind == Sidecars.Kind.SUBTITLES }.getOrNull(track.source - 1)?.second
+}
+
+/** How often the lines ahead of the position are looked at for speaking. */
+private const val DUB_PACE_MS = 500L
+
+/** The voice subtitles in [language] are spoken in: the household's where this build has it, else the first offered. */
+internal fun dubVoice(state: PlayerScreenState, platform: PlayerPlatform, language: String?): PiperVoices.Entry? {
+    val offered = PiperVoices.forLanguage(language, platform.espeak)
+    return offered.firstOrNull { it.id == state.dubVoiceId } ?: offered.firstOrNull()
+}
+
+/**
+ * The man's and the woman's voice when the household speaks the subtitles automatically by the speaker (#532) — Auto,
+ * the default before any voice is chosen — and the language has both; null for one voice.
+ */
+internal fun dubPair(
+    state: PlayerScreenState,
+    platform: PlayerPlatform,
+    language: String?,
+): Pair<PiperVoices.Entry, PiperVoices.Entry>? {
+    if (state.dubVoiceId.isNotEmpty() && state.dubVoiceId != PiperVoices.AUTO) return null
+    val (male, female) = PiperVoices.pair(language, platform.espeak)
+    return if (male != null && female != null) male to female else null
+}
+
+/** The language of the subtitle track playing, as the engine names it. */
+internal fun dubLanguage(state: PlayerScreenState): String? =
+    if (syncableSubtitles(state) == null && state.captioning) {
+        state.captionLanguage ?: state.captionTarget.ifEmpty { null }
+    } else {
+        state.tracks.firstOrNull { it.kind == Track.Kind.TEXT && it.selected && !it.second }?.language
+    }
+
+/** How often the made subtitle on screen follows the position. */
+private const val CAPTION_PACE_MS = 100L
+
+/** What NativeWhisper.transcribe wrote, read back: the language, then a segment a line. */
+internal fun heardOf(text: String): LiveCaptions.Heard {
+    val lines = text.lines()
+    val segments = lines.drop(1).mapNotNull { line ->
+        val parts = line.split('\t', limit = 3)
+        val start = parts.getOrNull(0)?.toLongOrNull()
+        val end = parts.getOrNull(1)?.toLongOrNull()
+        if (start == null || end == null) null else LiveCaptions.Segment(start, end, parts.getOrElse(2) { "" })
+    }
+    return LiveCaptions.Heard(lines.firstOrNull().orEmpty(), segments)
+}
+
+/**
+ * Whether [download]'s files are in place, fetched now where not (telling [say] how far, as [what]); false where they
+ * could not be — [say] has said why.
+ */
+internal suspend fun fetched(
+    platform: PlayerPlatform,
+    download: NeuralModels.Download,
+    what: String,
+    say: (String?) -> Unit,
+): Boolean {
+    val dir = platform.modelFolder(download) ?: run {
+        say("This build cannot keep $what.")
+        return false
+    }
+    if (ModelFolder.ready(dir, download)) return true
+    say("Fetching $what…")
+    val done = withContext(Dispatchers.IO) {
+        ModelFolder.fetch(dir, download, { part -> say("Fetching $what… ${(part * 100).toInt()} %") })
+    }
+    if (!done) say("$what could not be fetched.")
+    return done
+}
+
+/** How the made subtitles are translated, as the info graph names it; null where they are as spoken. */
+internal fun captionTranslation(state: PlayerScreenState): String? {
+    val route = CaptionRoute.of(state.captionTarget, state.captionSpoken)
+    val into = TranslationModels.into(route.translator)
+    return when {
+        route.translator != null && route.whisperTranslates -> "Whisper into English, then OPUS-MT into ${into?.label}"
+        route.translator != null -> "OPUS-MT, English into ${into?.label}"
+        route.whisperTranslates -> "Whisper, into English"
+        else -> null
+    }
 }

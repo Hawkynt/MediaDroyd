@@ -3,6 +3,7 @@ package com.hawkynt.mediadroyd.player
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.AudioProcessor.UnhandledAudioFormatException
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import java.nio.ByteBuffer
 
@@ -25,7 +26,19 @@ class LoudnessAudioProcessor(
     private val voiceBoostDb: () -> Float = { 0f },
     private val eqPreampDb: () -> Float = { 0f },
     private val eqBandsDb: () -> List<Float> = { emptyList() },
+    private val voiceOver: () -> com.hawkynt.mediadroyd.engine.VoiceOver? = { null },
 ) : BaseAudioProcessor() {
+
+    // Where the sound passing stands in the film (VoiceOver, #531): the stream's position at the last flush — where
+    // a seek or the start put it — and the frames handed through since.
+    private var rate = 0
+    private var streamStartUs = 0L
+    private var framesSince = 0L
+
+    override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
+        streamStartUs = streamMetadata.positionOffsetUs
+        framesSince = 0
+    }
 
     private var channels = 1
     private var chain: LoudnessChain? = null
@@ -36,6 +49,7 @@ class LoudnessAudioProcessor(
             throw UnhandledAudioFormatException(inputAudioFormat)
         }
         channels = inputAudioFormat.channelCount.coerceAtLeast(1)
+        rate = inputAudioFormat.sampleRate
         chain = LoudnessChain(inputAudioFormat.sampleRate, channels)
         return inputAudioFormat
     }
@@ -48,6 +62,12 @@ class LoudnessAudioProcessor(
         if (samples.size < count) samples = ShortArray(count)
         inputBuffer.asShortBuffer().get(samples, 0, count)
         inputBuffer.position(inputBuffer.limit())
+        // Spoken subtitles at the film's own time, before the speed (the chain's Sonic comes after this processor).
+        voiceOver()?.let { over ->
+            val ptsMs = (streamStartUs + framesSince * 1_000_000L / rate.coerceAtLeast(1)) / 1000
+            over.mix(samples, 0, frames, channels, rate, ptsMs)
+        }
+        framesSince += frames
         checkNotNull(chain).process(
             samples, 0, frames, gainDb(), nightMode(), normalize(), fileLoudness(), voiceBoostDb(),
             eqPreampDb(), eqBandsDb(),

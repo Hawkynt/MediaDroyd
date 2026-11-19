@@ -14,8 +14,92 @@ import com.hawkynt.mediadroyd.nfo.TimeRange
  * begins that runs to the end. Pure: the platforms hand over the gray frames (PlayerPlatform.pictures).
  */
 object PictureCues {
-    /** Gray frames of a stretch of a video: [frames] of [width] x [height] bytes, one every [stepMs] from [startMs]. */
-    class Frames(val width: Int, val height: Int, val startMs: Long, val stepMs: Long, val frames: List<ByteArray>)
+    /**
+     * Gray frames of a stretch of a video: [frames] of [width] x [height] bytes, one every [stepMs] from [startMs]; for
+     * a closing decoded once for both looks (#535, [closing]) also the video's [durationMs] and the text reader's
+     * frames ([textAt]).
+     */
+    class Frames(
+        val width: Int,
+        val height: Int,
+        val startMs: Long,
+        val stepMs: Long,
+        val frames: List<ByteArray>,
+        val durationMs: Long = -1,
+        private val text: Map<Long, ByteArray> = emptyMap(),
+    ) {
+        /** The frame at [atMs] at CreditText's size, gray, where the text reader's frames are kept there; else null. */
+        fun textAt(atMs: Long): ByteArray? = text[atMs]?.let(::inflate)
+
+        /** Whether any text reader's frames are kept. */
+        val hasText: Boolean get() = text.isNotEmpty()
+
+        /** These frames without the text reader's: some megabytes given back once they are read. */
+        fun withoutText() = Frames(width, height, startMs, stepMs, frames, durationMs)
+    }
+
+    /**
+     * A closing ([startMs] on, of a video [durationMs] long) decoded once for both of its looks (#535): [frames] gray
+     * at CreditText's size, one every [CLOSING_STEP_MS], shrunk to the look size here; where [keepText] (the platform
+     * can read text), the text reader's own frames — every CreditText.STEP_MS — kept as well, packed.
+     */
+    fun closing(startMs: Long, durationMs: Long, frames: List<ByteArray>, keepText: Boolean): Frames {
+        val w = CreditText.WIDTH
+        val h = CreditText.HEIGHT
+        val look = frames.map { shrink(it, w, h, LOOK_WIDTH, LOOK_HEIGHT) }
+        val every = (CreditText.STEP_MS / CLOSING_STEP_MS).toInt()
+        val text = if (!keepText) {
+            emptyMap()
+        } else {
+            frames.withIndex().filter { it.index % every == 0 }
+                .associate { (i, frame) -> startMs + i * CLOSING_STEP_MS to deflate(frame) }
+        }
+        return Frames(LOOK_WIDTH, LOOK_HEIGHT, startMs, CLOSING_STEP_MS, look, durationMs, text)
+    }
+
+    /** [gray] ([width] x [height]) shrunk to [toWidth] x [toHeight]: each cell the mean of the pixels it covers. */
+    fun shrink(gray: ByteArray, width: Int, height: Int, toWidth: Int, toHeight: Int): ByteArray {
+        val out = ByteArray(toWidth * toHeight)
+        for (cy in 0 until toHeight) {
+            val y0 = cy * height / toHeight
+            val y1 = maxOf(y0 + 1, (cy + 1) * height / toHeight)
+            for (cx in 0 until toWidth) {
+                val x0 = cx * width / toWidth
+                val x1 = maxOf(x0 + 1, (cx + 1) * width / toWidth)
+                var sum = 0L
+                for (y in y0 until y1) for (x in x0 until x1) sum += gray[y * width + x].toInt() and 0xff
+                out[cy * toWidth + cx] = (sum / ((x1 - x0) * (y1 - y0))).toInt().toByte()
+            }
+        }
+        return out
+    }
+
+    private fun deflate(bytes: ByteArray): ByteArray {
+        val deflater = java.util.zip.Deflater(java.util.zip.Deflater.BEST_SPEED)
+        return try {
+            deflater.setInput(bytes)
+            deflater.finish()
+            val out = java.io.ByteArrayOutputStream(bytes.size / 4)
+            val buffer = ByteArray(1 shl 16)
+            while (!deflater.finished()) out.write(buffer, 0, deflater.deflate(buffer))
+            out.toByteArray()
+        } finally {
+            deflater.end()
+        }
+    }
+
+    private fun inflate(packed: ByteArray): ByteArray {
+        val inflater = java.util.zip.Inflater()
+        return try {
+            inflater.setInput(packed)
+            val out = ByteArray(CreditText.WIDTH * CreditText.HEIGHT)
+            var n = 0
+            while (n < out.size && !inflater.finished()) n += inflater.inflate(out, n, out.size - n)
+            out
+        } finally {
+            inflater.end()
+        }
+    }
 
     /** How often the opening is sampled for its intro. */
     const val OPENING_STEP_MS = 250L

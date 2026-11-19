@@ -178,6 +178,66 @@ tasks.register<SourceRelease>("chromaprintSource") {
     outputDir.set(chromaprintRoot)
 }
 
+// whisper.cpp (MIT) with its ggml: subtitles made from the speech (#529), inside the native library on every system.
+val whisperRoot = layout.buildDirectory.dir("whisper.cpp")
+extra["whisperRoot"] = whisperRoot
+tasks.register<SourceRelease>("whisperSource") {
+    group = "build"
+    description = "Fetches whisper.cpp for the native tree"
+    url.set("https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.5.tar.gz")
+    sha256.set("ff1a9053feb509ff9d7729703355541ae9690073a6b1c40eb692c962e0dc1720")
+    outputDir.set(whisperRoot)
+}
+
+// espeak-ng (GPL-3.0-or-later) for the spoken subtitles' Piper voices (#531): only with -Pespeak, for the household's
+// own devices, never in a release; its library is one of its own (native/espeak).
+val espeak = providers.gradleProperty("espeak").isPresent
+val espeakRoot = layout.buildDirectory.dir("espeak-ng")
+extra["espeakRoot"] = espeakRoot
+extra["espeak"] = espeak
+tasks.register<SourceRelease>("espeakSource") {
+    group = "build"
+    description = "Fetches espeak-ng for the native tree (-Pespeak)"
+    url.set("https://github.com/espeak-ng/espeak-ng/archive/refs/tags/1.52.0.tar.gz")
+    sha256.set("bb4338102ff3b49a81423da8a1a158b420124b055b60fa76cfb4b18677130a23")
+    outputDir.set(espeakRoot)
+}
+
+// espeak-ng's phoneme tables and dictionaries made on this machine (they are the same on every system), for the app to
+// carry as assets in its -Pespeak builds: ./gradlew :native:espeakData → native/build/espeak-data/espeak-ng-data.
+val espeakDataDir = layout.buildDirectory.dir("espeak-data")
+extra["espeakDataDir"] = espeakDataDir
+tasks.register("espeakData") {
+    group = "build"
+    description = "Builds espeak-ng's data for the app's -Pespeak builds"
+    dependsOn("espeakSource")
+    inputs.dir(espeakRoot)
+    outputs.dir(espeakDataDir)
+    val source = espeakRoot
+    val out = espeakDataDir
+    val work = layout.buildDirectory.dir("espeak-data-cmake")
+    doLast {
+        val cmake = cmake()
+        fun run(vararg args: String) {
+            val started = ProcessBuilder(cmake, *args).redirectErrorStream(true).start()
+            started.outputStream.close()
+            started.inputStream.bufferedReader().forEachLine { println(it) }
+            check(started.waitFor() == 0) { "cmake ${args.joinToString(" ")} failed" }
+        }
+        // espeak-ng compiles its data into its own build folder; that folder's path must stay short (160 characters
+        // with the data's own names on Linux), so the folder sits right under build/.
+        val build = work.get().asFile.path
+        run(
+            "-S", source.get().asFile.path, "-B", build, "-DCMAKE_BUILD_TYPE=Release", "-DUSE_MBROLA=OFF",
+            "-DUSE_LIBSONIC=OFF", "-DUSE_LIBPCAUDIO=OFF", "-DUSE_ASYNC=OFF", "-DESPEAK_BUILD_MANPAGES=OFF",
+        )
+        run("--build", build, "--target", "data", "--parallel", Runtime.getRuntime().availableProcessors().toString())
+        val target = File(out.get().asFile, "espeak-ng-data")
+        target.deleteRecursively()
+        File(build, "espeak-ng-data").copyRecursively(target)
+    }
+}
+
 // The desktop this build runs on, as the library is named for it: linux-x64, linux-arm64 or windows-x64.
 val hostSystem = if (System.getProperty("os.name").startsWith("Windows")) "windows" else "linux"
 val hostArch = when (System.getProperty("os.arch")) {
@@ -236,7 +296,8 @@ fun cmake(): String {
 tasks.register("desktopLibrary") {
     group = "build"
     description = "Builds the native library (native/) for this desktop"
-    dependsOn(ncnnDesktop, "assSources", "chromaprintSource")
+    dependsOn(ncnnDesktop, "assSources", "chromaprintSource", "whisperSource")
+    if (espeak) dependsOn("espeakSource")
     val sources = layout.projectDirectory
     inputs.files(sources.file("CMakeLists.txt"), sources.dir("src"), sources.dir("jni"), sources.dir("ass"))
     inputs.property("host", host)
@@ -249,6 +310,9 @@ tasks.register("desktopLibrary") {
     val wantedForHost = ncnnForHost
     val ass = assRoot
     val chromaprint = chromaprintRoot
+    val espeakSources = espeakRoot.takeIf { espeak }
+    val whisper = whisperRoot
+    inputs.property("espeak", espeak)
     doLast {
         val wanted = checkNotNull(wantedForHost) { "ncnn has no release for $host" }
         val ncnn = ncnnDir.get().asFile.let { if (wanted.root.isEmpty()) it else File(it, wanted.root) }
@@ -273,8 +337,16 @@ tasks.register("desktopLibrary") {
             "-DMEDIADROYD_OUTPUT=${desktopLibraryDir.get().asFile.path}",
             "-DASS_SOURCES=${ass.get().asFile.path}",
             "-DCHROMAPRINT_SOURCES=${chromaprint.get().asFile.path}",
+            "-DESPEAK_SOURCES=${espeakSources?.get()?.asFile?.path.orEmpty()}",
+            "-DWHISPER_SOURCES=${whisper.get().asFile.path}",
         )
         run("--build", build, "--config", "Release", "--parallel", jobs)
+        // Without -Pespeak no espeak-ng is carried, not even one an earlier build left behind.
+        if (espeakSources == null) {
+            val out = desktopLibraryDir.get().asFile
+            out.listFiles().orEmpty().filter { it.name.contains("mediadroyd_espeak") }.forEach { it.delete() }
+            File(out, "espeak-ng-data").deleteRecursively()
+        }
     }
 }
 
@@ -312,6 +384,9 @@ tasks.register("desktopRuntime") {
         val built = library.get().asFile.listFiles().orEmpty().filter { it.isFile }
         check(built.isNotEmpty()) { "the native library was not built" }
         built.forEach { it.copyTo(File(target, it.name)) }
+        // espeak-ng's data beside its library, where the build carries it (-Pespeak).
+        File(library.get().asFile, "espeak-ng-data").takeIf { it.isDirectory }
+            ?.copyRecursively(File(target, "espeak-ng-data"))
         val name = if (windows) "vcomp140.dll" else "libgomp.so.1"
         val openMp = if (windows) {
             val vswhere = File(

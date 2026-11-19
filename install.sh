@@ -9,8 +9,9 @@
 #   ./install.sh --build       built from this checkout (needs a JDK 21 and, for the native library, CMake and a C++
 #                              compiler)
 #   ./install.sh --build --full
-#                              the same with Bytedeco's GPL FFmpeg build (x264, x265, ...): for your own machine only,
-#                              never to be passed on (README "Building")
+#                              the same with Bytedeco's GPL FFmpeg build (x264, x265, ...) and espeak-ng for the
+#                              spoken subtitles' voices: for your own machine only, never to be passed on (README
+#                              "Building")
 #   ./install.sh --uninstall   removes the app, its menu entry, icon and command; keeps the settings
 set -eu
 
@@ -55,7 +56,7 @@ trap 'rm -rf "$work"' EXIT
 if [ "$mode" = build ]; then
   [ -x "$HERE/gradlew" ] || { echo "--build needs the MediaDroyd source checkout this script came with" >&2; exit 1; }
   set -- :desktop:createDistributable --no-daemon
-  [ "$full" = 1 ] && set -- "$@" -PfullFfmpeg
+  [ "$full" = 1 ] && set -- "$@" -PfullFfmpeg -Pespeak
   (cd "$HERE" && ./gradlew "$@")
   source="$HERE/desktop/build/compose/binaries/main/app/MediaDroyd"
   launcher="bin/MediaDroyd"

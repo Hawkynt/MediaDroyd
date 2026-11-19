@@ -1,0 +1,8 @@
+OPUS-MT (Helsinki-NLP), English into German, French, Spanish, Italian, Dutch and Russian
+https://github.com/Helsinki-NLP/Opus-MT
+
+The models are licensed under the Creative Commons Attribution 4.0 International licence (CC BY 4.0):
+Jörg Tiedemann and Santhosh Thottingal, "OPUS-MT — Building open translation services for the World", EAMT 2020.
+
+Fetched when chosen, as Xenova's quantised ONNX exports (https://huggingface.co/Xenova/opus-mt-en-<language>) at fixed
+revisions, every file checked against its digest, and run on ONNX Runtime to translate subtitles made from the speech.

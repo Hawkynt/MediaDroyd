@@ -18,6 +18,14 @@ object CreditReads {
     // Pictures read past a time before giving up on finding one there (a broken stretch, the end).
     private const val MAX_READS = 400
 
+    /** The lines read in [gray] (CreditText's size), a frame decoded already (PictureCues.closing); null if not. */
+    fun recognise(neural: DesktopNeural, gray: ByteArray): List<CreditText.Line>? = synchronized(this) {
+        if (!neural.loaded || !neural.ready(NeuralModels.PPOCR)) return null
+        if (handle == 0L) handle = NativeText.open(null, neural.folder(NeuralModels.PPOCR).path, false)
+        if (handle == 0L) return null
+        NativeText.read(handle, gray, CreditText.WIDTH, CreditText.HEIGHT)?.let(CreditText::lines)
+    }
+
     /**
      * The video at [path] ([from] a network source where it lives on one): at each time [at] gives from its length, the
      * lines read there; null where it or the models cannot be read.

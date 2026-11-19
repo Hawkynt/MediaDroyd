@@ -11,6 +11,9 @@ import com.hawkynt.mediadroyd.player.SubtitleText
 import com.hawkynt.mediadroyd.player.Teletext
 import com.hawkynt.mediadroyd.player.ToneMap
 import com.hawkynt.mediadroyd.player.YuvMatrix
+import com.hawkynt.mediadroyd.player.FilmSound
+import com.hawkynt.mediadroyd.player.LiveCaptions
+import com.hawkynt.mediadroyd.player.ReadAhead
 import org.bytedeco.ffmpeg.avcodec.AVCodec
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext
 import org.bytedeco.ffmpeg.avcodec.AVPacket
@@ -44,6 +47,11 @@ class MediaReader(
     private val decoders: List<HardwareDecoding.Device> = HardwareDecoding.candidates(softwareFirst = false),
     /** Whether the pictures are decoded at all: not where only the sound is wanted (SoundPrints). */
     pictures: Boolean = true,
+    /**
+     * Whether it reads ahead for everyone (#535): a thread of its own demuxes the file [AHEAD_MS] ahead of what is
+     * read into packets shared with the analysis ([soundTap]), and a seek inside them needs no new read of the file.
+     */
+    readAhead: Boolean = false,
 ) : AutoCloseable {
 
     /**
@@ -170,6 +178,21 @@ class MediaReader(
     private val rgbaFrame: AVFrame = avutil.av_frame_alloc()
     private val soundFrame: AVFrame = avutil.av_frame_alloc()
     private val pending = ArrayDeque<Any>()
+
+    // Reading ahead for everyone: the packets, this reader's own place in them, the thread demuxing into them, and the
+    // lock the file is demuxed and sought under (#535).
+    private val shared: ReadAhead<AVPacket>? = if (!readAhead) {
+        null
+    } else {
+        ReadAhead(AHEAD_MS, MAX_AHEAD_BYTES, BEHIND_MS, share = { avcodec.av_packet_clone(it) }) {
+            avcodec.av_packet_free(it)
+        }
+    }
+    private val playback = shared?.cursor(Long.MIN_VALUE, holds = true)
+    private val formatLock = Any()
+    @Volatile private var seekGeneration = 0
+    @Volatile private var closing = false
+    private var pump: Thread? = null
     private var skipBeforeMs = Long.MIN_VALUE
     private var ended = false
 
@@ -536,7 +559,18 @@ class MediaReader(
      * out, so the next picture is the one at that time.
      */
     fun seek(positionMs: Long) {
-        avformat.av_seek_frame(format, -1, positionMs * 1000, avformat.AVSEEK_FLAG_BACKWARD)
+        val playback = playback
+        if (playback == null) {
+            avformat.av_seek_frame(format, -1, positionMs * 1000, avformat.AVSEEK_FLAG_BACKWARD)
+        } else if (!playback.seek(positionMs, keyStream = if (video != null) videoIndex else audioIndex)) {
+            // Outside what is read ahead: everything there given back, the file read anew from there.
+            synchronized(formatLock) {
+                seekGeneration++
+                avformat.av_seek_frame(format, -1, positionMs * 1000, avformat.AVSEEK_FLAG_BACKWARD)
+                shared!!.reset()
+                playback.rejoin()
+            }
+        }
         video?.let { avcodec.avcodec_flush_buffers(it) }
         audio?.let { avcodec.avcodec_flush_buffers(it) }
         text.teletext?.reset()
@@ -564,25 +598,132 @@ class MediaReader(
 
     /** The next decoded picture or sound, in the file's order; null at the end. */
     fun read(): Any? {
+        val playback = playback
+        if (playback != null && pump == null) {
+            pump = Thread({ demux(shared!!) }, "mediadroyd-read-ahead").apply {
+                isDaemon = true
+                start()
+            }
+        }
         while (pending.isEmpty()) {
-            if (ended) return null
-            if (avformat.av_read_frame(format, packet) < 0) {
-                ended = true
-                video?.let { drain(it, null) }
-                audio?.let { drain(it, null) }
+            if (ended || closing) return null
+            if (playback != null) {
+                when (val next = playback.next()) {
+                    is ReadAhead.Next.Item -> decode(next.item)
+                    ReadAhead.Next.Wait -> playback.await(WAIT_MS)
+                    ReadAhead.Next.End -> finish()
+                    ReadAhead.Next.Lost -> playback.rejoin()
+                }
                 continue
             }
-            val index = packet.stream_index()
-            when (index) {
-                videoIndex -> video?.let { drain(it, packet) }
-                audioIndex -> audio?.let { drain(it, packet) }
+            if (avformat.av_read_frame(format, packet) < 0) {
+                finish()
+                continue
             }
-            // Both subtitle tracks may be pages of one teletext stream.
-            if (index == text.index) text.packet(packet)
-            if (index == secondText.index) secondText.packet(packet)
+            decode(packet)
             avcodec.av_packet_unref(packet)
         }
         return pending.removeFirst()
+    }
+
+    private fun finish() {
+        ended = true
+        video?.let { drain(it, null) }
+        audio?.let { drain(it, null) }
+    }
+
+    private fun decode(input: AVPacket) {
+        val index = input.stream_index()
+        when (index) {
+            videoIndex -> video?.let { drain(it, input) }
+            audioIndex -> audio?.let { drain(it, input) }
+        }
+        // Both subtitle tracks may be pages of one teletext stream.
+        if (index == text.index) text.packet(input)
+        if (index == secondText.index) secondText.packet(input)
+    }
+
+    // The file demuxed into [into], AHEAD_MS ahead of what is read, on a thread of its own: the picture, every sound
+    // and every subtitle stream, so another sound or subtitle picked needs no new read.
+    private fun demux(into: ReadAhead<AVPacket>) {
+        val read = avcodec.av_packet_alloc()
+        try {
+            while (!closing) {
+                val generation: Int
+                val got: Int
+                synchronized(formatLock) {
+                    generation = seekGeneration
+                    got = if (closing) -1 else avformat.av_read_frame(format, read)
+                }
+                if (got < 0) {
+                    synchronized(formatLock) { if (generation == seekGeneration && !closing) into.end() }
+                    while (!closing && generation == seekGeneration) into.awaitRoom(WAIT_MS)
+                    continue
+                }
+                val index = read.stream_index()
+                val kind = format.streams(index).codecpar().codec_type()
+                val kept = index == videoIndex || kind == avutil.AVMEDIA_TYPE_AUDIO ||
+                    kind == avutil.AVMEDIA_TYPE_SUBTITLE
+                val clone = if (kept) avcodec.av_packet_clone(read) else null
+                avcodec.av_packet_unref(read)
+                if (clone == null) continue
+                val ms = packetMs(clone)
+                val key = clone.flags() and avcodec.AV_PKT_FLAG_KEY != 0
+                var taken = false
+                while (!closing && !taken) {
+                    // A seek meanwhile makes it a packet of before: dropped.
+                    val stale = synchronized(formatLock) {
+                        if (generation != seekGeneration) {
+                            true
+                        } else {
+                            taken = into.offer(clone, ms, clone.size(), index, key)
+                            false
+                        }
+                    }
+                    if (stale) break
+                    if (!taken) into.awaitRoom(WAIT_MS)
+                }
+                if (!taken) avcodec.av_packet_free(clone)
+            }
+        } finally {
+            avcodec.av_packet_free(read)
+        }
+    }
+
+    private var lastPacketMs = 0L
+
+    // A packet's time in ms from the stream's start: its presentation time, else its decoding time, else the last one.
+    private fun packetMs(input: AVPacket): Long {
+        val stream = format.streams(input.stream_index())
+        val time = input.pts().takeIf { it != avutil.AV_NOPTS_VALUE }
+            ?: input.dts().takeIf { it != avutil.AV_NOPTS_VALUE } ?: return lastPacketMs
+        val start = if (stream.start_time() != avutil.AV_NOPTS_VALUE) stream.start_time() else 0
+        val base = stream.time_base()
+        return Math.round((time - start) * 1000.0 * base.num() / base.den()).also { lastPacketMs = it }
+    }
+
+    /**
+     * The sound playing, from [fromMs] on, tapped from the packets read ahead (#535) — decoded for the analysis on its
+     * own (SoundTap), the file not read again; where its place is given back, [fallback] reads on from the file
+     * itself. Null where this reader does not read ahead, has no sound, or holds nothing near [fromMs].
+     */
+    fun soundTap(fromMs: Long, fallback: (atMs: Long) -> FilmSound.Stream?): FilmSound.Stream? {
+        val shared = shared ?: return null
+        val index = audioIndex.takeIf { it >= 0 } ?: return null
+        if (closing || !shared.covers(fromMs)) return null
+        val parameters = avcodec.avcodec_parameters_alloc()
+        val stream = synchronized(formatLock) {
+            if (closing) null else format.streams(index).also { avcodec.avcodec_parameters_copy(parameters, it.codecpar()) }
+        }
+        if (stream == null) {
+            avcodec.avcodec_parameters_free(parameters)
+            return null
+        }
+        val start = if (stream.start_time() != avutil.AV_NOPTS_VALUE) stream.start_time() else 0
+        return SoundTap(
+            shared.cursor(fromMs, setOf(index)), parameters, stream.time_base().num(), stream.time_base().den(), start,
+            fromMs, fallback,
+        )
     }
 
     private fun drain(context: AVCodecContext, input: AVPacket?) {
@@ -770,6 +911,10 @@ class MediaReader(
     }
 
     override fun close() {
+        closing = true
+        // The demuxer done with the file first: it reads it only under this lock.
+        synchronized(formatLock) { shared?.reset() }
+        pump?.join(JOIN_MS)
         sws?.let { swscale.sws_freeContext(it) }
         swr?.let { swresample.swr_free(it) }
         video?.let { avcodec.avcodec_free_context(it) }
@@ -789,6 +934,19 @@ class MediaReader(
     companion object {
         /** The rate all sound is resampled to for the output. */
         const val SAMPLE_RATE = 48_000
+
+        /**
+         * How far ahead the file is read where it reads ahead for everyone (#535): what Whisper hears ahead of the
+         * position (LiveCaptions.AHEAD_MS) and the window it hears, with a margin — at most [MAX_AHEAD_BYTES].
+         */
+        const val AHEAD_MS = LiveCaptions.AHEAD_MS + LiveCaptions.WINDOW_MS + 5_000L
+        const val MAX_AHEAD_BYTES = 512L shl 20
+
+        /** What stays behind the position, so a short seek back needs no new read. */
+        const val BEHIND_MS = 10_000L
+
+        private const val WAIT_MS = 20L
+        private const val JOIN_MS = 2_000L
 
         /** FFmpeg's subtitle codecs by the MIME types the info sheet names them by (PlaybackChain.subtitleFormat). */
         val SUBTITLE_MIME_TYPES = mapOf(

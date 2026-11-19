@@ -200,4 +200,34 @@ class SkipFinderTest {
         assertEquals(2_460_000L, found.creditsEndMs)
         assertEquals(listOf(2_400_000L..2_460_000L), found.credits)
     }
+
+    @Test
+    fun `the closing decoded for its pictures is read for its text too, only the narrowing decodes again (#535)`() {
+        val store = StateStore(Memory())
+        val scene = ByteArray(CreditText.WIDTH * CreditText.HEIGHT) { (80 + it % CreditText.WIDTH / 12).toByte() }
+        val titled = scene.copyOf().also { it[0] = 1 }
+        val decoded = ArrayList<Long>()
+        val finder = SkipFinder(
+            store,
+            pictures = { _, closing ->
+                // Credits over the scene from 2 401 s to the end at 2 480 s.
+                val frames = List(480) { if (2_000_000 + it * 1000L >= 2_401_000) titled else scene }
+                if (closing) PictureCues.closing(2_000_000, 2_480_000, frames, keepText = true) else null
+            },
+            text = { _, at -> at(2_480_000).map { time -> decoded += time; time to credits(time) } },
+            recognise = { gray -> credits(if (gray[0] == 1.toByte()) 2_401_000 else 0) },
+            print = { location, closing ->
+                IntroCredits.SoundPrint(noise(600.0, location.hashCode() + if (closing) 1 else 0), 0)
+            },
+        )
+        val step = finder.steps(episodes, 0).first { it.part == SkipFinder.Part.CREDITS }
+        finder.keep(step, requireNotNull(finder.find(step)))
+        assertEquals(2_401_000L, store.foundSkipFor(episodes[0])?.creditsStartMs)
+        // Only the four seconds before the first credits read are decoded again.
+        assertEquals(listOf(2_401_000L, 2_402_000L, 2_403_000L, 2_404_000L), decoded.sorted().distinct().take(4))
+        assertTrue("decoded again: $decoded", decoded.none { it % 5000 == 0L })
+    }
+
+    private fun credits(time: Long) =
+        if (time >= 2_401_000) listOf(CreditText.Line(100, 100, 300, 30, "Directed by")) else emptyList()
 }

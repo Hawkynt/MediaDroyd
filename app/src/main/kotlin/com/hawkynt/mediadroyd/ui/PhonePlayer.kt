@@ -234,6 +234,7 @@ fun PhonePlayer(
             override val normalizeLoudness get() = settings.evenLoudness
             override val audioDelayMs get() = audioDelayMs
             override val subtitleDelayMs get() = shared[0]?.subtitleDelayNow ?: 0
+            override val voiceOver get() = shared[0]?.voiceOver
             override val voiceBoostDb get() = settings.voices
             override val equalizerPreampDb get() = equalizer.preampDb
             override val equalizerBandsDb get() = equalizer.bandsDb
@@ -1104,8 +1105,38 @@ fun PhonePlayer(
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.data.CreditReads.read(context, location, at)
 
-        // Where the sound speaks, for Sync: the app's FFmpeg decoding the whole sound (SpeechReads).
-        override fun speech(location: String) = com.hawkynt.mediadroyd.data.SpeechReads.of(context, location)
+        override fun recognise(gray: ByteArray) = com.hawkynt.mediadroyd.data.CreditReads.recognise(context, gray)
+
+        // The film's sound read once for every analysis of it (FilmSound, #535): the app's FFmpeg at 16 kHz.
+        override fun log(message: String) {
+            android.util.Log.i("MediaDroyd.Measure", message)
+        }
+
+        override fun openSound(location: String, fromMs: Long, near: Boolean) =
+            com.hawkynt.mediadroyd.data.SpeechReads.open(context, location, fromMs, near)
+
+        override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
+            com.hawkynt.mediadroyd.data.ModelStore.folder(context, download)
+
+        override fun openWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry): Long =
+            if (!com.hawkynt.mediadroyd.player.AndroidNeural.loaded) {
+                0L
+            } else {
+                val dir = com.hawkynt.mediadroyd.data.ModelStore.folder(context, model.download)
+                com.hawkynt.mediadroyd.player.NativeWhisper.open(java.io.File(dir, model.file).path)
+            }
+
+        // Spoken subtitles (#531): Piper's voices on ONNX Runtime; espeak-ng in builds for one's own phones.
+        override val espeak get() = com.hawkynt.mediadroyd.data.AndroidVoices.espeak
+
+        override fun voiceReady(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
+            com.hawkynt.mediadroyd.data.ModelStore.ready(context, voice.download)
+
+        override fun fetchVoice(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry, progress: (Float) -> Unit) =
+            com.hawkynt.mediadroyd.data.ModelStore.fetch(context, voice.download, progress)
+
+        override fun speaker(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
+            com.hawkynt.mediadroyd.data.AndroidVoices.speaker(context, voice)
 
         // Media3's own controls take play, pause and seeking; a remote's keys reach them.
         override val commands = PHONE_COMMANDS

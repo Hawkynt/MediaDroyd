@@ -67,21 +67,34 @@ if(NOT CHROMAPRINT_SOURCES)
 endif()
 add_subdirectory(chromaprint)
 
+set(WHISPER_SOURCES "" CACHE PATH "whisper.cpp's release tree (native/build.gradle.kts, whisperSource)")
+if(NOT WHISPER_SOURCES)
+    message(FATAL_ERROR "WHISPER_SOURCES is not set: the source :native:whisperSource unpacks")
+endif()
+add_subdirectory(whisper)
+
+# espeak-ng for the Piper voices, a GPL library of its own, only where its sources are handed over (-Pespeak).
+set(ESPEAK_SOURCES "" CACHE PATH "espeak-ng's release tree (native/build.gradle.kts, espeakSource); empty: none")
+if(ESPEAK_SOURCES)
+    add_subdirectory(espeak)
+endif()
+
 if(ANDROID)
     # The name the app loads (NeuralInterpolator.kt).
     add_library(mediadroyd_neural SHARED
-        jni/interpolator.cpp jni/platform_android.cpp jni/subtitles.cpp jni/fingerprint.cpp jni/text.cpp)
+        jni/interpolator.cpp jni/platform_android.cpp jni/subtitles.cpp jni/fingerprint.cpp jni/text.cpp
+        jni/speech.cpp)
     target_link_libraries(mediadroyd_neural
-        mediadroyd_networks mediadroyd_subtitles mediadroyd_chromaprint android -fopenmp -static-openmp)
+        mediadroyd_networks mediadroyd_subtitles mediadroyd_chromaprint whisper android -fopenmp -static-openmp)
     # 16 KB pages, as Android 15 devices may use.
     target_link_options(mediadroyd_neural PRIVATE "-Wl,-z,max-page-size=16384")
 else()
     find_package(JNI REQUIRED)
     add_library(mediadroyd SHARED
         jni/interpolator.cpp jni/platform_desktop.cpp jni/desktop.cpp jni/subtitles.cpp jni/fingerprint.cpp
-        jni/text.cpp)
+        jni/text.cpp jni/speech.cpp)
     target_include_directories(mediadroyd PRIVATE ${JNI_INCLUDE_DIRS})
-    target_link_libraries(mediadroyd PRIVATE mediadroyd_networks mediadroyd_subtitles mediadroyd_chromaprint)
+    target_link_libraries(mediadroyd PRIVATE mediadroyd_networks mediadroyd_subtitles mediadroyd_chromaprint whisper)
     # Only the JNI entries (JNIEXPORT) are exported.
     set_target_properties(mediadroyd mediadroyd_networks PROPERTIES
         CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)

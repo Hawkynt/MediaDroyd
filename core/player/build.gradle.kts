@@ -8,6 +8,9 @@ kotlin {
 
 dependencies {
     api(project(":core:library"))
+    implementation(libs.serialization.json)
+    // Piper's voices (PiperSpeaker): each shell brings ONNX Runtime's own build, desktop jar or Android library.
+    compileOnly(libs.onnxruntime)
     testImplementation(libs.junit)
 }
 

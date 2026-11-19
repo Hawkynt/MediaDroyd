@@ -3,22 +3,42 @@ package com.hawkynt.mediadroyd.data
 import android.content.Context
 import com.hawkynt.mediadroid.ffmpeg.FfmpegDemuxer
 import com.hawkynt.mediadroyd.player.FfmpegInputs
-import com.hawkynt.mediadroyd.player.SubtitleSync
+import com.hawkynt.mediadroyd.player.FilmSound
+import com.hawkynt.mediadroyd.player.SoundCopies
+import com.hawkynt.mediadroyd.player.playableUri
 import java.io.RandomAccessFile
 
 /**
- * Where a video's sound speaks on Android, for moving subtitles onto it (PlayerPlatform.speech, SubtitleSync): its main
- * audio track decoded by the app's own FFmpeg (FfmpegDemuxer.sound, one channel at [RATE]) a stretch of [PIECE_US] at a
- * time — never the whole film in memory — each laid where it belongs on the timeline (what a seek hands out early is
- * cut off, a gap filled with silence) and judged by SubtitleSync.Speech.
+ * A film's sound read once on Android for everything that analyses it (PlayerPlatform.openSound, FilmSound, #535): its
+ * main audio track decoded by the app's own FFmpeg (FfmpegDemuxer.sound, one channel at FilmSound.RATE) a stretch of
+ * [PIECE_US] at a time from one open demuxer, each laid where it belongs (what the decoder hands out before it dropped,
+ * a gap filled with silence), handed on piece by piece. Near the position of the film playing, decoded from the copies
+ * of what Media3 read ahead instead (SoundCopies), the file not read again.
  */
 object SpeechReads {
-    /** The rate the sound is decoded at: enough for the speech band's 3.4 kHz. */
-    private const val RATE = 8000
-    private const val PIECE_US = 300_000_000L
+    private const val PIECE_US = 10_000_000L
+    private const val TAG = "MediaDroyd.Sound"
 
-    /** The verdicts for the video at [location]; null where its sound cannot be read with the app's FFmpeg. */
-    fun of(context: Context, location: String): BooleanArray? {
+    /**
+     * The video at [location] read from [fromMs]: where [near], from what Media3 read ahead of playback where it plays
+     * it; else from the file. Null where its sound cannot be read with the app's FFmpeg.
+     */
+    fun open(context: Context, location: String, fromMs: Long, near: Boolean = false): FilmSound.Stream? {
+        android.util.Log.i(TAG, "sound from $fromMs ms asked for${if (near) " near playback" else ""}")
+        if (near) {
+            SoundCopies.open(playableUri(location).toString(), fromMs) { at ->
+                android.util.Log.i(TAG, "sound at $at ms read from the file: the copies moved on")
+                own(context, location, at)
+            }?.let {
+                android.util.Log.i(TAG, "sound from $fromMs ms decoded from what playback read")
+                return it
+            }
+        }
+        android.util.Log.i(TAG, "sound from $fromMs ms read from the file${if (near) ": no copies there" else ""}")
+        return own(context, location, fromMs)
+    }
+
+    private fun own(context: Context, location: String, fromMs: Long): FilmSound.Stream? {
         if (!FfmpegDemuxer.isAvailable()) return null
         val local = if (location.startsWith("/")) runCatching { RandomAccessFile(location, "r") }.getOrNull() else null
         return try {
@@ -27,39 +47,47 @@ object SpeechReads {
                 location.startsWith("/") -> return null
                 else -> FfmpegInputs.remote(SourceAccess.resolve(context, location) ?: return null)
             }
-            val demuxer = FfmpegDemuxer.open(input) ?: return null
-            try {
-                val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 }
-                    ?: return null
-                val speech = SubtitleSync.Speech(RATE, 1)
-                var fedUs = 0L
-                var start = 0L
-                while (start < durationUs) {
-                    val end = minOf(start + PIECE_US, durationUs)
-                    val first = LongArray(1)
-                    val pcm = demuxer.sound(start, end, RATE, first)
-                    if (pcm != null && pcm.isNotEmpty()) {
-                        // The samples from where the timeline stands; what came before it dropped, a gap silent.
-                        val skip = ((fedUs - first[0]) * RATE / 1_000_000L).toInt()
-                        if (skip < 0) {
-                            val silence = ShortArray(-skip)
-                            speech.feed(silence, 0, silence.size)
-                            fedUs = first[0]
+            val demuxer = FfmpegDemuxer.open(input) ?: run {
+                runCatching { local?.close() }
+                return null
+            }
+            val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 } ?: Long.MAX_VALUE
+            val rate = FilmSound.RATE
+            object : FilmSound.Stream {
+                // Where the next sample handed on belongs, in µs of the film.
+                var nextUs = fromMs * 1000
+
+                override fun read(): FloatArray? {
+                    while (nextUs < durationUs) {
+                        val end = minOf(nextUs + PIECE_US, durationUs)
+                        val first = LongArray(1)
+                        val pcm = runCatching { demuxer.sound(nextUs, end, rate, first) }.getOrNull()
+                        if (pcm == null || pcm.isEmpty()) {
+                            if (end >= durationUs) return null
+                            nextUs = end
+                            continue
                         }
-                        val from = skip.coerceIn(0, pcm.size)
-                        speech.feed(pcm, from, pcm.size - from)
-                        fedUs += (pcm.size - from).toLong() * 1_000_000L / RATE
+                        // From where the timeline stands: what came before it dropped, a gap before the first silent.
+                        val skip = ((nextUs - first[0]) * rate / 1_000_000L).toInt()
+                        val wanted = ((end - nextUs) * rate / 1_000_000L).toInt()
+                        val out = FloatArray(minOf(wanted, pcm.size - skip).coerceAtLeast(0)) { i ->
+                            val at = i + skip
+                            if (at in pcm.indices) pcm[at] / 32_768f else 0f
+                        }
+                        nextUs = end
+                        if (out.isNotEmpty()) return out
                     }
-                    start = end
+                    return null
                 }
-                speech.result().takeIf { it.isNotEmpty() }
-            } finally {
-                demuxer.close()
+
+                override fun close() {
+                    runCatching { demuxer.close() }
+                    runCatching { local?.close() }
+                }
             }
         } catch (_: Exception) {
-            null
-        } finally {
             runCatching { local?.close() }
+            null
         }
     }
 }

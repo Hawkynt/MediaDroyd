@@ -10,19 +10,22 @@ import com.hawkynt.mediadroyd.player.TextReads
  * Looks at the sound of the episodes around the one playing for their intros and credits (IntroCredits, #480), two
  * neighbours at a time, and keeps what it finds in the [store] (StateStore.saveFoundSkip) — found or not, so no video
  * is looked at twice. The episode playing comes first and its intro before anything else, from the two openings alone,
- * so it can still be skipped once it starts (or jumped out of at once, should it be playing already); then its
- * credits, then the next episode's. [print] fingerprints a video's opening (IntroCredits.openingMs from its start)
- * or, where `closing`, its last IntroCredits.CLOSING_MS; null where its sound cannot be read, and the video is then
- * left to be looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
+ * so it can still be skipped once it starts (or jumped out of at once, should it be playing already); then its credits,
+ * then the next episode's. [print] fingerprints a video's opening (IntroCredits.openingMs from its start) or, where
+ * `closing`, its last IntroCredits.CLOSING_MS; null where its sound cannot be read, and the video is then left to be
+ * looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
  * (PictureCues, #492): both openings' frames for a shared intro, each closing's own frames for its credits — and where
  * those show no black and text frames, the closing's [text] (CreditText, #493): frames read every few seconds by the
  * platform's text recogniser. They are decoded only then. Each print and each video's frames are made once while this
- * finder lives. Finding blocks: not on the main thread; keeping touches the store: on its thread.
+ * finder lives; a closing's frames carry the text reader's own where the platform keeps them (PictureCues.closing,
+ * #535), read by [recognise] without decoding them again — only the narrowing down decodes a few more. Finding blocks:
+ * not on the main thread; keeping touches the store: on its thread.
  */
 class SkipFinder(
     private val store: StateStore,
     private val pictures: (location: String, closing: Boolean) -> PictureCues.Frames? = { _, _ -> null },
     private val text: TextReads = { _, _ -> null },
+    private val recognise: ((gray: ByteArray) -> List<CreditText.Line>?)? = null,
     private val print: (location: String, closing: Boolean) -> IntroCredits.SoundPrint?,
 ) {
     /** What one step looks for. */
@@ -95,8 +98,8 @@ class SkipFinder(
             if (!heardBoth && seenA == null && seenB == null) return null
             // Then their text, where the pictures could be read but showed no black and text frames.
             fun read(location: String, seen: PictureCues.Frames?): List<TimeRange> = seen?.let {
-                PictureCues.creditsSpans(it).ifEmpty { CreditText.findSpans { at -> text(location, at) } }
-            }.orEmpty()
+                PictureCues.creditsSpans(it).ifEmpty { CreditText.findSpans { at -> textOf(location, it, at) } }
+            }.orEmpty().also { dropText(location) }
             mapOf(
                 step.a to Found(null, heard?.first?.let(::listOf) ?: read(step.a, seenA)),
                 step.b to Found(null, heard?.second?.let(::listOf) ?: read(step.b, seenB)),
@@ -113,6 +116,26 @@ class SkipFinder(
             val intro = heard ?: if (seenA != null && seenB != null) PictureCues.intro(seenA, seenB) else null
             mapOf(step.a to Found(intro?.first), step.b to Found(intro?.second))
         }
+    }
+
+    // The text at the times [at] gives: from the closing's own frames where they are kept, the rest decoded.
+    private fun textOf(
+        location: String,
+        seen: PictureCues.Frames,
+        at: (durationMs: Long) -> List<Long>,
+    ): List<Pair<Long, List<CreditText.Line>>>? {
+        val recognise = recognise
+        if (recognise == null || !seen.hasText || seen.durationMs <= 0) return text(location, at)
+        val times = at(seen.durationMs)
+        val kept = times.mapNotNull { time -> seen.textAt(time)?.let(recognise)?.let { time to it } }
+        val rest = times - kept.map { it.first }.toSet()
+        val more = if (rest.isEmpty()) emptyList() else text(location) { rest } ?: emptyList()
+        return (kept + more).sortedBy { it.first }.takeIf { it.isNotEmpty() || times.isEmpty() }
+    }
+
+    // A closing's text frames given back once it is read: only its small look frames stay cached.
+    private fun dropText(location: String) = synchronized(frames) {
+        frames[location to true]?.takeIf { it.hasText }?.let { frames[location to true] = it.withoutText() }
     }
 
     /** Keeps what [step] found ([find]), for each video whose part was not looked at before. */

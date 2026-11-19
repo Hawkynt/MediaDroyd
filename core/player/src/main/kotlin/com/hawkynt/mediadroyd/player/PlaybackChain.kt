@@ -36,7 +36,17 @@ object PlaybackChain {
         val subtitles: Subtitles?,
         /** The playback engine and its version. */
         val player: String,
+        /** Subtitles made from the speech as it plays (#529), where they are on. */
+        val made: Made? = null,
+        /** The subtitles spoken over the sound (#531): the voice and what the film's own voices do, where on. */
+        val voiceOver: String? = null,
     )
+
+    /**
+     * Subtitles made from the speech: the Whisper [model] that hears, the [language] it heard (null before), and
+     * how they are translated ([translation]; null for as spoken).
+     */
+    data class Made(val model: String, val language: String?, val translation: String? = null)
 
     /** The picture's way from the decoder to the screen. */
     data class Video(
@@ -112,12 +122,17 @@ object PlaybackChain {
     )
 
     /** The fact sheet's graph. Media3 parts are named as Media3 calls them; the codecs as people do. */
-    fun of(facts: Facts): Graph = Graph(
+    fun of(facts: Facts): Graph = synchronized(this) {
+        voiceOver = facts.voiceOver
+        graphOf(facts)
+    }
+
+    private fun graphOf(facts: Facts): Graph = Graph(
         inputs = facts.inputs.map { Input(nameOf(it.location), sourceOf(it.location), demuxerOf(it.demuxer)) },
         paths = listOfNotNull(
             facts.video?.let(::picture),
             facts.audio?.let(::sound),
-            facts.subtitles?.let(::subtitles),
+            facts.made?.let(::made) ?: facts.subtitles?.let(::subtitles),
         ),
         engine = facts.player,
     )
@@ -224,6 +239,24 @@ object PlaybackChain {
         if (picture.temperature != ColourBalance.D65_KELVIN) add("${number(picture.temperature)} K")
     }
 
+    private fun made(made: Made): Path = Path(
+        Lane.SUBTITLES,
+        0,
+        listOfNotNull(
+            Node(
+                "Speech recognition",
+                "Whisper ${made.model} (whisper.cpp), heard ahead of the position" +
+                    (made.language?.let { " · ${it.uppercase()}" } ?: ""),
+            ),
+            made.translation?.let { Node("Translation", it) },
+            Node("Renderer", "MediaDroyd's own text over the picture"),
+        ),
+        Node("Screen", "over the picture"),
+    )
+
+    // The voice-over of the graph being made: of(), read by sound().
+    private var voiceOver: String? = null
+
     private fun sound(audio: Audio): Path {
         val processing = buildList {
             if (audio.loudnessDb != 0f) add("loudness ${signed(audio.loudnessDb)} dB")
@@ -237,6 +270,7 @@ object PlaybackChain {
             if (audio.speed != 1f) add("speed ${number(audio.speed)}× (Sonic)")
             if (audio.delayMs != 0) add("delay ${audio.delayMs} ms")
             if (audio.spatial) add("spatial audio")
+            voiceOver?.let { add("voice-over: $it") }
         }.joinToString(", ").let { steps ->
             when {
                 steps.isEmpty() -> "none" + (audio.pcmFormat?.let { " ($it)" } ?: "")

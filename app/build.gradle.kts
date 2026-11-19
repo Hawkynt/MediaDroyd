@@ -16,6 +16,15 @@ val ncnnRoot = project(":native").extra["ncnnAndroidRoot"] as Provider<Directory
 val assRoot = project(":native").extra["assRoot"] as Provider<Directory>
 @Suppress("UNCHECKED_CAST")
 val chromaprintRoot = project(":native").extra["chromaprintRoot"] as Provider<Directory>
+// espeak-ng (GPL-3.0-or-later) for the spoken subtitles' Piper voices: only with -Pespeak, for the household's own
+// phones, never in a release — its library (mediadroyd_espeak) and its data as assets.
+val espeak = project(":native").extra["espeak"] as Boolean
+@Suppress("UNCHECKED_CAST")
+val espeakRoot = project(":native").extra["espeakRoot"] as Provider<Directory>
+@Suppress("UNCHECKED_CAST")
+val whisperRoot = project(":native").extra["whisperRoot"] as Provider<Directory>
+@Suppress("UNCHECKED_CAST")
+val espeakDataDir = project(":native").extra["espeakDataDir"] as Provider<Directory>
 
 android {
     // BouncyCastle's modules (for SMB and SFTP) each carry the same licence file; one copy is kept.
@@ -48,10 +57,18 @@ android {
                 arguments += "-DNCNN_ROOT=${ncnnRoot.get().asFile.absolutePath}"
                 arguments += "-DASS_SOURCES=${assRoot.get().asFile.absolutePath}"
                 arguments += "-DCHROMAPRINT_SOURCES=${chromaprintRoot.get().asFile.absolutePath}"
+                arguments += "-DWHISPER_SOURCES=${whisperRoot.get().asFile.absolutePath}"
                 arguments += "-DANDROID_STL=c++_static"
+                if (espeak) arguments += "-DESPEAK_SOURCES=${espeakRoot.get().asFile.absolutePath}"
+                // Only the app's own libraries: espeak-ng's tree also holds its data's target, which runs espeak-ng
+                // itself and so cannot be built for Android (its data comes from :native:espeakData).
+                targets += "mediadroyd_neural"
+                if (espeak) targets += "mediadroyd_espeak"
             }
         }
     }
+
+    if (espeak) sourceSets["main"].assets.srcDir(espeakDataDir.get().asFile)
 
     externalNativeBuild {
         cmake {
@@ -90,8 +107,13 @@ android {
 
 tasks.configureEach {
     if (name.startsWith("configureCMake") || name.startsWith("buildCMake")) {
-        dependsOn(":native:ncnnAndroid", ":native:assSources", ":native:chromaprintSource")
+        dependsOn(":native:ncnnAndroid", ":native:assSources", ":native:chromaprintSource", ":native:whisperSource")
+        if (espeak) dependsOn(":native:espeakSource")
     }
+    // espeak-ng's data, made on this machine, as assets (-Pespeak).
+    // Every task that reads the assets — merging them, and lint looking at the sources — waits for it.
+    val readsAssets = (name.startsWith("merge") && name.endsWith("Assets")) || name.contains("lint", ignoreCase = true)
+    if (espeak && readsAssets) dependsOn(":native:espeakData")
 }
 
 // The README screenshots are rendered by the real screens on the JVM (Robolectric + Roborazzi) from a
@@ -141,6 +163,8 @@ dependencies {
     implementation(libs.coil.compose)
     // Neural upscaling (Real-ESRGAN, see NeuralUpscaler): TensorFlow Lite with its GPU and NNAPI back-ends.
     implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    // Spoken subtitles (#531): Piper's VITS voices.
+    implementation(libs.onnxruntime.android)
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
     implementation(libs.serialization.json)

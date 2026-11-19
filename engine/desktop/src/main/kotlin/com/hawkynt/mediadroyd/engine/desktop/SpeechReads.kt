@@ -1,32 +1,60 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
 import com.hawkynt.mediadroyd.library.FsFile
-import com.hawkynt.mediadroyd.player.SubtitleSync
+import com.hawkynt.mediadroyd.player.FilmSound
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Where a video's sound speaks on the desktop, for moving subtitles onto it (PlayerPlatform.speech, SubtitleSync):
- * FFmpeg decodes its whole sound (MediaReader, its pictures left alone) as 16-bit stereo at MediaReader.SAMPLE_RATE,
- * piece by piece into SubtitleSync.Speech.
+ * A film's sound read once on the desktop for everything that analyses it (PlayerPlatform.openSound, FilmSound, #535):
+ * FFmpeg decodes it (MediaReader, its pictures left alone) as 16-bit stereo at MediaReader.SAMPLE_RATE, mixed to one
+ * channel and every three samples averaged into one — FilmSound.RATE — handed on a decoded piece at a time. Near
+ * the position of the film playing, tapped from the packets playback reads ahead instead (SharedReads, SoundTap).
  */
 object SpeechReads {
-    /** The verdicts for the video at [path] ([from] a network source where it lives on one); null where unreadable. */
-    fun of(path: String, from: FsFile?): BooleanArray? = runCatching {
-        MediaReader(path, from, decoders = emptyList(), pictures = false).use { reader ->
-            val speech = SubtitleSync.Speech(MediaReader.SAMPLE_RATE, 2)
-            var samples = ShortArray(0)
-            var read = false
-            while (true) {
-                val sound = reader.read() ?: break
-                if (sound !is MediaReader.Sound) continue
-                val count = sound.pcm.size / 2
-                if (samples.size < count) samples = ShortArray(count)
-                ByteBuffer.wrap(sound.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(samples, 0, count)
-                speech.feed(samples, 0, count / 2)
-                read = true
+    /**
+     * The video at [path] ([from] a network source where it is on one) read from [fromMs]: where [near], tapped from
+     * what playback reads ahead where it plays it; else from the file. Null where unreadable.
+     */
+    fun open(path: String, from: FsFile?, fromMs: Long, near: Boolean = false): FilmSound.Stream? =
+        (if (near) SharedReads.tap(path, fromMs) { at -> own(path, from, at) } else null) ?: own(path, from, fromMs)
+
+    private fun own(path: String, from: FsFile?, fromMs: Long): FilmSound.Stream? = runCatching {
+        val reader = MediaReader(path, from, decoders = emptyList(), pictures = false)
+        if (fromMs > 0) reader.seek(fromMs)
+        val step = MediaReader.SAMPLE_RATE / FilmSound.RATE
+        object : FilmSound.Stream {
+            // What a seek hands out before fromMs, in input frames; -1 until the first piece says how much.
+            var skip = -1L
+            var sum = 0f
+            var count = 0
+
+            override fun read(): FloatArray? {
+                while (true) {
+                    val sound = runCatching { reader.read() }.getOrNull() ?: return null
+                    if (sound !is MediaReader.Sound) continue
+                    if (skip < 0) skip = (fromMs - sound.ptsMs).coerceAtLeast(0) * MediaReader.SAMPLE_RATE / 1000
+                    val shorts = ByteBuffer.wrap(sound.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                    val out = FloatArray(shorts.remaining() / 2 / step + 1)
+                    var n = 0
+                    while (shorts.remaining() >= 2) {
+                        val mono = (shorts.get() + shorts.get()) / 65_536f
+                        if (skip > 0) {
+                            skip--
+                            continue
+                        }
+                        sum += mono
+                        if (++count == step) {
+                            out[n++] = sum / step
+                            sum = 0f
+                            count = 0
+                        }
+                    }
+                    if (n > 0) return out.copyOf(n)
+                }
             }
-            if (read) speech.result() else null
+
+            override fun close() = reader.close()
         }
     }.getOrNull()
 }

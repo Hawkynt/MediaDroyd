@@ -147,6 +147,7 @@ fun DesktopPlayer(
         object : PlaybackTuning by knobs {
             override val voiceBoostDb get() = store.state.data.settings.voices
             override val subtitleDelayMs get() = screenState[0]?.subtitleDelayNow ?: knobs.subtitleDelayMs
+            override val voiceOver get() = screenState[0]?.voiceOver
         }
     }
     val engine = remember {
@@ -704,15 +705,47 @@ fun DesktopPlayer(
 
         // And by their pictures where the sound does not tell: FFmpeg's pictures, shrunk to gray (PicturePrints).
         override fun pictures(location: String, closing: Boolean) =
-            com.hawkynt.mediadroyd.engine.desktop.PicturePrints.of(location, places.remoteFile(location), closing)
+            com.hawkynt.mediadroyd.engine.desktop.PicturePrints.of(
+                location, places.remoteFile(location), closing,
+                keepText = neural.loaded && neural.ready(com.hawkynt.mediadroyd.player.NeuralModels.PPOCR),
+            )
 
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)
 
-        // Where the sound speaks, for Sync: FFmpeg decoding the whole sound (SpeechReads).
-        override fun speech(location: String) =
-            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.of(location, places.remoteFile(location))
+        override fun recognise(gray: ByteArray) =
+            com.hawkynt.mediadroyd.engine.desktop.CreditReads.recognise(neural, gray)
+
+        // The film's sound read once for every analysis of it (FilmSound, #535): FFmpeg's sound at 16 kHz.
+        override fun log(message: String) = System.err.println("MediaDroyd.Measure: $message")
+
+        override fun openSound(location: String, fromMs: Long, near: Boolean) =
+            com.hawkynt.mediadroyd.engine.desktop.SpeechReads.open(location, places.remoteFile(location), fromMs, near)
+
+        override fun modelFolder(download: com.hawkynt.mediadroyd.player.NeuralModels.Download) =
+            neural.folder(download)
+
+        override fun openWhisper(model: com.hawkynt.mediadroyd.player.WhisperModels.Entry): Long =
+            if (!com.hawkynt.mediadroyd.engine.desktop.NativeNetworks.loaded) {
+                0L
+            } else {
+                com.hawkynt.mediadroyd.player.NativeWhisper.open(File(neural.folder(model.download), model.file).path)
+            }
+
+        // Spoken subtitles (#531): Piper's voices on ONNX Runtime, in the models folder; espeak-ng where carried.
+        override val espeak get() = com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.dataDir != null
+
+        override fun voiceReady(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
+            com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(voice.download), voice.download)
+
+        override fun fetchVoice(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry, progress: (Float) -> Unit) =
+            com.hawkynt.mediadroyd.player.ModelFolder.fetch(neural.folder(voice.download), voice.download, progress)
+
+        override fun speaker(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry):
+            com.hawkynt.mediadroyd.player.Dub.LineSpeaker? = runCatching {
+            com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.speaker(neural.folder(voice.download), voice)
+        }.getOrNull()
 
         override val commands = PlayerCommand.entries.toSet()
         override val subtitlesByTrack = true

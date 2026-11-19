@@ -1,0 +1,11 @@
+espeak-ng 1.52.0
+https://github.com/espeak-ng/espeak-ng
+
+Copyright (C) 2005-2024 Jonathan Duddington, Reece H. Dunn and the espeak-ng contributors.
+
+Licensed under the GNU General Public License, version 3 or later (GPL-3.0-or-later); parts under the Apache License
+2.0, the BSD 2-Clause licence and the Unicode licence (its COPYING.* files).
+
+Used for the spoken subtitles' Piper voices: text turned into the IPA phonemes those voices were trained on. Built only
+into the library mediadroyd_espeak of builds for the household's own devices (-Pespeak), never into a release, and
+never linked by MediaDroyd's own (LGPL) library. Its source is the release above, unchanged (native/espeak builds it).

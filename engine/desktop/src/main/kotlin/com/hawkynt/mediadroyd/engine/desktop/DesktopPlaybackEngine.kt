@@ -44,8 +44,11 @@ class DesktopPlaybackEngine(
 ) : PlaybackEngine {
 
     // Only the video's own picture is worth a graphics chip's decoder: not the cover art of a sound file beside it.
-    private fun readerOf(location: String, decoders: List<HardwareDecoding.Device> = emptyList()) =
-        MediaReader(location, files(location), decoders)
+    private fun readerOf(
+        location: String,
+        decoders: List<HardwareDecoding.Device> = emptyList(),
+        readAhead: Boolean = false,
+    ) = MediaReader(location, files(location), decoders, readAhead = readAhead)
 
     private val listeners = CopyOnWriteArrayList<PlaybackEngine.Listener>()
     // As many as picturesAhead allows: a few, more while the sound is set sooner than the picture.
@@ -136,7 +139,9 @@ class DesktopPlaybackEngine(
         stop()
         moveTo(PlaybackState.BUFFERING)
         val opened = try {
-            readerOf(request.path, HardwareDecoding.candidates(softwareDecoding))
+            // Read ahead once for everyone: the analysis taps the film's sound from it (SharedReads, #535).
+            readerOf(request.path, HardwareDecoding.candidates(softwareDecoding), readAhead = true)
+                .also { SharedReads.put(request.path, it) }
         } catch (failed: Exception) {
             moveTo(PlaybackState.IDLE)
             throw failed
@@ -227,6 +232,7 @@ class DesktopPlaybackEngine(
         var pictureMs = Long.MIN_VALUE
         var soundMs = Long.MIN_VALUE
         val tempo = Tempo()
+        var voiced = ShortArray(0)
         val pulldown = Film()
         // The household's sound settings, on the sound as it goes to the output (after Tempo).
         val chain = LoudnessChain(MediaReader.SAMPLE_RATE, 2)
@@ -349,6 +355,16 @@ class DesktopPlaybackEngine(
                         }
                     }
                     is MediaReader.Sound -> {
+                        // Spoken subtitles at the film's own time, before the speed (VoiceOver, #531).
+                        tuning.voiceOver?.let { over ->
+                            val count = item.pcm.size / 2
+                            if (voiced.size < count) voiced = ShortArray(count)
+                            val view = ByteBuffer.wrap(item.pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                            view.get(voiced, 0, count)
+                            over.mix(voiced, 0, count / 2, 2, MediaReader.SAMPLE_RATE, item.ptsMs)
+                            view.clear()
+                            view.put(voiced, 0, count)
+                        }
                         val pcm = tempo.process(item.pcm)
                         if (pcm.isNotEmpty()) {
                             val t = tuning
@@ -931,6 +947,7 @@ class DesktopPlaybackEngine(
         thread = null
         sink?.close()
         sink = null
+        reader?.let { r -> openedPath?.let { SharedReads.remove(it, r) } }
         reader?.close()
         reader = null
         ass?.close()

@@ -198,4 +198,28 @@ class PictureCuesTest {
         assertTrue("${a.startMs}..${a.endMs}", abs(a.endMs - 60_000) <= 2500 && abs(a.startMs - 20_000) <= 2500)
         assertTrue("${b.startMs}..${b.endMs}", abs(b.endMs - 75_000) <= 2500)
     }
+
+    @Test
+    fun `a closing decoded once at the text's size gives the look frames and keeps the text reader's own (#535)`() {
+        val w = CreditText.WIDTH
+        val h = CreditText.HEIGHT
+        // 20 s of closing, a frame a second, each its own brightness ramp.
+        val big = List(20) { n -> ByteArray(w * h) { i -> ((i % w) * 200 / w + n).toByte() } }
+        val closing = PictureCues.closing(startMs = 100_000, durationMs = 120_000, frames = big, keepText = true)
+        assertEquals(PictureCues.LOOK_WIDTH, closing.width)
+        assertEquals(PictureCues.CLOSING_STEP_MS, closing.stepMs)
+        assertEquals(20, closing.frames.size)
+        assertEquals(120_000L, closing.durationMs)
+        // The look frame: each cell the mean of the pixels it covers, as shrinking the picture itself would give.
+        val rgba = ByteArray(w * h * 4) { i -> if (i % 4 == 3) -1 else big[3][i / 4] }
+        val direct = PictureCues.gray(rgba, w, h, PictureCues.LOOK_WIDTH, PictureCues.LOOK_HEIGHT)
+        for (i in direct.indices) {
+            assertTrue(kotlin.math.abs((direct[i].toInt() and 0xff) - (closing.frames[3][i].toInt() and 0xff)) <= 1)
+        }
+        // The text reader's frames kept where it reads (every CreditText.STEP_MS), the same bytes back; none between.
+        assertTrue(closing.textAt(105_000)!!.contentEquals(big[5]))
+        assertNull(closing.textAt(106_000))
+        assertNull(closing.withoutText().textAt(105_000))
+        assertNull(PictureCues.closing(100_000, 120_000, big, keepText = false).textAt(105_000))
+    }
 }

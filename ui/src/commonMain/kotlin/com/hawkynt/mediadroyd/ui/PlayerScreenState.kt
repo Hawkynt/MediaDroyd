@@ -68,15 +68,109 @@ class PlayerScreenState(
     /** The subtitle delay at the position now: the look's, with its drift (SubtitleLook.delayAt). */
     val subtitleDelayNow: Int get() = subtitleLook.delayAt(positionMs)
 
+    /**
+     * Subtitles made from the speech (#529): whether they are on, in which language (#530; as spoken, or translated),
+     * by which Whisper model (the household's), what it is doing, the lines heard, the one showing now and the
+     * language they are in.
+     */
+    var captioning by mutableStateOf(false)
+    var captionTarget by mutableStateOf(store.data.settings.captionTarget)
+        private set
+    var captionModel by mutableStateOf(store.data.settings.captionModel)
+        private set
+    var captionStatus by mutableStateOf<String?>(null)
+    var captions by mutableStateOf<com.hawkynt.mediadroyd.player.LiveCaptions?>(null)
+    var captionText by mutableStateOf<String?>(null)
+    var captionLanguage by mutableStateOf<String?>(null)
+
+    /** Made subtitles in [language] (ISO 639-1; "" as spoken) from now on, for every video (#530). */
+    fun chooseCaptionTarget(language: String) {
+        captionTarget = language
+        store.data.settings.captionTarget = language
+        store.save()
+    }
+
+    /** The made subtitles' route to the language wanted, and the language spoken, as last heard. */
+    var captionSpoken by mutableStateOf<String?>(null)
+
+    fun chooseCaptionModel(id: String) {
+        captionModel = id
+        store.data.settings.captionModel = id
+        store.save()
+    }
+
+    /** Whether the subtitles are spoken (Dub, #531), and what the voice is doing — fetching, or why it cannot. */
+    var dubbing by mutableStateOf(false)
+    var dubStatus by mutableStateOf<String?>(null)
+
+    /** The household's voice for spoken subtitles (PiperVoices id; "" none chosen yet). */
+    var dubVoiceId by mutableStateOf(store.data.settings.dubVoice)
+        private set
+
+    /** What becomes of the film's own sound under a spoken line (Dub.Original), the household's. */
+    var dubOriginal by mutableStateOf(
+        runCatching { com.hawkynt.mediadroyd.player.Dub.Original.valueOf(store.data.settings.dubOriginal) }
+            .getOrDefault(com.hawkynt.mediadroyd.player.Dub.Original.BAND),
+    )
+        private set
+
+    fun chooseDubOriginal(original: com.hawkynt.mediadroyd.player.Dub.Original) {
+        dubOriginal = original
+        store.data.settings.dubOriginal = original.name
+        store.save()
+    }
+
+    /** Speaks the subtitles in the voice [id] from now on, for every video. */
+    fun chooseDubVoice(id: String) {
+        dubVoiceId = id
+        store.data.settings.dubVoice = id
+        store.save()
+    }
+
+    /** The spoken lines, at the film's time, for the engine to mix in (PlaybackTuning.voiceOver). */
+    val dubTrack = com.hawkynt.mediadroyd.player.Dub.Track()
+    private val dubMixers =
+        HashMap<Triple<Int, Int, com.hawkynt.mediadroyd.player.Dub.Original>, com.hawkynt.mediadroyd.player.Dub.Mixer>()
+
+    /** What the engines mix in while [dubbing]: the track, through a mixer per rate and channels. */
+    val voiceOver: com.hawkynt.mediadroyd.engine.VoiceOver? get() = if (!dubbing) null else dubVoiceOver
+
+    /** How many channels the sound reaches the voice-over with: a centre channel to remove only from 3 on. */
+    var dubChannels by mutableStateOf(0)
+        private set
+
+    private val dubVoiceOver = com.hawkynt.mediadroyd.engine.VoiceOver { samples, offset, frames, channels, rate, at ->
+        if (channels != dubChannels) dubChannels = channels
+        val mixer = synchronized(dubMixers) {
+            val original = dubOriginal
+            dubMixers.getOrPut(Triple(rate, channels, original)) {
+                com.hawkynt.mediadroyd.player.Dub.Mixer(rate, channels, original)
+            }
+        }
+        mixer.process(samples, offset, frames, at, dubTrack)
+    }
+
     /** What Sync is doing or found wrong, shown under its button; null when it is done (SubtitleSync, #450). */
     var syncing by mutableStateOf<String?>(null)
 
-    // The speech found in a video's sound, kept while the player is open: decoding it takes a while.
-    private var speech: Pair<String, BooleanArray>? = null
+    // The video's sound, decoded once for every analysis of it while the player is open (FilmSound, #535).
+    private var sound: Pair<String, com.hawkynt.mediadroyd.player.FilmSound>? = null
 
-    /** The speech in [video]'s sound, found by [find] the first time it is asked for. Blocks. */
-    fun speechFor(video: String, find: () -> BooleanArray?): BooleanArray? =
-        speech?.takeIf { it.first == video }?.second ?: find()?.also { speech = video to it }
+    /**
+     * [video]'s shared sound ([durationMs] long), read through [open] (the platform's reader from a time) — the same
+     * one for Whisper, the voice-over's placement and Sync; another video's closed as this one opens.
+     */
+    @Synchronized
+    fun soundOf(
+        video: String,
+        durationMs: Long,
+        open: (fromMs: Long, near: Boolean) -> com.hawkynt.mediadroyd.player.FilmSound.Stream?,
+    ): com.hawkynt.mediadroyd.player.FilmSound {
+        sound?.takeIf { it.first == video }?.let { return it.second }
+        // Off this thread: a read under way on the other video's sound is waited for.
+        sound?.second?.let { other -> Thread({ other.close() }, "mediadroyd-sound-close").start() }
+        return com.hawkynt.mediadroyd.player.FilmSound(open, durationMs).also { sound = video to it }
+    }
 
     /** Whether it plays now, for what shows only while paused. */
     var playing by mutableStateOf(false)

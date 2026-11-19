@@ -33,6 +33,8 @@ dependencies {
     implementation(libs.lwjgl.opengl)
     implementation(libs.ffmpeg)
     implementation(libs.javacpp)
+    // Spoken subtitles (#531): Piper's VITS voices.
+    implementation(libs.onnxruntime)
     platforms.forEach { platform ->
         runtimeOnly(variantOf(libs.ffmpeg) { classifier(platform + ffmpegFlavour) })
         runtimeOnly(variantOf(libs.javacpp) { classifier(platform) })
@@ -75,6 +77,7 @@ tasks.test {
         exclude(
             "**/NativeNetworksTest*", "**/NativeNeuralTest*", "**/LibAssTest*", "**/LibAssEngineTest*",
             "**/FingerprintTest*", "**/SoundPrintsTest*", "**/PicturePrintsTest*", "**/NativeTextTest*",
+            "**/PiperSpeakerTest*", "**/WhisperTest*", "**/TranslatorTest*",
         )
     }
 }

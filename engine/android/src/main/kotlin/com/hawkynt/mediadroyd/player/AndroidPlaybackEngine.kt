@@ -249,6 +249,7 @@ class AndroidPlaybackEngine(
                                         { tuning.voiceBoostDb },
                                         { tuning.equalizerPreampDb },
                                         { tuning.equalizerBandsDb },
+                                        { tuning.voiceOver },
                                     ),
                                 ),
                             )
@@ -340,6 +341,8 @@ class AndroidPlaybackEngine(
                         ReplayGain.parse(tags)?.gainDb,
                     )
                     if (loudness != fileLoudness) fileLoudness = loudness
+                    // The analysis hears the sound playing (SoundCopies, #535).
+                    SoundCopies.select(playableUri(path).toString(), format?.id)
                 }
             },
         )

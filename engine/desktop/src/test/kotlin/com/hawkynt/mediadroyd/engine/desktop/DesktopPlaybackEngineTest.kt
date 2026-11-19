@@ -473,6 +473,23 @@ class DesktopPlaybackEngineTest {
     }
 
     @Test
+    fun `spoken subtitles are mixed in at the film's own time on the way to the output (#531)`() {
+        val untouched = decodedPeak(clip)
+        val times = ArrayList<Long>()
+        val loud = PlaybackTuning.Mutable().apply {
+            voiceOver = com.hawkynt.mediadroyd.engine.VoiceOver { samples, offset, frames, channels, rate, ptsMs ->
+                assertEquals(2, channels)
+                assertEquals(MediaReader.SAMPLE_RATE, rate)
+                times += ptsMs
+                for (i in offset until offset + frames * channels) samples[i] = 20_000
+            }
+        }
+        val spoken = playedPeak(clip, loud)
+        assertTrue("$spoken against $untouched", spoken >= 20_000)
+        assertTrue("times $times", times.zipWithNext().all { (a, b) -> b >= a })
+    }
+
+    @Test
     fun `with even loudness a file plays at its ReplayGain`() {
         val tagged = fixture("replaygain.flac")
         val untouched = decodedPeak(tagged)

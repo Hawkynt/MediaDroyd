@@ -348,4 +348,29 @@ class PlaybackChainTest {
         val graph = PlaybackChain.of(facts.copy(video = null, subtitles = null))
         assertEquals(listOf(Lane.SOUND), graph.paths.map { it.lane })
     }
+
+    @Test
+    fun `made subtitles show their recognition and translation, the voice-over its voice (#529, #531)`() {
+        val made = PlaybackChain.of(
+            facts.copy(
+                subtitles = null,
+                made = PlaybackChain.Made("Base", "ja", "Whisper into English, then OPUS-MT into German"),
+                voiceOver = "Cori (Piper), the voice band suppressed under each line",
+            ),
+        )
+        assertEquals(
+            listOf("Speech recognition", "Translation", "Renderer"),
+            made.lane(Lane.SUBTITLES).nodes.map { it.title },
+        )
+        assertEquals(0, made.lane(Lane.SUBTITLES).input)
+        assertEquals(true, made.detail(Lane.SUBTITLES, "Speech recognition").contains("Whisper Base"))
+        assertEquals(true, made.detail(Lane.SUBTITLES, "Speech recognition").endsWith("JA"))
+        assertEquals(
+            "Whisper into English, then OPUS-MT into German",
+            made.detail(Lane.SUBTITLES, "Translation"),
+        )
+        assertEquals(true, made.detail(Lane.SOUND, "Processing").contains("voice-over: Cori (Piper)"))
+        // Without the voice-over the next graph has none.
+        assertEquals(false, PlaybackChain.of(facts).detail(Lane.SOUND, "Processing").contains("voice-over"))
+    }
 }
