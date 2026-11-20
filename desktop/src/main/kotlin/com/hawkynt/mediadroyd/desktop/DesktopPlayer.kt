@@ -132,7 +132,8 @@ fun DesktopPlayer(
     // The sound settings the engine reads as it plays (PlaybackTuning): the household's, kept; night mode for this
     // player only, as on Android.
     var sound by remember { mutableStateOf(store.sound) }
-    var nightMode by remember { mutableStateOf(false) }
+    // Kept for the next video and the next start (#539).
+    var nightMode by remember { mutableStateOf(store.state.data.settings.nightMode) }
     var softwareDecoding by remember { mutableStateOf(store.softwareDecoding) }
     val knobs = remember { PlaybackTuning.Mutable() }
     knobs.loudnessDb = sound.loudnessDb
@@ -929,7 +930,11 @@ fun DesktopPlayer(
                     store.sound = it
                 },
                 nightMode = nightMode,
-                onNightMode = { nightMode = it },
+                onNightMode = {
+                    nightMode = it
+                    store.state.data.settings.nightMode = it
+                    store.state.save()
+                },
             )
         }
 

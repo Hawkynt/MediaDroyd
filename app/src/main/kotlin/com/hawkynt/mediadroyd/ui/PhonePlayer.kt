@@ -195,7 +195,8 @@ fun PhonePlayer(
     }
     // The shared screen's state, made once the engine is; the engine's knobs read it as it plays.
     val shared = remember { arrayOfNulls<PlayerScreenState>(1) }
-    var nightMode by remember { mutableStateOf(false) }
+    // Kept for the next video and the next start (#539).
+    var nightMode by remember { mutableStateOf(store.data.settings.nightMode) }
 
     // Lip-sync, remembered per audio output: a Bluetooth headset lags differently from the speaker.
     var audioOutput by remember { mutableStateOf(com.hawkynt.mediadroyd.player.currentAudioOutput(context)) }
@@ -1448,7 +1449,14 @@ fun PhonePlayer(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = nightMode, onCheckedChange = { nightMode = it })
+                Switch(
+                    checked = nightMode,
+                    onCheckedChange = {
+                        nightMode = it
+                        store.data.settings.nightMode = it
+                        store.save()
+                    },
+                )
             }
 
             PanelTitle("Audio delay · ${audioOutput.name}")

@@ -73,9 +73,16 @@ class PlayerScreenState(
     /**
      * Subtitles made from the speech (#529): whether they are on, in which language (#530; as spoken, or translated),
      * by which Whisper model (the household's), what it is doing, the lines heard, the one showing now and the
-     * language they are in.
+     * language they are in. On or off is kept for the next video and the next start (#539).
      */
-    var captioning by mutableStateOf(false)
+    var captioning: Boolean
+        get() = captioningOn
+        set(on) {
+            captioningOn = on
+            settings.captioning = on
+            store.save()
+        }
+    private var captioningOn by mutableStateOf(settings.captioning)
     var captionTarget by mutableStateOf(store.data.settings.captionTarget)
         private set
     var captionModel by mutableStateOf(store.data.settings.captionModel)
@@ -104,8 +111,18 @@ class PlayerScreenState(
         store.save()
     }
 
-    /** Whether the subtitles are spoken (Dub, #531), and what the voice is doing — fetching, or why it cannot. */
-    var dubbing by mutableStateOf(false)
+    /**
+     * Whether the subtitles are spoken (Dub, #531) — kept for the next video and the next start (#539) —, and what the
+     * voice is doing — fetching, or why it cannot.
+     */
+    var dubbing: Boolean
+        get() = dubbingOn
+        set(on) {
+            dubbingOn = on
+            settings.dubbing = on
+            store.save()
+        }
+    private var dubbingOn by mutableStateOf(settings.dubbing)
     var dubStatus by mutableStateOf<String?>(null)
 
     /** The household's voice for spoken subtitles (PiperVoices id; "" none chosen yet). */

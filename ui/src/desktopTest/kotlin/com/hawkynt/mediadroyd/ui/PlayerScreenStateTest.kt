@@ -136,6 +136,24 @@ class PlayerScreenStateTest {
     }
 
     @Test
+    fun `speech subtitles and the voice-over stay on for the next video and the next start (#539)`() {
+        val s = state()
+        assertFalse(s.captioning)
+        assertFalse(s.dubbing)
+        s.captioning = true
+        s.dubbing = true
+        assertTrue(store.data.settings.captioning)
+        assertTrue(store.data.settings.dubbing)
+        // The next player — the next video, or the app started again — begins with them on.
+        val next = state()
+        assertTrue(next.captioning)
+        assertTrue(next.dubbing)
+        next.captioning = false
+        assertFalse(state().captioning)
+        assertTrue(state().dubbing)
+    }
+
+    @Test
     fun `the speed keys step by a twentieth, within the slider's range`() {
         val s = state()
         s.speed = 1f
