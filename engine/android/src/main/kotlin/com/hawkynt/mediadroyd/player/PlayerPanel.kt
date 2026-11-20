@@ -80,8 +80,24 @@ class PlayerPanel private constructor(private val view: PlayerView) {
 
     /** The picture shown here or, while it plays on another screen, hidden: the phone black behind the controls. */
     fun showPicture(visible: Boolean) {
+        pictureShown = visible
         view.videoSurfaceView?.visibility = if (visible) View.VISIBLE else View.INVISIBLE
-        AssOverlayView.show(view, visible)
+        AssOverlayView.show(view, visible && linesShown)
+    }
+
+    private var pictureShown = true
+    private var linesShown = true
+
+    /**
+     * The subtitles over the picture — [engine]'s first and second tracks, ASS or text — shown or hidden: hidden, they
+     * still play, for the voice-over to speak them (#542).
+     */
+    fun showSubtitleLines(engine: AndroidPlaybackEngine, visible: Boolean) {
+        linesShown = visible
+        val shown = if (visible) View.VISIBLE else View.INVISIBLE
+        view.subtitleView?.visibility = shown
+        engine.second.viewOf(view)?.visibility = shown
+        AssOverlayView.show(view, visible && pictureShown)
     }
 
     /** The chapters' starts marked on the time bar. */

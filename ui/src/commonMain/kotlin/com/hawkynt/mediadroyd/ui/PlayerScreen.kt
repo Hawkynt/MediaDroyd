@@ -222,15 +222,19 @@ interface PlayerPlatform {
     @Composable
     fun RowScope.TopBarButtons() {}
 
-    /** The gear's rows after the speed only this platform has (the phone's lock and rotation, sound). */
+    /** The gear's Playback rows after the speed only this platform has (the phone's lock and rotation). */
     @Composable
     fun ColumnScope.GearSections() {}
+
+    /** The gear's Sound rows after the audio track only this platform has (night mode, delay, equalizer). */
+    @Composable
+    fun ColumnScope.GearSound() {}
 
     /** The gear's rows after the picture sizes (the phone's camera cutout, the desktop's histogram). */
     @Composable
     fun ColumnScope.GearAfterPictureSize() {}
 
-    /** The gear's last rows (the desktop's decoding and its screen's setup). */
+    /** The gear's last Picture rows (the desktop's decoding and its screen's setup). */
     @Composable
     fun ColumnScope.GearEnd() {}
 
@@ -776,11 +780,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         }
         // Subtitles made from the speech (#529), over the picture where the household reads subtitles; while what plays
         // is not heard yet, what the hearing is doing instead — listening, or running behind with a model too slow.
-        val captionShown = state.captionText ?: state.captionStatus?.takeIf { state.captioning && !state.panelOpen }
+        // Hidden while the voice-over speaks them, where the household chose so (#542).
+        val captionLine = state.captionText?.takeIf { !state.linesHidden }
+        val captionShown = captionLine ?: state.captionStatus?.takeIf { state.captioning && !state.panelOpen }
         captionShown?.takeIf { !platform.pictureOnly }?.let { text ->
             Text(
                 text,
-                fontSize = if (state.captionText != null) 22.sp else 15.sp,
+                fontSize = if (captionLine != null) 22.sp else 15.sp,
                 color = androidx.compose.ui.graphics.Color.White,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp, start = 32.dp, end = 32.dp)
@@ -874,18 +880,17 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         onSecondSubtitleTrack = { state.trackPicker = TrackPicker.SECOND },
         onClose = { state.panelOpen = false },
         modifier = modifier,
-        sections = { with(platform) { GearSections() } },
+        page = state.gearPage,
+        onPage = { state.gearPage = it },
+        playback = {
+            with(platform) { GearSections() }
+            SleepChoice(state.session, ::monotonicMs)
+            RepeatChoice(state.session.repeat) { state.session.repeat = it }
+        },
         afterPictureSize = { with(platform) { GearAfterPictureSize() } },
-        end = {
-            CaptionRows(
-                on = state.captioning,
-                onOn = { state.captioning = it },
-                target = state.captionTarget,
-                onTarget = state::chooseCaptionTarget,
-                model = WhisperModels.of(state.captionModel),
-                onModel = { state.chooseCaptionModel(it.id) },
-                status = state.captionStatus,
-            )
+        pictureEnd = { with(platform) { GearEnd() } },
+        sound = {
+            with(platform) { GearSound() }
             VoiceOverRows(
                 voices = if (syncableSubtitles(state) != null || state.captioning) {
                     PiperVoices.forLanguage(dubLanguage(state), platform.espeak)
@@ -899,6 +904,8 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 },
                 auto = dubPair(state, platform, dubLanguage(state)) != null,
                 onAuto = { state.chooseDubVoice(PiperVoices.AUTO) },
+                linesShown = state.dubLinesShown,
+                onLinesShown = state::chooseDubLinesShown,
                 dubbing = state.dubbing,
                 onDubbing = { state.dubbing = it },
                 onVoice = { voice -> state.chooseDubVoice(voice.id) },
@@ -906,6 +913,17 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 centreChannel = com.hawkynt.mediadroyd.player.Dub.hasCentre(state.dubChannels),
                 onOriginal = state::chooseDubOriginal,
                 dubStatus = state.dubStatus,
+            )
+        },
+        subtitles = {
+            CaptionRows(
+                on = state.captioning,
+                onOn = { state.captioning = it },
+                target = state.captionTarget,
+                onTarget = state::chooseCaptionTarget,
+                model = WhisperModels.of(state.captionModel),
+                onModel = { state.chooseCaptionModel(it.id) },
+                status = state.captionStatus,
             )
             SubtitleLookRows(
                 state.subtitleLook, onLook = state::look, onReset = state::resetLook,
@@ -936,9 +954,6 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 },
                 syncing = state.syncing,
             )
-            SleepChoice(state.session, ::monotonicMs)
-            RepeatChoice(state.session.repeat) { state.session.repeat = it }
-            with(platform) { GearEnd() }
         },
     )
 }
