@@ -514,6 +514,9 @@ fun VoiceOverRows(
     >? = null,
     auto: Boolean = false,
     onAuto: () -> Unit = {},
+    /** Whether the lines spoken show on screen as well; hidden, they are heard only (#542). */
+    linesShown: Boolean = true,
+    onLinesShown: (Boolean) -> Unit = {},
 ) {
     if (voices.isNotEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -529,6 +532,17 @@ fun VoiceOverRows(
             androidx.compose.material3.Switch(checked = dubbing, onCheckedChange = onDubbing)
         }
         if (dubbing) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text("Show the lines too", fontSize = 15.sp)
+                    Text(
+                        if (linesShown) "The subtitles show as the voice speaks them." else "Heard, not shown.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                androidx.compose.material3.Switch(checked = linesShown, onCheckedChange = onLinesShown)
+            }
             @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 pair?.let { (man, woman) ->

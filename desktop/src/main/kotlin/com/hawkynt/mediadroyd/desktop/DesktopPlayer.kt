@@ -849,7 +849,8 @@ fun DesktopPlayer(
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 val textSize = with(density) { (subtitleLook.textSizeFraction * canvas.height).toSp() }
                 val above = with(density) { (subtitleLook.bottomPaddingFraction * canvas.height).toDp() }
-                subtitle?.let { line ->
+                // Heard, not shown, while the voice-over speaks them where the household chose so (#542).
+                subtitle?.takeIf { !state.linesHidden }?.let { line ->
                     SubtitleLine(
                         line,
                         subtitleLook,
@@ -861,7 +862,7 @@ fun DesktopPlayer(
                         ),
                     )
                 }
-                secondLine?.let { line ->
+                secondLine?.takeIf { !state.linesHidden }?.let { line ->
                     SubtitleLine(
                         line,
                         subtitleLook,

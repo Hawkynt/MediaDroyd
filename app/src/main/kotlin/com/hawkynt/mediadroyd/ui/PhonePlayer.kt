@@ -769,6 +769,12 @@ fun PhonePlayer(
         }
     }
 
+    // The subtitles heard, not shown, while the voice-over speaks them where the household chose so (#542).
+    LaunchedEffect(state.linesHidden, playerView, presentation) {
+        playerView?.showSubtitleLines(engine, !state.linesHidden)
+        presentation?.playerView?.showSubtitleLines(engine, !state.linesHidden)
+    }
+
     // With the film on the other screen the phone goes dark by itself once the controls hide — black and empty
     // at the lowest brightness, nothing left on it to burn in — until a touch lights it up again.
     val filmElsewhere = presentation?.isShowing == true

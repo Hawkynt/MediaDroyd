@@ -111,6 +111,21 @@ class PlayerScreenStateTest {
     }
 
     @Test
+    fun `with the voice-over on the lines can be heard only, the choice kept for the household (#542)`() {
+        val s = state()
+        assertFalse(s.linesHidden)
+        s.chooseDubLinesShown(false)
+        // Hidden only while a voice speaks them: without the voice-over the subtitles show as ever.
+        assertFalse(s.linesHidden)
+        s.dubbing = true
+        assertTrue(s.linesHidden)
+        assertFalse(store.data.settings.dubLinesShown)
+        assertTrue(state().also { it.dubbing = true }.linesHidden)
+        s.chooseDubLinesShown(true)
+        assertFalse(s.linesHidden)
+    }
+
+    @Test
     fun `the gear opens again on the page last chosen (#543)`() {
         val s = state()
         assertEquals(GearPage.PLAYBACK, s.gearPage)

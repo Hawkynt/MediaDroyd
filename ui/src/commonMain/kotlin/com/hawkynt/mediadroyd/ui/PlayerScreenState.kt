@@ -114,6 +114,19 @@ class PlayerScreenState(
     )
         private set
 
+    /** Whether the subtitles the voice-over speaks show on screen too; the household's choice (#542). */
+    var dubLinesShown by mutableStateOf(store.data.settings.dubLinesShown)
+        private set
+
+    fun chooseDubLinesShown(shown: Boolean) {
+        dubLinesShown = shown
+        store.data.settings.dubLinesShown = shown
+        store.save()
+    }
+
+    /** The subtitles playing are heard, not shown: the voice-over speaks them and the household hid them (#542). */
+    val linesHidden: Boolean get() = dubbing && !dubLinesShown
+
     fun chooseDubOriginal(original: com.hawkynt.mediadroyd.player.Dub.Original) {
         dubOriginal = original
         store.data.settings.dubOriginal = original.name

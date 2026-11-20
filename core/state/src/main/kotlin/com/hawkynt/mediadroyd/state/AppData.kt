@@ -170,6 +170,7 @@ data class Settings(
     var loudness: Float = 0f,                 // dB, -12..12
     var voices: Float = 0f,                   // dB the dialogue is raised by, 0..12 (VoiceBoost, #452)
     var dubVoice: String = "",               // the voice subtitles are spoken in (PiperVoices id), "" none chosen
+    var dubLinesShown: Boolean = true,       // the subtitles the voice-over speaks also shown on screen (#542)
     var dubOriginal: String = "BAND",        // Dub.Original name: the dialogue channel, the voice band, or all
     var captionModel: String = "base-q5_1", // WhisperModels id: subtitles made from the speech (#529)
     var captionTarget: String = "",          // made subtitles' language (ISO 639-1); "" as spoken (#530)

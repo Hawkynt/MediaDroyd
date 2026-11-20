@@ -743,11 +743,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         }
         // Subtitles made from the speech (#529), over the picture where the household reads subtitles; while what plays
         // is not heard yet, what the hearing is doing instead — listening, or running behind with a model too slow.
-        val captionShown = state.captionText ?: state.captionStatus?.takeIf { state.captioning && !state.panelOpen }
+        // Hidden while the voice-over speaks them, where the household chose so (#542).
+        val captionLine = state.captionText?.takeIf { !state.linesHidden }
+        val captionShown = captionLine ?: state.captionStatus?.takeIf { state.captioning && !state.panelOpen }
         captionShown?.takeIf { !platform.pictureOnly }?.let { text ->
             Text(
                 text,
-                fontSize = if (state.captionText != null) 22.sp else 15.sp,
+                fontSize = if (captionLine != null) 22.sp else 15.sp,
                 color = androidx.compose.ui.graphics.Color.White,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 48.dp, start = 32.dp, end = 32.dp)
@@ -865,6 +867,8 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 },
                 auto = dubPair(state, platform, dubLanguage(state)) != null,
                 onAuto = { state.chooseDubVoice(PiperVoices.AUTO) },
+                linesShown = state.dubLinesShown,
+                onLinesShown = state::chooseDubLinesShown,
                 dubbing = state.dubbing,
                 onDubbing = { state.dubbing = it },
                 onVoice = { voice -> state.chooseDubVoice(voice.id) },
