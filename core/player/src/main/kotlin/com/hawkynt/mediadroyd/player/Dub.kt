@@ -245,7 +245,9 @@ object Dub {
      * Speaks the [lines] of a subtitle track — a file's, or those made from the speech as it is heard, so the list may
      * grow — onto [track] as the film plays: [ahead] those starting from the position up to [AHEAD_MS] later that are
      * not spoken yet (known by their start), each fitted before the next line ([fit]), scaled to 16-bit. One line at a
-     * time, off the main thread; a seek simply speaks from the new position on.
+     * time, off the main thread; a seek simply speaks from the new position on. What lies more than [BEHIND_MS] behind
+     * the position is let go (Track.forget) — a whole film's lines would fill the memory (#537) — and spoken again
+     * should a seek back reach it.
      */
     class Speaking(
         private val lines: () -> List<Line>,
@@ -267,6 +269,9 @@ object Dub {
 
         /** Speaks what is due from [positionMs]; returns how many lines it spoke. Blocks. */
         fun ahead(positionMs: Long, voice: Int = 0): Int {
+            val behind = positionMs - BEHIND_MS
+            track.forget(behind)
+            spoken.removeAll { (at, _) -> at < behind }
             var count = 0
             val now = lines()
             for ((i, line) in now.withIndex()) {
@@ -299,6 +304,9 @@ object Dub {
 
     /** How far ahead of the position lines are spoken. */
     const val AHEAD_MS = 20_000L
+
+    /** How long a spoken line is kept behind the position: a seek back that far still hears it at once. */
+    const val BEHIND_MS = 60_000L
     private const val FULL_SCALE = 32_767f
 
     /**
@@ -325,6 +333,15 @@ object Dub {
                 clips += Clip(startMs, pcm, rate)
                 clips.sortBy { it.startMs }
             }
+        }
+
+        /** How many spoken lines it holds. */
+        val lines: Int get() = synchronized(clips) { clips.size }
+
+        /** Lets go of the lines, and the film's lines stepped back under them, that ended before [beforeMs]. */
+        fun forget(beforeMs: Long) = synchronized(clips) {
+            clips.removeAll { it.startMs + it.pcm.size * 1000L / it.rate < beforeMs }
+            ducks.removeAll { it.last < beforeMs }
         }
 
         /** Forgets every line: another track, or another video. */
