@@ -33,6 +33,30 @@ class TranslatorTest {
     }
 
     @Test
+    fun `Chinese and Japanese lines written as spoken are translated into English by their own OPUS-MT (#546)`() {
+        val models = System.getProperty("mediadroyd.testModels")?.let(::File) ?: folder.newFolder("models")
+        // Lines as Whisper writes them from a Chinese film's speech, and plain Japanese ones.
+        val cases = mapOf(
+            "zh" to listOf("你是来报名的吗" to "sign up", "是的" to "Yes", "好 走" to "go"),
+            "ja" to listOf("ありがとうございます" to "Thank you", "どこへ行くの?" to "Where", "家が燃えている!" to "fire"),
+        )
+        for ((language, lines) in cases) {
+            val entry = requireNotNull(TranslationModels.from(language))
+            val dir = File(models, entry.download.folder)
+            if (!ModelFolder.ready(dir, entry.download)) {
+                assertTrue("not fetched", ModelFolder.fetch(dir, entry.download, {}))
+            }
+            MarianTranslator(dir).use { translator ->
+                val english = requireNotNull(translator.translateAll(lines.map { it.first }))
+                lines.zip(english).forEach { (line, out) ->
+                    println("TRANSLATED ${line.first} -> $out")
+                    assertTrue("${line.first} -> $out", line.second in out)
+                }
+            }
+        }
+    }
+
+    @Test
     fun `a window's lines are translated together as each would be alone, and faster (#530)`() {
         val models = System.getProperty("mediadroyd.testModels")?.let(::File) ?: folder.newFolder("models")
         val entry = requireNotNull(TranslationModels.into("de"))

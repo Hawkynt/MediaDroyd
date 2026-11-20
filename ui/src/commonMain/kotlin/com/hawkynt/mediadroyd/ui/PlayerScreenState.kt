@@ -83,6 +83,9 @@ class PlayerScreenState(
     var captionStatus by mutableStateOf<String?>(null)
     var captions by mutableStateOf<com.hawkynt.mediadroyd.player.LiveCaptions?>(null)
     var captionText by mutableStateOf<String?>(null)
+
+    /** The spoken language whose own translator into English made the subtitles, once it does (#546). */
+    var captionFrom by mutableStateOf<String?>(null)
     var captionLanguage by mutableStateOf<String?>(null)
 
     /** Made subtitles in [language] (ISO 639-1; "" as spoken) from now on, for every video (#530). */
