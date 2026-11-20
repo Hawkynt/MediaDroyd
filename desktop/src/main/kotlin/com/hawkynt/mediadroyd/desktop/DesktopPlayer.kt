@@ -915,7 +915,7 @@ fun DesktopPlayer(
 
         // Loudness, even loudness, night mode and the audio delay of this computer's output.
         @Composable
-        override fun ColumnScope.GearSections() {
+        override fun ColumnScope.GearSound() {
             DesktopSoundRows(
                 sound,
                 onSound = {

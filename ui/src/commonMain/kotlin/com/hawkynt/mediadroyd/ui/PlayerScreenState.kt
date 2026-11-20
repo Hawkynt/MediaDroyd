@@ -185,6 +185,9 @@ class PlayerScreenState(
     var error by mutableStateOf<String?>(null)
 
     var panelOpen by mutableStateOf(panelAtStart)
+
+    /** The gear panel's page: the last one chosen, shown when the gear opens again (#543). */
+    var gearPage by mutableStateOf(GearPage.PLAYBACK)
     var infoOpen by mutableStateOf(infoAtStart)
     var chapterPicker by mutableStateOf(false)
     var trackPicker by mutableStateOf<TrackPicker?>(null)

@@ -111,6 +111,16 @@ class PlayerScreenStateTest {
     }
 
     @Test
+    fun `the gear opens again on the page last chosen (#543)`() {
+        val s = state()
+        assertEquals(GearPage.PLAYBACK, s.gearPage)
+        s.gearPage = GearPage.SUBTITLES
+        s.panelOpen = false
+        s.panelOpen = true
+        assertEquals(GearPage.SUBTITLES, s.gearPage)
+    }
+
+    @Test
     fun `the speed keys step by a twentieth, within the slider's range`() {
         val s = state()
         s.speed = 1f

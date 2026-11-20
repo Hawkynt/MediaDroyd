@@ -221,15 +221,19 @@ interface PlayerPlatform {
     @Composable
     fun RowScope.TopBarButtons() {}
 
-    /** The gear's rows after the speed only this platform has (the phone's lock and rotation, sound). */
+    /** The gear's Playback rows after the speed only this platform has (the phone's lock and rotation). */
     @Composable
     fun ColumnScope.GearSections() {}
+
+    /** The gear's Sound rows after the audio track only this platform has (night mode, delay, equalizer). */
+    @Composable
+    fun ColumnScope.GearSound() {}
 
     /** The gear's rows after the picture sizes (the phone's camera cutout, the desktop's histogram). */
     @Composable
     fun ColumnScope.GearAfterPictureSize() {}
 
-    /** The gear's last rows (the desktop's decoding and its screen's setup). */
+    /** The gear's last Picture rows (the desktop's decoding and its screen's setup). */
     @Composable
     fun ColumnScope.GearEnd() {}
 
@@ -837,18 +841,17 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         onSecondSubtitleTrack = { state.trackPicker = TrackPicker.SECOND },
         onClose = { state.panelOpen = false },
         modifier = modifier,
-        sections = { with(platform) { GearSections() } },
+        page = state.gearPage,
+        onPage = { state.gearPage = it },
+        playback = {
+            with(platform) { GearSections() }
+            SleepChoice(state.session, ::monotonicMs)
+            RepeatChoice(state.session.repeat) { state.session.repeat = it }
+        },
         afterPictureSize = { with(platform) { GearAfterPictureSize() } },
-        end = {
-            CaptionRows(
-                on = state.captioning,
-                onOn = { state.captioning = it },
-                target = state.captionTarget,
-                onTarget = state::chooseCaptionTarget,
-                model = WhisperModels.of(state.captionModel),
-                onModel = { state.chooseCaptionModel(it.id) },
-                status = state.captionStatus,
-            )
+        pictureEnd = { with(platform) { GearEnd() } },
+        sound = {
+            with(platform) { GearSound() }
             VoiceOverRows(
                 voices = if (syncableSubtitles(state) != null || state.captioning) {
                     PiperVoices.forLanguage(dubLanguage(state), platform.espeak)
@@ -869,6 +872,17 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 centreChannel = com.hawkynt.mediadroyd.player.Dub.hasCentre(state.dubChannels),
                 onOriginal = state::chooseDubOriginal,
                 dubStatus = state.dubStatus,
+            )
+        },
+        subtitles = {
+            CaptionRows(
+                on = state.captioning,
+                onOn = { state.captioning = it },
+                target = state.captionTarget,
+                onTarget = state::chooseCaptionTarget,
+                model = WhisperModels.of(state.captionModel),
+                onModel = { state.chooseCaptionModel(it.id) },
+                status = state.captionStatus,
             )
             SubtitleLookRows(
                 state.subtitleLook, onLook = state::look, onReset = state::resetLook,
@@ -899,9 +913,6 @@ private fun Gear(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 },
                 syncing = state.syncing,
             )
-            SleepChoice(state.session, ::monotonicMs)
-            RepeatChoice(state.session.repeat) { state.session.repeat = it }
-            with(platform) { GearEnd() }
         },
     )
 }

@@ -1395,7 +1395,7 @@ fun PhonePlayer(
             }
         }
 
-        // The child lock, the sound (night mode, the output's delay, spatial audio) and the rotation.
+        // The child lock and the rotation.
         @Composable
         override fun ColumnScope.GearSections() {
             OutlinedButton(
@@ -1418,8 +1418,22 @@ fun PhonePlayer(
                 modifier = Modifier.padding(top = 4.dp),
             )
 
-            PanelTitle("Sound")
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            PanelTitle("Rotation")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Rotation.entries.forEach { option ->
+                    FilterChip(
+                        selected = rotation == option,
+                        onClick = { rotation = option },
+                        label = { Text(option.label, fontSize = 16.sp) },
+                    )
+                }
+            }
+        }
+
+        // The sound: night mode, the output's delay and equalizer, spatial audio.
+        @Composable
+        override fun ColumnScope.GearSound() {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text("Night mode", fontSize = 16.sp)
                     Text(
@@ -1494,17 +1508,6 @@ fun PhonePlayer(
                             store.data.settings.spatialAudio = it
                             store.save()
                         },
-                    )
-                }
-            }
-
-            PanelTitle("Rotation")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Rotation.entries.forEach { option ->
-                    FilterChip(
-                        selected = rotation == option,
-                        onClick = { rotation = option },
-                        label = { Text(option.label, fontSize = 16.sp) },
                     )
                 }
             }

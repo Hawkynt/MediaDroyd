@@ -13,6 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,15 +26,42 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.player.PictureFit
+import com.hawkynt.mediadroyd.ui.resources.Res
+import com.hawkynt.mediadroyd.ui.resources.ic_image
+import com.hawkynt.mediadroyd.ui.resources.ic_subtitles
+import com.hawkynt.mediadroyd.ui.resources.ic_volume_up
+import org.jetbrains.compose.resources.painterResource
+
+/** The gear panel's pages, each opened by its icon along the panel's top (#543): none needs long scrolling. */
+enum class GearPage(val label: String) {
+    PLAYBACK("Playback"),
+    PICTURE("Picture"),
+    SOUND("Sound"),
+    SUBTITLES("Subtitles"),
+}
+
+@Composable
+private fun GearPage.icon(): androidx.compose.ui.graphics.painter.Painter = when (this) {
+    GearPage.PLAYBACK -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.Settings)
+    GearPage.PICTURE -> painterResource(Res.drawable.ic_image)
+    GearPage.SOUND -> painterResource(Res.drawable.ic_volume_up)
+    GearPage.SUBTITLES -> painterResource(Res.drawable.ic_subtitles)
+}
 
 /**
- * The gear's side panel: speed, this video's picture, subtitles and tracks. Picture changes show
- * live and are remembered for this one video when a slider is let go.
+ * The gear's side panel, one [page] at a time (#543), the others a tap on their icon away ([onPage]): Playback — the
+ * speed, then [playback] (the platform's lock and rotation, the sleep timer, repeat); Picture — the picture's size and
+ * shape, [afterPictureSize], this video's picture (live while a slider moves, remembered for this one video when it is
+ * let go), then [pictureEnd]; Sound — the audio track, then [sound]; Subtitles — the subtitles and their tracks, then
+ * [subtitles].
  */
 @Composable
 fun GearPanel(
@@ -56,8 +85,14 @@ fun GearPanel(
     onSecondSubtitleTrack: () -> Unit = {},
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    sections: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
+    /** The page shown, and where another is chosen. */
+    page: GearPage = GearPage.PLAYBACK,
+    onPage: (GearPage) -> Unit = {},
+    playback: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
     afterPictureSize: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
+    pictureEnd: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
+    sound: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
+    subtitles: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
     /** The folder this video is in, and the one whose picture it starts with, if any has one (FolderDefaults). */
     folder: String = "",
     pictureFolder: String? = null,
@@ -67,8 +102,6 @@ fun GearPanel(
     fitHint: String = "Pinch with two fingers to zoom; choosing a size resets the zoom.",
     /** Which upscalers offer their networks' models here (PictureSliders). */
     neuralModels: (PictureAdjustment.Upscaler) -> Boolean = { it.isEnlarger },
-    /** After the subtitles and sound: what only this platform's player offers. */
-    end: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -76,20 +109,95 @@ fun GearPanel(
             .widthIn(max = 400.dp)
             .fillMaxWidth(0.9f)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
-            .clickable(interactionSource = null, indication = null) {}
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .clickable(interactionSource = null, indication = null) {},
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Playback & picture", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 20.dp, end = 8.dp)) {
+            Text(page.label, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Close") }
         }
+        Row(
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        ) {
+            GearPage.entries.forEach { each ->
+                val chosen = each == page
+                val tint = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable { onPage(each) }
+                        .semantics { contentDescription = each.label; selected = chosen }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    Icon(each.icon(), contentDescription = null, tint = tint)
+                    Text(each.label, fontSize = 13.sp, color = tint)
+                }
+            }
+        }
+        HorizontalDivider()
+        // Each page scrolls on its own, from its top.
+        androidx.compose.runtime.key(page) {
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+            ) {
+                when (page) {
+                    GearPage.PLAYBACK -> {
+                        PanelTitle("Speed")
+                        SpeedSlider(speed, onSpeed, Modifier.fillMaxWidth())
+                        playback()
+                    }
+                    GearPage.PICTURE -> PicturePage(
+                        fit, onFit, fitHint, picture, onPicture, onPictureDone, onResetPicture, check, colorizers,
+                        neuralModels, folder, pictureFolder, onUseForFolder, onForgetFolder, afterPictureSize,
+                        end = pictureEnd,
+                    )
+                    GearPage.SOUND -> {
+                        OutlinedButton(onClick = onAudioTrack, modifier = Modifier.padding(top = 16.dp)) {
+                            Text("Audio track…", fontSize = 16.sp)
+                        }
+                        sound()
+                    }
+                    GearPage.SUBTITLES -> {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
+                            Text("Subtitles", fontSize = 17.sp, modifier = Modifier.weight(1f))
+                            Switch(checked = subtitlesOn, onCheckedChange = onSubtitles)
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 8.dp),
+                        ) {
+                            OutlinedButton(onClick = onSubtitleTrack) { Text("Subtitle track…", fontSize = 16.sp) }
+                            OutlinedButton(onClick = onSecondSubtitleTrack) { Text("Second…", fontSize = 16.sp) }
+                        }
+                        subtitles()
+                    }
+                }
+            }
+        }
+    }
+}
 
-        PanelTitle("Speed")
-        SpeedSlider(speed, onSpeed, Modifier.fillMaxWidth())
-
-        sections()
-
+// The Picture page: the picture's size and shape, then this video's picture and the folder's.
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.PicturePage(
+    fit: PictureFit,
+    onFit: (PictureFit) -> Unit,
+    fitHint: String,
+    picture: PictureAdjustment,
+    onPicture: (PictureAdjustment) -> Unit,
+    onPictureDone: () -> Unit,
+    onResetPicture: () -> Unit,
+    check: PictureTry,
+    colorizers: List<PictureAdjustment.Colorize>,
+    neuralModels: (PictureAdjustment.Upscaler) -> Boolean,
+    folder: String,
+    pictureFolder: String?,
+    onUseForFolder: () -> Unit,
+    onForgetFolder: () -> Unit,
+    afterPictureSize: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+    end: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
         PanelTitle("Picture size")
         @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -165,21 +273,8 @@ fun GearPanel(
             TextButton(onClick = onForgetFolder) { Text("Forget the folder's picture", fontSize = 16.sp) }
         }
 
-        PanelTitle("Language and sound")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Subtitles", fontSize = 17.sp, modifier = Modifier.weight(1f))
-            Switch(checked = subtitlesOn, onCheckedChange = onSubtitles)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            OutlinedButton(onClick = onAudioTrack) { Text("Audio track…", fontSize = 16.sp) }
-            OutlinedButton(onClick = onSubtitleTrack) { Text("Subtitle track…", fontSize = 16.sp) }
-        }
-        OutlinedButton(onClick = onSecondSubtitleTrack, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Second subtitles…", fontSize = 16.sp)
-        }
         end()
     }
-}
 
 /**
  * The sleep timer (PlayerSession): off, after a number of minutes from [nowMs] (the screen's monotonic clock), or at
