@@ -32,6 +32,8 @@ class PlayerScreenState(
     /** The demo library's placeholders: nothing remembered of them. */
     val demo: Boolean = false,
     panelAtStart: Boolean = false,
+    /** The gear's page when it first opens. */
+    pageAtStart: GearPage = GearPage.PLAYBACK,
     infoAtStart: Boolean = false,
     /** More to play once the queue runs out (random movies, #512); null for a queue that ends. */
     more: (() -> List<Playable>)? = null,
@@ -114,6 +116,19 @@ class PlayerScreenState(
     )
         private set
 
+    /** Whether the subtitles the voice-over speaks show on screen too; the household's choice (#542). */
+    var dubLinesShown by mutableStateOf(store.data.settings.dubLinesShown)
+        private set
+
+    fun chooseDubLinesShown(shown: Boolean) {
+        dubLinesShown = shown
+        store.data.settings.dubLinesShown = shown
+        store.save()
+    }
+
+    /** The subtitles playing are heard, not shown: the voice-over speaks them and the household hid them (#542). */
+    val linesHidden: Boolean get() = dubbing && !dubLinesShown
+
     fun chooseDubOriginal(original: com.hawkynt.mediadroyd.player.Dub.Original) {
         dubOriginal = original
         store.data.settings.dubOriginal = original.name
@@ -185,6 +200,9 @@ class PlayerScreenState(
     var error by mutableStateOf<String?>(null)
 
     var panelOpen by mutableStateOf(panelAtStart)
+
+    /** The gear panel's page: the last one chosen, shown when the gear opens again (#543). */
+    var gearPage by mutableStateOf(pageAtStart)
     var infoOpen by mutableStateOf(infoAtStart)
     var chapterPicker by mutableStateOf(false)
     var trackPicker by mutableStateOf<TrackPicker?>(null)
