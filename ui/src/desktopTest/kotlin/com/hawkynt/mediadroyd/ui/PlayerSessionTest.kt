@@ -137,6 +137,24 @@ class PlayerSessionTest {
     }
 
     @Test
+    fun `the next episode is not ended by the last one's credits while it is still being opened (#548)`() {
+        val chapters = listOf(Chapter(0, 550_000, "Episode"), Chapter(550_000, 600_000, "Credits"))
+        val s = session()
+        engine.open(MediaRequest(s.current.videoPath, startMs = 0))
+        s.begin(chapters)
+        engine.seekTo(560_000)
+        s.tick()
+        assertEquals(1, s.index)
+        // The next episode's chapters are still being read: the engine plays on in the last one's credits.
+        repeat(4) {
+            engine.advance(500)
+            s.tick()
+        }
+        assertEquals(1, s.index)
+        assertFalse(store.isWatched("/show/e2.mkv"))
+    }
+
+    @Test
     fun `credits a scene is hidden after are jumped over, the scene plays, the credits after it end the video`() {
         val chapters = listOf(
             Chapter(0, 500_000, "Episode"),
