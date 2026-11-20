@@ -48,6 +48,9 @@ class ReadAhead<T>(
     private var generation = 0
     private val cursors = ArrayList<Cursor<T>>()
 
+    /** How many bytes are held, as their offers counted them. */
+    val heldBytes: Long get() = synchronized(lock) { bytes }
+
     /** The time of the last packet read; Long.MIN_VALUE before the first. */
     val lastMs: Long get() = synchronized(lock) { entries.lastOrNull()?.ms ?: Long.MIN_VALUE }
 
