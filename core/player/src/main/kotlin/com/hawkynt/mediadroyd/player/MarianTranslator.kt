@@ -60,7 +60,7 @@ class MarianTranslator(dir: File) : AutoCloseable {
         OnnxTensor.createTensor(env, LongBuffer.wrap(ids), shape).use { idTensor ->
             OnnxTensor.createTensor(env, LongBuffer.wrap(mask), shape).use { attention ->
                 encoder.run(mapOf("input_ids" to idTensor, "attention_mask" to attention)).use { encoded ->
-                    val written = decode(encoded[0] as OnnxTensor, attention, batch, length * 2 + 10)
+                    val written = decode(encoded[0] as OnnxTensor, attention, batch, minOf(length * 2 + 10, MAX_STEPS))
                     written.mapIndexed { i, pieces ->
                         if (sources[i].size <= 1) "" else tokenizer.decode(pieces.map { it.toInt() })
                     }
@@ -140,5 +140,11 @@ class MarianTranslator(dir: File) : AutoCloseable {
     override fun close() {
         encoder.close()
         decoder.close()
+    }
+
+    private companion object {
+        // The most pieces a translation is written in: a subtitle line takes a few dozen; a speech model's loop of
+        // hundreds of words would otherwise hold the window up for a minute (#541).
+        const val MAX_STEPS = 160
     }
 }

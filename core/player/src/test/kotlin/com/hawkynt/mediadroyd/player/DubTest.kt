@@ -118,6 +118,28 @@ class DubTest {
     }
 
     @Test
+    fun `the voice runs on seamlessly from buffer to buffer, their times given in whole milliseconds (#541)`() {
+        val rate = 48_000
+        val clip = FloatArray(rate * 2) { (it % 1000).toFloat() }
+        val track = Dub.Track().apply { add(0, clip, rate) }
+        val mixer = Dub.Mixer(rate, 1, Dub.Original.MUTE)
+        val frames = 1024
+        val out = ShortArray(rate)
+        var at = 0
+        while (at + frames <= out.size) {
+            // The engine's time of the buffer: its first frame's, cut to whole milliseconds (21.333 ms a buffer).
+            mixer.process(out, at, frames, at * 1000L / rate, track)
+            at += frames
+        }
+        val jumps = (1 until at).count { out[it] - out[it - 1] != 1 && out[it] != 0.toShort() }
+        assertEquals(0, jumps)
+        // A seek: the time jumps and the voice follows.
+        val after = ShortArray(frames)
+        mixer.process(after, 0, frames, 1500, track)
+        assertEquals((1500 * rate / 1000 % 1000).toShort(), after[0])
+    }
+
+    @Test
     fun `a clip at the voice's own rate is laid onto the track at the output's`() {
         val track = Dub.Track()
         track.add(1000, FloatArray(22_050) { 1000f }, rate = 22_050)
@@ -162,6 +184,21 @@ class DubTest {
         assertTrue(track.voiceAt(1000, 1000, voice))
         assertEquals(0.5f * 32_767, voice[0], 1f)
         assertEquals(1, speaking.ahead(30_000))
+    }
+
+    @Test
+    fun `lines long past are let go, and spoken again after a seek back to them (#537)`() {
+        val lines = (0 until 100).map { Dub.Line(it * 10_000L, it * 10_000L + 2_000, "line $it") }
+        val track = Dub.Track()
+        val speaking = Dub.Speaking(lines, FakeSpeaker(), track)
+        for (position in 0L until 1_000_000L step 10_000L) speaking.ahead(position)
+        // An hour and more of lines would fill the memory: only the last minute and what lies ahead stay.
+        val voice = FloatArray(10)
+        assertTrue(!track.voiceAt(100, 1000, voice))
+        assertTrue(track.voiceAt(990_000, 1000, voice))
+        assertTrue(track.lines <= (Dub.BEHIND_MS + Dub.AHEAD_MS) / 10_000 + 1)
+        assertEquals(3, speaking.ahead(0))
+        assertTrue(track.voiceAt(100, 1000, voice))
     }
 
     @Test
