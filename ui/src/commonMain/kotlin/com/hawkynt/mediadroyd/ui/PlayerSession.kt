@@ -255,10 +255,14 @@ class PlayerSession(
     /**
      * Twice a second while it plays: inside a known intro it jumps to its end, once the credits have begun (with
      * skipping on) it ends the video there and then (finishCurrent); every third second the progress is kept. A part
-     * repeating is the viewer's choice: no jump takes it away. Returns where it jumped to, or null.
+     * repeating is the viewer's choice: no jump takes it away. Nothing while the engine still plays another video (the
+     * last one, the next not opened yet). Returns where it jumped to, or null.
      */
     fun tick(): Long? {
         if (!engine.isPlaying) return null
+        // Not this video's yet: the next one is still being opened while the last plays on in its credits, which would
+        // end the new one at once (#548).
+        if (engine.openedPath != current.videoPath) return null
         val position = engine.positionMs
         if (abLoop.a != null) {
             if (++ticks % 6 == 0) saveProgress(position)
