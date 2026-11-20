@@ -169,6 +169,9 @@ data class Settings(
     var defaultSpeed: Float = 1.0f,
     var loudness: Float = 0f,                 // dB, -12..12
     var voices: Float = 0f,                   // dB the dialogue is raised by, 0..12 (VoiceBoost, #452)
+    var dubbing: Boolean = false,            // the voice-over on, for the next video too (#539)
+    var captioning: Boolean = false,         // subtitles made from the speech on, for the next video too (#539)
+    var nightMode: Boolean = false,          // the player's night mode, for the next video too (#539)
     var dubVoice: String = "",               // the voice subtitles are spoken in (PiperVoices id), "" none chosen
     var dubLinesShown: Boolean = true,       // the subtitles the voice-over speaks also shown on screen (#542)
     var dubOriginal: String = "BAND",        // Dub.Original name: the dialogue channel, the voice band, or all
