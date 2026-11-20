@@ -303,11 +303,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
 
     // Subtitles made from the speech (#529): the sound ahead of the position heard by Whisper (the household's model,
     // fetched the first time); in the language wanted (#530) — as spoken, Whisper's English, or that English translated
-    // by OPUS-MT (CaptionRoute); shown over the picture, and spoken where the dub is on.
+    // by OPUS-MT (CaptionRoute) — Chinese and Japanese written as spoken and translated by their own (#546); shown over
+    // the picture, and spoken where the dub is on.
     LaunchedEffect(state.captioning, state.captionTarget, state.captionModel, session.index) {
         state.captions = null
         state.captionText = null
         state.captionSpoken = null
+        state.captionFrom = null
         if (!state.captioning) {
             state.captionStatus = null
             return@LaunchedEffect
@@ -338,6 +340,10 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         // The fast cores only: a phone's little ones slow ggml down (FastCores).
         val threads = com.hawkynt.mediadroyd.player.FastCores.count()
         var spoken: String? = null
+        // The spoken language's own translator into English, where it has one (#546): fetched once the language is
+        // heard; until then Whisper's English.
+        var fromTranslator: MarianTranslator? = null
+        var fromAsked = false
         // How long the last window took to hear, for telling the household when the model cannot keep up.
         var tookMs = 0L
         var windowMs = 0L
@@ -356,7 +362,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 }
                 // The language spoken from the first window, written as spoken; then by the route to the target.
                 var heard = if (spoken == null) whisper(false)?.also { spoken = it.language } else null
-                val route = CaptionRoute.of(target, spoken)
+                val route = CaptionRoute.of(target, spoken) { fromTranslator != null }
                 if (heard == null || route.whisperTranslates) {
                     heard = whisper(route.whisperTranslates) ?: return@hear null
                 }
@@ -372,6 +378,16 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     },
                 )
                 val translated = System.nanoTime()
+                // As spoken into English first, where the spoken language has its own translator (#546).
+                val toEnglish = fromTranslator
+                if (route.from != null && toEnglish != null) {
+                    val texts = toEnglish.translateAll(heard.segments.map { it.text.trim() })
+                    heard = heard.copy(
+                        segments = heard.segments.mapIndexed { i, segment ->
+                            segment.copy(text = texts?.getOrNull(i)?.takeIf { it.isNotEmpty() } ?: segment.text)
+                        },
+                    )
+                }
                 // The window's lines translated together (MarianTranslator.translateAll): the steps of the longest.
                 if (route.translator != null && translator != null) {
                     val texts = translator.translateAll(heard.segments.map { it.text.trim() })
@@ -429,6 +445,22 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                         state.captionSpoken = spoken
                         state.captionLanguage = target.ifEmpty { spoken }
                     }
+                    // The spoken language heard: its own translator into English fetched, where it has one (#546).
+                    val source = TranslationModels.from(spoken)
+                    if (source != null && !fromAsked && CaptionRoute.of(target, spoken).from != null) {
+                        fromAsked = true
+                        if (fetched(platform, source.download, "the ${source.label} translator") {
+                                state.captionStatus = it
+                            }
+                        ) {
+                            fromTranslator = withContext(Dispatchers.Default) {
+                                platform.modelFolder(source.download)
+                                    ?.let { runCatching { MarianTranslator(it) }.getOrNull() }
+                            }
+                            state.captionFrom = fromTranslator?.let { source.source }
+                            state.captionStatus = null
+                        }
+                    }
                     delay(DUB_PACE_MS)
                 }
             }
@@ -436,6 +468,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             withContext(NonCancellable + Dispatchers.Default) {
                 NativeWhisper.close(handle)
                 translator?.close()
+                fromTranslator?.close()
             }
         }
     }
@@ -1119,9 +1152,13 @@ internal suspend fun fetched(
 
 /** How the made subtitles are translated, as the info graph names it; null where they are as spoken. */
 internal fun captionTranslation(state: PlayerScreenState): String? {
-    val route = CaptionRoute.of(state.captionTarget, state.captionSpoken)
+    val route = CaptionRoute.of(state.captionTarget, state.captionSpoken) { it == state.captionFrom }
     val into = TranslationModels.into(route.translator)
+    val from = TranslationModels.from(route.from)
     return when {
+        from != null && route.translator != null ->
+            "Whisper as spoken, OPUS-MT ${from.label} into English, then into ${into?.label}"
+        from != null -> "Whisper as spoken, OPUS-MT ${from.label} into English"
         route.translator != null && route.whisperTranslates -> "Whisper into English, then OPUS-MT into ${into?.label}"
         route.translator != null -> "OPUS-MT, English into ${into?.label}"
         route.whisperTranslates -> "Whisper, into English"

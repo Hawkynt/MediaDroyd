@@ -116,19 +116,29 @@ class LiveCaptions(
 }
 
 /**
- * How made subtitles reach the language wanted (#529, #530): whether Whisper writes English ([whisperTranslates]) and
- * into which language OPUS-MT then translates that English ([translator]; null for none). [of] decides from the
- * language [target]ed (null or empty: as spoken) and the one [spoken] (null before it is known): as spoken, Whisper
- * writes what it hears; into English, Whisper translates unless English is spoken; into another language, nothing
- * where that is spoken, else English first — Whisper's, unless English is spoken — then OPUS-MT.
+ * How made subtitles reach the language wanted (#529, #530, #546): whether Whisper writes English
+ * ([whisperTranslates]); else, where [from] is set, Whisper writes that language as spoken and OPUS-MT translates it
+ * into English; then into which language OPUS-MT translates that English ([translator]; null for none). [of] decides
+ * from the language [target]ed (null or empty: as spoken) and the one [spoken] (null before it is known): as spoken,
+ * or into the language spoken, Whisper writes what it hears; else English first — as spoken where English is spoken,
+ * through its own translator where the spoken language has one there ([translatable]: TranslationModels.from, or
+ * whether it is fetched), else Whisper's — then, into another language than English, OPUS-MT.
  */
-data class CaptionRoute(val whisperTranslates: Boolean, val translator: String?) {
+data class CaptionRoute(val whisperTranslates: Boolean, val translator: String?, val from: String? = null) {
     companion object {
-        fun of(target: String?, spoken: String?): CaptionRoute = when {
-            target.isNullOrEmpty() -> CaptionRoute(false, null)
-            target == "en" -> CaptionRoute(spoken != "en", null)
-            target == spoken -> CaptionRoute(false, null)
-            else -> CaptionRoute(spoken != "en", target)
+        fun of(
+            target: String?,
+            spoken: String?,
+            translatable: (String) -> Boolean = { TranslationModels.from(it) != null },
+        ): CaptionRoute {
+            if (target.isNullOrEmpty() || target == spoken) return CaptionRoute(false, null)
+            val into = target.takeIf { it != "en" }
+            return when {
+                spoken == "en" -> CaptionRoute(false, into)
+                spoken != null && TranslationModels.from(spoken) != null && translatable(spoken) ->
+                    CaptionRoute(false, into, from = spoken)
+                else -> CaptionRoute(true, into)
+            }
         }
     }
 }

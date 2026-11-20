@@ -77,16 +77,32 @@ class LiveCaptionsTest {
 
     @Test
     fun `made subtitles reach any language through English`() {
-        assertEquals(CaptionRoute(false, null), CaptionRoute.of("", "ja"))
-        assertEquals(CaptionRoute(true, null), CaptionRoute.of("en", "ja"))
+        assertEquals(CaptionRoute(false, null), CaptionRoute.of("", "ko"))
+        assertEquals(CaptionRoute(true, null), CaptionRoute.of("en", "ko"))
         assertEquals(CaptionRoute(false, null), CaptionRoute.of("en", "en"))
-        // Japanese speech into German: Whisper's English, then OPUS-MT into German.
-        assertEquals(CaptionRoute(true, "de"), CaptionRoute.of("de", "ja"))
+        // Korean speech into German: Whisper's English, then OPUS-MT into German.
+        assertEquals(CaptionRoute(true, "de"), CaptionRoute.of("de", "ko"))
         // English speech into German: Whisper writes English, OPUS-MT translates it.
         assertEquals(CaptionRoute(false, "de"), CaptionRoute.of("de", "en"))
         // German speech into German: written as spoken.
         assertEquals(CaptionRoute(false, null), CaptionRoute.of("de", "de"))
         // Not known yet: English first, to be safe.
         assertEquals(CaptionRoute(true, "de"), CaptionRoute.of("de", null))
+    }
+
+    @Test
+    fun `Chinese and Japanese speech are written as spoken and translated on the device (#546)`() {
+        // Chinese into German: Whisper writes Chinese, OPUS-MT translates it into English, then into German.
+        assertEquals(CaptionRoute(false, "de", from = "zh"), CaptionRoute.of("de", "zh"))
+        assertEquals(CaptionRoute(false, null, from = "ja"), CaptionRoute.of("en", "ja"))
+        // As spoken, or into the language spoken: nothing to translate.
+        assertEquals(CaptionRoute(false, null), CaptionRoute.of("", "zh"))
+        assertEquals(CaptionRoute(false, null), CaptionRoute.of("ja", "ja"))
+        // Until its translator is there, Whisper's English as before.
+        assertEquals(CaptionRoute(true, "de"), CaptionRoute.of("de", "zh") { false })
+        assertEquals("zh", TranslationModels.from("zh")?.source)
+        assertEquals("en", TranslationModels.from("ja")?.language)
+        assertEquals(null, TranslationModels.from("ko"))
+        assertEquals("en", TranslationModels.into("de")?.source)
     }
 }

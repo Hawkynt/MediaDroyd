@@ -4,11 +4,18 @@ package com.hawkynt.mediadroyd.player
  * The translators subtitles can be translated with (#530): OPUS-MT's Marian models (Helsinki-NLP, CC BY 4.0) from
  * English into another language, as Xenova's quantised ONNX exports at fixed revisions, fetched when chosen and checked
  * against their digests. Whisper turns any speech into English (#529), so English into the language wanted covers any
- * spoken language: Japanese speech → English → German.
+ * spoken language — but small Whisper models translating Chinese or Japanese mostly loop and guess, so those are
+ * written as spoken and translated into English by their own translators ([FROM], #546): Chinese speech → English →
+ * German.
  */
 object TranslationModels {
-    /** A translator into [language] (ISO 639-1), what to call it, its files. */
-    data class Entry(val language: String, val label: String, val download: NeuralModels.Download)
+    /** A translator from [source] into [language] (ISO 639-1), what to call it (the other language), its files. */
+    data class Entry(
+        val language: String,
+        val label: String,
+        val download: NeuralModels.Download,
+        val source: String = "en",
+    )
 
     /** The files every export has, by name in the download (the networks in its onnx/ folder). */
     const val ENCODER = "onnx/encoder_model_quantized.onnx"
@@ -16,15 +23,22 @@ object TranslationModels {
     const val TOKENIZER = "tokenizer.json"
     const val CONFIG = "config.json"
 
-    private fun model(language: String, label: String, revision: String, vararg files: Pair<Long, String>) = Entry(
+    private fun model(
+        language: String,
+        label: String,
+        revision: String,
+        vararg files: Pair<Long, String>,
+        source: String = "en",
+    ) = Entry(
         language, label,
         NeuralModels.Download(
-            "translate-en-$language",
+            "translate-$source-$language",
             listOf(DECODER, ENCODER, TOKENIZER, "vocab.json", CONFIG).zip(files) { name, (bytes, sha) ->
                 NeuralModels.File(name, bytes, sha)
             },
-            source = "https://huggingface.co/Xenova/opus-mt-en-$language/resolve/$revision",
+            source = "https://huggingface.co/Xenova/opus-mt-$source-$language/resolve/$revision",
         ),
+        source,
     )
 
     val ALL = listOf(
@@ -78,6 +92,31 @@ object TranslationModels {
         ),
     )
 
-    /** The translator into [language], or null where there is none. */
+    /** The translators into English from a language Whisper writes as spoken (#546). */
+    val FROM = listOf(
+        model(
+            "en", "Chinese", "39d480d52a9ea3065a1f117adfe4dbc55de10e6f",
+            60_212_804L to "c6b7f04ff1ba0fbd1bf6852599b4c0cad6fe512d57cd887f44ef36cf705424cb",
+            52_899_742L to "84d5e171b626bc8b6b220d022ac58696e9528c25deeacca62b5cbf4364547a99",
+            6_381_339L to "b306d0301cf280bfd647d7067b5ade2a97b987e6d678df110703c002433643ff",
+            1_747_906L to "08a119a1defd522fa047cb5e3bfe3e89633e96caa38ced0dc9cee7ef1021a011",
+            1_389L to "293d318fce41dbf04114eac45037bb88a32d7c4ee21011a75e24a8b98ca45ad1",
+            source = "zh",
+        ),
+        model(
+            "en", "Japanese", "1a906cfaaf7c8f4193f67f5885c082aa6dbd9d16",
+            58_001_744L to "b304d0014e4e1575437b6af95467b6cb54405d923732d8359113bd6dbbee93c0",
+            50_705_822L to "345262b16bcdda1468b0f3380c112b7ce79f731176b4b1d21f6edd5b2ae0d25c",
+            5_991_485L to "770ff2855437cf44f1f110550c5a9dca773253a167aeac36076b2073d259aa3b",
+            1_622_775L to "a1667b43d021e09c76f385101bd473f20b5691a12cdca7dda43e4a8daff20021",
+            1_376L to "d35476f1d3858883feec67e5a63ddc387452a70fda9c8e26db99c71aa2ad6a34",
+            source = "ja",
+        ),
+    )
+
+    /** The translator from English into [language], or null where there is none. */
     fun into(language: String?): Entry? = ALL.firstOrNull { it.language == language }
+
+    /** The translator from [language] into English, or null where Whisper's own English is the way (#546). */
+    fun from(language: String?): Entry? = FROM.firstOrNull { it.source == language }
 }
