@@ -41,6 +41,7 @@ import com.hawkynt.mediadroyd.player.SubtitleSync
 import com.hawkynt.mediadroyd.player.Dub
 import com.hawkynt.mediadroyd.player.PiperVoices
 import com.hawkynt.mediadroyd.player.LiveCaptions
+import com.hawkynt.mediadroyd.player.Loops
 import com.hawkynt.mediadroyd.player.NativeWhisper
 import com.hawkynt.mediadroyd.player.WhisperModels
 import com.hawkynt.mediadroyd.player.Prosody
@@ -359,9 +360,10 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 if (heard == null || route.whisperTranslates) {
                     heard = whisper(route.whisperTranslates) ?: return@hear null
                 }
-                // Each line's tone from its own sound, before any translation, for the voice to keep (#534).
+                // A model caught in a loop heard once, before the loop is translated (Loops, #541); then each line's
+                // tone from its own sound, before any translation, for the voice to keep (#534).
                 heard = heard.copy(
-                    segments = heard.segments.map { segment ->
+                    segments = Loops.drop(heard.segments).map { segment ->
                         val rate = NativeWhisper.SAMPLE_RATE
                         val from = (segment.startMs * rate / 1000).toInt().coerceIn(0, pcm.size)
                         val to = (segment.endMs * rate / 1000).toInt().coerceIn(from, pcm.size)

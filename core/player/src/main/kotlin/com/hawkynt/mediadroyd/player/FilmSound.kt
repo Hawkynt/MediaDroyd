@@ -72,8 +72,11 @@ class FilmSound(private val open: (fromMs: Long, near: Boolean) -> Stream?, priv
     // Whether every block from [first] up to [last] (samples) is full, or lies past the film's end.
     private fun decoded(first: Long, last: Long): Boolean = synchronized(this) {
         val end = minOf(last, ended)
-        end <= first || (first / RATE..(end - 1) / RATE).all { (filled[it] ?: 0) >= RATE }
+        end <= first || (first / RATE..(end - 1) / RATE).all { (filled[it] ?: 0) >= whole(it) }
     }
+
+    // How many samples make [block] whole: a second's, or up to the film's end in its last one (guarded by this).
+    private fun whole(block: Long): Int = minOf(RATE.toLong(), ended - block * RATE).toInt()
 
     /** The speech found so far, SubtitleSync.RATE verdicts a second from the film's start; none where not decoded. */
     fun speech(): BooleanArray = SubtitleSync.verdicts(synchronized(this) { levels.copyOf() })
@@ -113,15 +116,16 @@ class FilmSound(private val open: (fromMs: Long, near: Boolean) -> Stream?, priv
         while (!closed) {
             val have = synchronized(this) {
                 if (at >= last || at >= ended) return
-                filled[at / RATE] ?: 0
+                (filled[at / RATE] ?: 0).let { if (it >= whole(at / RATE)) RATE else it }
             }
             val block = at / RATE
             if (have >= RATE) {
                 at = (block + 1) * RATE
                 continue
             }
-            // The stream stands where this block needs its next sample: read on; else open one at the block.
-            if (slot.stream == null || slot.at != block * RATE + have) {
+            // The stream stands in this block, no further than its next sample is needed: read on; else open one at the
+            // block (#540: one reopened at the block's start reads on to where it is filled, not opened again).
+            if (slot.stream == null || slot.at !in block * RATE..block * RATE + have) {
                 slot.close()
                 slot.stream = open(block * 1000, slot.near)
                 slot.at = block * RATE

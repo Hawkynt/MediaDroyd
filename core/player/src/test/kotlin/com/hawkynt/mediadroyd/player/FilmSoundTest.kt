@@ -53,6 +53,28 @@ class FilmSoundTest {
     }
 
     @Test
+    fun `a film ending inside a second is not opened again and again at its end (#540)`() {
+        var opens = 0
+        val endSample = 425_273L * rate / 1000
+        val sound = FilmSound({ fromMs, _ ->
+            opens++
+            object : FilmSound.Stream {
+                var at = fromMs * rate / 1000
+                override fun read(): FloatArray? {
+                    if (at >= endSample) return null
+                    val chunk = FloatArray(minOf(rate / 10L, endSample - at).toInt()) { 0.1f }
+                    at += chunk.size
+                    return chunk
+                }
+                override fun close() {}
+            }
+        }, durationMs = 425_273)
+        assertEquals(endSample - 420L * rate, requireNotNull(sound.samples(420_000, 480_000)).size.toLong())
+        repeat(5) { sound.samples(425_000, 485_000) }
+        assertEquals(1, opens)
+    }
+
+    @Test
     fun `reading on continues the stream open, a seek opens one where it lands`() {
         val sound = FilmSound(::open, durationMs = 600_000)
         sound.samples(0, 30_000)
