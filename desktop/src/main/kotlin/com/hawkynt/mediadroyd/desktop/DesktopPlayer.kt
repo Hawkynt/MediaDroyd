@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import com.hawkynt.mediadroyd.ui.GearPage
 import com.hawkynt.mediadroyd.ui.PlayerCommand
 import com.hawkynt.mediadroyd.ui.PlayerPlatform
 import com.hawkynt.mediadroyd.ui.PlayerScreen
@@ -164,7 +165,11 @@ fun DesktopPlayer(
     val state = remember {
         PlayerScreenState(
             queue, startIndex, store.state, engine, autoAdvance,
-            panelAtStart = System.getenv("MEDIADROYD_SHOW") == "panel",
+            // MEDIADROYD_SHOW=panel, or panel:<page> (playback, picture, sound, subtitles): the gear open from the start.
+            panelAtStart = System.getenv("MEDIADROYD_SHOW")?.substringBefore(':') == "panel",
+            pageAtStart = System.getenv("MEDIADROYD_SHOW")?.substringAfter("panel:", "")
+                ?.let { name -> GearPage.entries.firstOrNull { it.name.equals(name, ignoreCase = true) } }
+                ?: GearPage.PLAYBACK,
             infoAtStart = System.getenv("MEDIADROYD_SHOW") == "info",
             more = more,
         )

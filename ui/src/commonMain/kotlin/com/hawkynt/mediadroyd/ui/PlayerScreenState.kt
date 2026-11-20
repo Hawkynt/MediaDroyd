@@ -32,6 +32,8 @@ class PlayerScreenState(
     /** The demo library's placeholders: nothing remembered of them. */
     val demo: Boolean = false,
     panelAtStart: Boolean = false,
+    /** The gear's page when it first opens. */
+    pageAtStart: GearPage = GearPage.PLAYBACK,
     infoAtStart: Boolean = false,
     /** More to play once the queue runs out (random movies, #512); null for a queue that ends. */
     more: (() -> List<Playable>)? = null,
@@ -200,7 +202,7 @@ class PlayerScreenState(
     var panelOpen by mutableStateOf(panelAtStart)
 
     /** The gear panel's page: the last one chosen, shown when the gear opens again (#543). */
-    var gearPage by mutableStateOf(GearPage.PLAYBACK)
+    var gearPage by mutableStateOf(pageAtStart)
     var infoOpen by mutableStateOf(infoAtStart)
     var chapterPicker by mutableStateOf(false)
     var trackPicker by mutableStateOf<TrackPicker?>(null)
