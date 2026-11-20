@@ -104,5 +104,8 @@ class LiveCaptionsTest {
         assertEquals("en", TranslationModels.from("ja")?.language)
         assertEquals(null, TranslationModels.from("ko"))
         assertEquals("en", TranslationModels.into("de")?.source)
+        // A translator's own loop, as OPUS-MT wrote one for "Yoo-hoo!", is known as one; a short line is not.
+        assertTrue(Loops.repeats("- Nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein, nein"))
+        assertTrue(!Loops.repeats("Bist du hier, um dich anzumelden?"))
     }
 }

@@ -397,6 +397,8 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                         },
                     )
                 }
+                // A translator caught in a loop of its own ("Nein, nein, nein, …") is left out too (#546).
+                heard = heard.copy(segments = heard.segments.filterNot { Loops.repeats(it.text) })
                 tookMs = (System.nanoTime() - began) / 1_000_000
                 windowMs = toMs - fromMs
                 platform.log(
