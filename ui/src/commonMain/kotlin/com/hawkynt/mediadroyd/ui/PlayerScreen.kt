@@ -298,8 +298,25 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             recognise = platform::recognise,
             print = platform::soundPrint,
         )
-        for (step in finder.steps(session.queue.map { it.videoPath }, session.index)) {
-            val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() } ?: continue
+        val queue = session.queue.map { it.videoPath }
+        for (step in finder.steps(queue, session.index)) {
+            val began = System.nanoTime()
+            val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() }
+            // Which episode and what was found, by place in the queue rather than by name (#548).
+            val which = if (step.a == session.current.videoPath) {
+                "this episode"
+            } else {
+                "episode +${queue.indexOf(step.a) - session.index}"
+            }
+            val what = found?.get(step.a)?.let { f ->
+                f.intro?.let { "intro ${it.startMs / 1000}…${it.endMs / 1000} s" }
+                    ?: f.credits.joinToString { "credits ${it.startMs / 1000}…${it.endMs / 1000} s" }.ifEmpty { "none" }
+            } ?: "not readable"
+            platform.log(
+                "skips: ${step.part} of $which in ${(System.nanoTime() - began) / 1_000_000} ms at " +
+                    "${engine.positionMs / 1000} s: $what",
+            )
+            found ?: continue
             finder.keep(step, found)
             session.applySkips()
         }
