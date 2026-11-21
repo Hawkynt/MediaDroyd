@@ -25,8 +25,8 @@ object SoundPrints {
     private const val TIMEOUT_US = 10_000L
 
     /**
-     * The video at [location]: its opening (IntroCredits.openingMs), or where [closing] its last
-     * IntroCredits.CLOSING_MS; null where its sound cannot be read or decoded here.
+     * The video at [location]: its opening (IntroCredits.openingMs), or where [closing] its closing
+     * (IntroCredits.closingMs); null where its sound cannot be read or decoded here.
      */
     fun of(context: Context, location: String, closing: Boolean): IntroCredits.SoundPrint? {
         if (!AndroidNeural.loaded) return null
@@ -47,9 +47,9 @@ object SoundPrints {
             try {
                 val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 }
                 if (closing && durationUs == null) return null
-                val startUs = if (closing) (durationUs!! - IntroCredits.CLOSING_MS * 1000).coerceAtLeast(0) else 0L
+                val startUs = if (closing) (durationUs!! - IntroCredits.closingMs(durationUs / 1000) * 1000).coerceAtLeast(0) else 0L
                 val openingMs = IntroCredits.openingMs((durationUs ?: 0) / 1000)
-                val endUs = startUs + (if (closing) IntroCredits.CLOSING_MS else openingMs) * 1000
+                val endUs = startUs + (if (closing) IntroCredits.closingMs(durationUs!! / 1000) else openingMs) * 1000
                 val first = LongArray(1)
                 val pcm = demuxer.sound(startUs, endUs, NativeFingerprint.SAMPLE_RATE, first) ?: return null
                 NativeFingerprint.fingerprint(pcm, NativeFingerprint.SAMPLE_RATE, 1)
@@ -85,8 +85,8 @@ object SoundPrints {
             } else {
                 0L
             }
-            val startMs = if (closing) (durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0) else 0L
-            val endMs = startMs + if (closing) IntroCredits.CLOSING_MS else IntroCredits.openingMs(durationMs)
+            val startMs = if (closing) (durationMs - IntroCredits.closingMs(durationMs)).coerceAtLeast(0) else 0L
+            val endMs = startMs + if (closing) IntroCredits.closingMs(durationMs) else IntroCredits.openingMs(durationMs)
             if (startMs > 0) extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!).also { codec = it }
             decoder.configure(format, null, null, 0)

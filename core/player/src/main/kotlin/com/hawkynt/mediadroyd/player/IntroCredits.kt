@@ -23,8 +23,11 @@ object IntroCredits {
      */
     fun openingMs(durationMs: Long): Long = com.hawkynt.mediadroyd.library.SkipRules.openingMs(durationMs)
 
-    /** How much before an episode's end is fingerprinted to look for its credits. */
-    const val CLOSING_MS = 8 * 60_000L
+    /**
+     * How much before the end of a video [durationMs] long is looked at for its credits: where they may begin at all
+     * (SkipRules.closingMs, #554) — its last quarter, at most twenty minutes, so a film's long credits fit (#555).
+     */
+    fun closingMs(durationMs: Long): Long = com.hawkynt.mediadroyd.library.SkipRules.closingMs(durationMs)
 
     /** The shortest an intro is taken to be: a channel's jingle or a shared sting is none. */
     const val MIN_INTRO_MS = 15_000L

@@ -17,8 +17,8 @@ import java.io.RandomAccessFile
  */
 object PicturePrints {
     /**
-     * The video at [location]: its opening (IntroCredits.openingMs), or where [closing] its last
-     * IntroCredits.CLOSING_MS, as gray frames; null where it cannot be read or holds no pictures.
+     * The video at [location]: its opening (IntroCredits.openingMs), or where [closing] its closing
+     * (IntroCredits.closingMs), as gray frames; null where it cannot be read or holds no pictures.
      */
     fun of(context: Context, location: String, closing: Boolean): PictureCues.Frames? {
         if (!FfmpegDemuxer.isAvailable()) return null
@@ -33,9 +33,9 @@ object PicturePrints {
             try {
                 val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 }
                 if (closing && durationUs == null) return null
-                val startUs = if (closing) (durationUs!! - IntroCredits.CLOSING_MS * 1000).coerceAtLeast(0) else 0L
+                val startUs = if (closing) (durationUs!! - IntroCredits.closingMs(durationUs / 1000) * 1000).coerceAtLeast(0) else 0L
                 val openingMs = IntroCredits.openingMs((durationUs ?: 0) / 1000)
-                val endUs = startUs + (if (closing) IntroCredits.CLOSING_MS else openingMs) * 1000
+                val endUs = startUs + (if (closing) IntroCredits.closingMs(durationUs!! / 1000) else openingMs) * 1000
                 val stepMs = if (closing) PictureCues.CLOSING_STEP_MS else PictureCues.OPENING_STEP_MS
                 // A closing at the text reader's size: decoded once for its pictures and its text (#535).
                 val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH

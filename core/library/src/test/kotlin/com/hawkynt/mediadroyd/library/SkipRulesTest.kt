@@ -140,4 +140,11 @@ class SkipRulesTest {
         // Nor is it waited for where it is out of place.
         assertEquals(500L, SkipRules.waitMs(1_199_900, 1_200_000L..1_300_000L, emptyList(), 1f, 500, episode))
     }
+
+    @Test
+    fun theClosingLookedAtIsWhereCreditsMayBegin() {
+        assertEquals(10 * 60_000L + 30_000L, SkipRules.closingMs(42 * 60_000L))
+        assertEquals(SkipRules.CLOSING_MS, SkipRules.closingMs(120 * 60_000L))
+        assertEquals(0L, SkipRules.closingMs(0))
+    }
 }

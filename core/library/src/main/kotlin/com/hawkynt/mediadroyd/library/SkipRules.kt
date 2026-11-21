@@ -45,6 +45,12 @@ object SkipRules {
     fun closingFromMs(durationMs: Long): Long =
         if (durationMs <= 0) 0 else maxOf(durationMs - durationMs / 4, durationMs - CLOSING_MS)
 
+    /**
+     * How much of a video [durationMs] long its closing is — where its credits may begin ([closingFromMs]) to its end,
+     * what is looked at for them (#555); 0 where the length is unknown.
+     */
+    fun closingMs(durationMs: Long): Long = if (durationMs <= 0) 0 else durationMs - closingFromMs(durationMs)
+
     // An intro past the opening or credits before the closing are none, whatever named them (#554).
     private fun introInPlace(intro: LongRange, durationMs: Long) = intro.first <= openingMs(durationMs)
 

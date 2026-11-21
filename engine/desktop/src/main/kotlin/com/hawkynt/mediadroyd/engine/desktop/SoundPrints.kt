@@ -15,14 +15,14 @@ import java.nio.ByteOrder
 object SoundPrints {
     /**
      * The video at [path] ([from] a network source where it lives on one): its opening (IntroCredits.openingMs), or
-     * where [closing] its last IntroCredits.CLOSING_MS; null where it cannot be read or the native library is missing.
+     * where [closing] its closing (IntroCredits.closingMs); null where it cannot be read or the native library is missing.
      */
     fun of(path: String, from: FsFile?, closing: Boolean): IntroCredits.SoundPrint? {
         if (!NativeNetworks.loaded) return null
         return runCatching {
             MediaReader(path, from, decoders = emptyList(), pictures = false).use { reader ->
-                val startMs = if (closing) (reader.durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0) else 0
-                val lengthMs = if (closing) IntroCredits.CLOSING_MS else IntroCredits.openingMs(reader.durationMs)
+                val startMs = if (closing) (reader.durationMs - IntroCredits.closingMs(reader.durationMs)).coerceAtLeast(0) else 0
+                val lengthMs = if (closing) IntroCredits.closingMs(reader.durationMs) else IntroCredits.openingMs(reader.durationMs)
                 val endMs = startMs + lengthMs
                 if (startMs > 0) reader.seek(startMs)
                 val pcm = ByteArrayOutputStream()

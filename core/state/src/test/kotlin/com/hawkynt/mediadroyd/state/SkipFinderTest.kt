@@ -204,6 +204,33 @@ class SkipFinderTest {
     }
 
     @Test
+    fun `a movie's credits are found from its own closing alone, its intro never looked for (#555)`() {
+        val store = StateStore(Memory())
+        val films = listOf("/films/a.mkv", "/films/b.mkv")
+        val looked = ArrayList<String>()
+        val finder = SkipFinder(
+            store,
+            pictures = { location, closing ->
+                looked += "$location ${if (closing) "closing" else "opening"} pictures"
+                if (closing) blackCredits(296) else null
+            },
+            print = { location, closing ->
+                looked += "$location ${if (closing) "closing" else "opening"} sound"
+                null
+            },
+        )
+        val steps = finder.steps(films, 0, alone = true)
+        assertEquals(listOf(SkipFinder.Part.CREDITS, SkipFinder.Part.CREDITS), steps.map { it.part })
+        for (step in steps) finder.find(step)?.let { finder.keep(step, it) }
+        assertEquals(2_296_000L, store.foundSkipFor(films[0])?.creditsStartMs)
+        assertTrue(store.hasLookedForCredits(films[1]))
+        assertTrue("an opening looked at: $looked", looked.none { "opening" in it })
+        assertTrue(finder.steps(films, 0, alone = true).isEmpty())
+        // One movie alone in its queue too.
+        assertEquals(1, SkipFinder(StateStore(Memory())) { _, _ -> null }.steps(films.take(1), 0, alone = true).size)
+    }
+
+    @Test
     fun `credits with a scene hidden after them are kept with their end (#513)`() {
         val store = StateStore(Memory())
         val w = PictureCues.LOOK_WIDTH
@@ -237,9 +264,11 @@ class SkipFinderTest {
         val finder = SkipFinder(
             store,
             pictures = { _, closing ->
-                // Credits over the scene from 2 401 s to the end at 2 480 s.
-                val frames = List(480) { if (2_000_000 + it * 1000L >= 2_401_000) titled else scene }
-                if (closing) PictureCues.closing(2_000_000, 2_480_000, frames.asSequence(), keepText = true) else null
+                // Credits over the scene from 2 401 s to the end at 2 480 s; the closing where credits may begin.
+                val from = 2_480_000 - IntroCredits.closingMs(2_480_000)
+                val count = ((2_480_000 - from) / 1000).toInt()
+                val frames = List(count) { if (from + it * 1000L >= 2_401_000) titled else scene }
+                if (closing) PictureCues.closing(from, 2_480_000, frames.asSequence(), keepText = true) else null
             },
             text = { _, at -> at(2_480_000).map { time -> decoded += time; time to credits(time) } },
             recognise = { gray -> credits(if (gray[0] == 1.toByte()) 2_401_000 else 0) },

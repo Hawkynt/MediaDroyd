@@ -80,7 +80,7 @@ interface PlayerPlatform {
 
     /**
      * A fingerprint of [location]'s sound for finding its intro and credits (IntroCredits, SkipFinder): its opening
-     * (IntroCredits.openingMs), or where [closing] its last IntroCredits.CLOSING_MS; null where the platform cannot
+     * (IntroCredits.openingMs), or where [closing] its closing (IntroCredits.closingMs); null where the platform cannot
      * read or fingerprint it. Blocks: called off the main thread.
      */
     fun soundPrint(location: String, closing: Boolean): IntroCredits.SoundPrint? = null
@@ -88,7 +88,7 @@ interface PlayerPlatform {
     /**
      * Gray frames of [location] for finding its intro and credits by their pictures where the sound does not
      * (PictureCues, SkipFinder): its opening (IntroCredits.openingMs) at PictureCues' hash size every OPENING_STEP_MS,
-     * or where [closing] its last IntroCredits.CLOSING_MS at the look size every CLOSING_STEP_MS — decoded once, the
+     * or where [closing] its closing (IntroCredits.closingMs) at the look size every CLOSING_STEP_MS — decoded once, the
      * text reader's frames kept (PictureCues.closing, #535) where [recognise] can read them; null where the platform
      * cannot read them. Blocks: called off the main thread.
      */
@@ -301,7 +301,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         )
         val queue = session.queue.map { it.videoPath }
         // What is kept already around this episode, found or not, before anything is looked at again.
-        val steps = finder.steps(queue, session.index)
+        // A movie's credits alone, from its last part's own closing; no intro looked for (#555).
+        val steps = if (session.current.movie) {
+            finder.steps(queue, session.index, alone = true)
+                .filter { step -> session.queue.firstOrNull { it.videoPath == step.a }?.lastPart != false }
+        } else {
+            finder.steps(queue, session.index)
+        }
         platform.log("skips: episode ${session.index + 1} of ${queue.size}, ${steps.size} steps to take")
         for (offset in -3..1) {
             val location = queue.getOrNull(session.index + offset) ?: continue
