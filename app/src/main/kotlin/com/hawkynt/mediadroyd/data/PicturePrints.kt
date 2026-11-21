@@ -40,14 +40,17 @@ object PicturePrints {
                 // A closing at the text reader's size: decoded once for its pictures and its text (#535).
                 val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH
                 val height = if (closing) CreditText.HEIGHT else PictureCues.HASH_HEIGHT
-                val gray = demuxer.pictures(startUs, endUs, stepMs * 1000, width, height) ?: return null
                 val size = width * height
-                val frames = List(gray.size / size) { gray.copyOfRange(it * size, (it + 1) * size) }
-                when {
-                    frames.isEmpty() -> null
-                    closing -> PictureCues.closing(startUs / 1000, durationUs!! / 1000, frames, AndroidNeural.loaded)
-                    else -> PictureCues.Frames(width, height, startUs / 1000, stepMs, frames)
+                if (closing) {
+                    // Window by window, each frame taken on before the next window is decoded: eight minutes of
+                    // frames at the text reader's size at once are more than the heap (#551).
+                    val frames = windows(demuxer, startUs, endUs, stepMs * 1000, width, height)
+                    val made = PictureCues.closing(startUs / 1000, durationUs!! / 1000, frames, AndroidNeural.loaded)
+                    return made.takeIf { it.frames.isNotEmpty() }
                 }
+                val gray = demuxer.pictures(startUs, endUs, stepMs * 1000, width, height) ?: return null
+                val frames = List(gray.size / size) { gray.copyOfRange(it * size, (it + 1) * size) }
+                if (frames.isEmpty()) null else PictureCues.Frames(width, height, startUs / 1000, stepMs, frames)
             } finally {
                 demuxer.close()
             }
@@ -57,4 +60,30 @@ object PicturePrints {
             runCatching { local?.close() }
         }
     }
+
+    // The frames from [startUs] to [endUs], one every [stepUs], decoded [WINDOW_US] at a time and handed on one by
+    // one; they end where a window gives fewer than it asked for.
+    private fun windows(
+        demuxer: FfmpegDemuxer,
+        startUs: Long,
+        endUs: Long,
+        stepUs: Long,
+        width: Int,
+        height: Int,
+    ): Sequence<ByteArray> = sequence {
+        val size = width * height
+        val stride = WINDOW_US / stepUs * stepUs
+        var from = startUs
+        while (from < endUs) {
+            val to = minOf(from + stride, endUs)
+            val gray = demuxer.pictures(from, to, stepUs, width, height) ?: break
+            val count = gray.size / size
+            for (i in 0 until count) yield(gray.copyOfRange(i * size, (i + 1) * size))
+            if (count < (to - from + stepUs - 1) / stepUs) break
+            from = to
+        }
+    }
+
+    // How much of a closing is decoded at once: 30 frames at the text reader's size, some 16 MB.
+    private const val WINDOW_US = 30_000_000L
 }

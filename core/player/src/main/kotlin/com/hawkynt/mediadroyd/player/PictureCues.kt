@@ -41,18 +41,19 @@ object PictureCues {
     /**
      * A closing ([startMs] on, of a video [durationMs] long) decoded once for both of its looks (#535): [frames] gray
      * at CreditText's size, one every [CLOSING_STEP_MS], shrunk to the look size here; where [keepText] (the platform
-     * can read text), the text reader's own frames — every CreditText.STEP_MS — kept as well, packed.
+     * can read text), the text reader's own frames — every CreditText.STEP_MS — kept as well, packed. The frames are
+     * taken one at a time and none of them is held — a buffer may be handed over again for the next —, as eight
+     * minutes of them at that size are more than a phone's heap (#551).
      */
-    fun closing(startMs: Long, durationMs: Long, frames: List<ByteArray>, keepText: Boolean): Frames {
+    fun closing(startMs: Long, durationMs: Long, frames: Sequence<ByteArray>, keepText: Boolean): Frames {
         val w = CreditText.WIDTH
         val h = CreditText.HEIGHT
-        val look = frames.map { shrink(it, w, h, LOOK_WIDTH, LOOK_HEIGHT) }
         val every = (CreditText.STEP_MS / CLOSING_STEP_MS).toInt()
-        val text = if (!keepText) {
-            emptyMap()
-        } else {
-            frames.withIndex().filter { it.index % every == 0 }
-                .associate { (i, frame) -> startMs + i * CLOSING_STEP_MS to deflate(frame) }
+        val look = ArrayList<ByteArray>()
+        val text = LinkedHashMap<Long, ByteArray>()
+        for ((i, frame) in frames.withIndex()) {
+            look += shrink(frame, w, h, LOOK_WIDTH, LOOK_HEIGHT)
+            if (keepText && i % every == 0) text[startMs + i * CLOSING_STEP_MS] = deflate(frame)
         }
         return Frames(LOOK_WIDTH, LOOK_HEIGHT, startMs, CLOSING_STEP_MS, look, durationMs, text)
     }

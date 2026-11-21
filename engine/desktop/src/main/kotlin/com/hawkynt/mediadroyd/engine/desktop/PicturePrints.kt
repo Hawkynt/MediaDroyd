@@ -31,22 +31,26 @@ object PicturePrints {
             val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH
             val height = if (closing) CreditText.HEIGHT else PictureCues.HASH_HEIGHT
             if (startMs > 0) reader.seek(startMs)
-            val frames = ArrayList<ByteArray>()
-            var nextMs = startMs
-            while (nextMs < endMs) {
-                val item = reader.read() ?: break
-                val picture = (item as? MediaReader.Picture)?.eightBit() ?: continue
-                if (picture.ptsMs < nextMs) continue
-                val gray = PictureCues.gray(picture.rgba, picture.width, picture.height, width, height)
-                while (nextMs <= picture.ptsMs && nextMs < endMs) {
-                    frames += gray
-                    nextMs += stepMs
+            // Handed on one by one while they are read: a closing's eight minutes at the text reader's size at once
+            // are hundreds of megabytes (#551).
+            val frames = sequence {
+                var nextMs = startMs
+                while (nextMs < endMs) {
+                    val item = reader.read() ?: break
+                    val picture = (item as? MediaReader.Picture)?.eightBit() ?: continue
+                    if (picture.ptsMs < nextMs) continue
+                    val gray = PictureCues.gray(picture.rgba, picture.width, picture.height, width, height)
+                    while (nextMs <= picture.ptsMs && nextMs < endMs) {
+                        yield(gray)
+                        nextMs += stepMs
+                    }
                 }
             }
-            when {
-                frames.isEmpty() -> null
-                closing -> PictureCues.closing(startMs, reader.durationMs, frames, keepText)
-                else -> PictureCues.Frames(width, height, startMs, stepMs, frames)
+            if (closing) {
+                PictureCues.closing(startMs, reader.durationMs, frames, keepText).takeIf { it.frames.isNotEmpty() }
+            } else {
+                val taken = frames.toList()
+                if (taken.isEmpty()) null else PictureCues.Frames(width, height, startMs, stepMs, taken)
             }
         }
     }.getOrNull()
