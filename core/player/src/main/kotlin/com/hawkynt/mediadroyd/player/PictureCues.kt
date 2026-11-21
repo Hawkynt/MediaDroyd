@@ -256,8 +256,7 @@ object PictureCues {
 
     /**
      * The intro the openings [own] and [other] (frames of the hash size, both sampled every [OPENING_STEP_MS]) share in
-     * pictures: its span in each video, IntroCredits.MARGIN_MS inside at both ends; null where they share none of an
-     * intro's length.
+     * pictures: its span in each video, edge to edge (#553); null where they share none of an intro's length.
      */
     fun intro(own: Frames, other: Frames): Pair<TimeRange, TimeRange>? {
         fun hashes(frames: Frames, side: Int) = IntArray(frames.frames.size) {

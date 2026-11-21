@@ -75,4 +75,19 @@ object SkipRules {
         val toEnd = span.last == Long.MAX_VALUE || durationMs <= 0 || span.last >= durationMs - HIDDEN_SCENE_MIN_MS
         return if (toEnd) Credits.End else Credits.Jump(span.last)
     }
+
+    /** The shortest wait [waitMs] gives: the clock is looked at again almost at once, never in a busy loop. */
+    const val MIN_WAIT_MS = 10L
+
+    /**
+     * How long to wait at [positionMs], playing at [speed], before looking again: [tickMs], or less where the [intro]
+     * or a stretch of the [credits] begins sooner — just until it does, so the jump comes as it begins and not a frame
+     * of it shows (#553); at least [MIN_WAIT_MS].
+     */
+    fun waitMs(positionMs: Long, intro: LongRange?, credits: List<LongRange>, speed: Float, tickMs: Long): Long {
+        val next = (listOfNotNull(intro?.first) + credits.map { it.first }).filter { it > positionMs }.minOrNull()
+            ?: return tickMs
+        val wait = ((next - positionMs) / speed.coerceAtLeast(0.1f)).toLong()
+        return wait.coerceIn(MIN_WAIT_MS, tickMs)
+    }
 }

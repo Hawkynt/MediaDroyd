@@ -105,4 +105,19 @@ class SkipRulesTest {
         // A stretch whose end is unknown runs to the end.
         assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(130_000, listOf(120_000L..Long.MAX_VALUE), 0))
     }
+
+    @Test
+    fun theWaitEndsWhereTheNextIntroOrCreditsBeginSoNotAFrameOfThemShows() {
+        val intro = 60_000L..120_000L
+        val credits = listOf(1_800_000L..1_900_000L, 1_950_000L..2_000_000L)
+        // 400 ms before the intro, at normal speed and at 2x: woken just as it begins (#553).
+        assertEquals(400L, SkipRules.waitMs(59_600, intro, credits, speed = 1f, tickMs = 500))
+        assertEquals(200L, SkipRules.waitMs(59_600, intro, credits, speed = 2f, tickMs = 500))
+        // Nothing near: the usual tick; the credits' next stretch counts once the intro is behind.
+        assertEquals(500L, SkipRules.waitMs(1_000_000, intro, credits, speed = 1f, tickMs = 500))
+        assertEquals(100L, SkipRules.waitMs(1_799_900, intro, credits, speed = 1f, tickMs = 500))
+        assertEquals(500L, SkipRules.waitMs(1_000_000, null, emptyList(), speed = 1f, tickMs = 500))
+        // At or a hair before an edge: a short wait, never none (the clock is checked again at once).
+        assertEquals(SkipRules.MIN_WAIT_MS, SkipRules.waitMs(59_999, intro, credits, speed = 1f, tickMs = 500))
+    }
 }

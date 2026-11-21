@@ -53,8 +53,8 @@ class SkipFinderTest {
         for (n in listOf(2, 3, 4)) assertTrue(store.hasLookedForSkips(episodes[n - 1]))
         assertFalse(store.hasLookedForSkips(episodes[0]))
         assertNotNull(store.foundSkipFor(episodes[2])?.intro)
-        assertEquals(37_000.0, store.foundSkipFor(episodes[2])!!.introStartMs!!.toDouble(), 500.0)
-        assertEquals(2_302_000.0, store.foundSkipFor(episodes[2])!!.creditsStartMs!!.toDouble(), 500.0)
+        assertEquals(36_000.0, store.foundSkipFor(episodes[2])!!.introStartMs!!.toDouble(), 500.0)
+        assertEquals(2_301_000.0, store.foundSkipFor(episodes[2])!!.creditsStartMs!!.toDouble(), 500.0)
     }
 
     @Test
@@ -199,7 +199,7 @@ class SkipFinderTest {
         for (pictures in listOf(blackCredits(240), null)) {
             val kept = StateStore(Memory())
             finder(kept) { _, closing -> if (closing) pictures else null }.around(episodes, 1)
-            assertEquals(2_302_000.0, kept.foundSkipFor(episodes[2])!!.creditsStartMs!!.toDouble(), 500.0)
+            assertEquals(2_301_000.0, kept.foundSkipFor(episodes[2])!!.creditsStartMs!!.toDouble(), 500.0)
         }
     }
 

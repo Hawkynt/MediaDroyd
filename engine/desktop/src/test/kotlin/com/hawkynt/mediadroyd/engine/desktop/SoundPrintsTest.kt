@@ -67,25 +67,23 @@ class SoundPrintsTest {
             val first = episode(dir, 1, coldOpen = 12)
             val second = episode(dir, 2, coldOpen = 31)
             fun print(file: File, closing: Boolean) = requireNotNull(SoundPrints.of(file.path, null, closing))
-            // The edges a second inside (IntroCredits.MARGIN_MS), within a second: an item reads 0.37 s of sound, the
+            // The edges where they are (no margin, #553), within a second: an item reads 0.37 s of sound, the
             // smoothing blurs a segment's edges, and the quarter-second notes around a stretch may happen to match.
             fun near(wantSeconds: Int, gotMs: Long) = assertEquals(wantSeconds * 1000.0, gotMs.toDouble(), 1000.0)
-            fun inside(seconds: Int) = seconds + 1
-            fun before(seconds: Int) = seconds - 1
             val openings = print(first, false) to print(second, false)
             val (introFirst, introSecond) =
                 requireNotNull(IntroCredits.intro(openings.first.items, openings.second.items))
-            near(inside(12), introFirst.startMs)
-            near(before(12 + THEME_SECONDS), introFirst.endMs)
-            near(inside(31), introSecond.startMs)
+            near(12, introFirst.startMs)
+            near(12 + THEME_SECONDS, introFirst.endMs)
+            near(31, introSecond.startMs)
             val closings = print(first, true) to print(second, true)
             val (creditsFirst, creditsSecond) = requireNotNull(
                 IntroCredits.credits(
                     closings.first.items, closings.first.startMs, closings.second.items, closings.second.startMs,
                 ),
             )
-            near(inside(12 + THEME_SECONDS + STORY), creditsFirst)
-            near(inside(31 + THEME_SECONDS + STORY), creditsSecond)
+            near(12 + THEME_SECONDS + STORY, creditsFirst)
+            near(31 + THEME_SECONDS + STORY, creditsSecond)
         } finally {
             dir.deleteRecursively()
         }

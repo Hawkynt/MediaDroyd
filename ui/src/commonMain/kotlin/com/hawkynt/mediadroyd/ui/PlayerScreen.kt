@@ -654,12 +654,13 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         if (!platform.subtitlesByTrack) engine.subtitlesOn = state.subtitlesOn
     }
 
-    // Intros skipped, the credits ending the video, the progress kept (PlayerSession.tick); the time played counted at
-    // its speed, for whether a video is worth a resume point.
+    // Intros skipped, the credits ending the video, the progress kept (PlayerSession.tick) — looked at again just as
+    // an intro or the credits begin (#553); the time played counted at its speed, for whether a video is worth a
+    // resume point.
     LaunchedEffect(engine) {
         var last = System.currentTimeMillis()
         while (true) {
-            delay(TICK_MS)
+            delay(session.waitMs(engine.speed, TICK_MS))
             val now = System.currentTimeMillis()
             session.countPlayed(now - last, state.speed)
             last = now

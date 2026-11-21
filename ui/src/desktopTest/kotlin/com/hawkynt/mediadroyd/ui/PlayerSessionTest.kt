@@ -137,6 +137,26 @@ class PlayerSessionTest {
     }
 
     @Test
+    fun `the clock is looked at again just as an intro or the credits begin, not a frame of them shown (#553)`() {
+        val chapters = listOf(
+            Chapter(0, 100_000, "Cold open"),
+            Chapter(100_000, 130_000, "Intro"),
+            Chapter(130_000, 550_000, "Episode"),
+            Chapter(550_000, 600_000, "Credits"),
+        )
+        val s = session()
+        engine.open(MediaRequest(s.current.videoPath, startMs = 0))
+        s.begin(chapters)
+        engine.advance(99_700)
+        assertEquals(300L, s.waitMs(speed = 1f, tickMs = 500))
+        engine.advance(300)
+        assertEquals(130_000L, s.tick())
+        engine.seekTo(549_900)
+        assertEquals(50L, s.waitMs(speed = 2f, tickMs = 500))
+        assertEquals(500L, session(skipping = false).waitMs(speed = 1f, tickMs = 500))
+    }
+
+    @Test
     fun `the next episode is not ended by the last one's credits while it is still being opened (#548)`() {
         val chapters = listOf(Chapter(0, 550_000, "Episode"), Chapter(550_000, 600_000, "Credits"))
         val s = session()

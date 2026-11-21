@@ -292,6 +292,16 @@ class PlayerSession(
         return null
     }
 
+    /**
+     * How long until [tick] is to look again, playing at [speed]: [tickMs], or just until a known intro or the credits
+     * begin, so the jump comes as they do and not a frame of them shows (SkipRules.waitMs, #553).
+     */
+    fun waitMs(speed: Float, tickMs: Long): Long {
+        if (!engine.isPlaying || abLoop.a != null || engine.openedPath != current.videoPath) return tickMs
+        val credits = if (skipping) creditsSpans else emptyList()
+        return SkipRules.waitMs(engine.positionMs, introSpanMs, credits, speed, tickMs)
+    }
+
     /** Back to the repeated part's start once its end is reached; returns where it went, or null. */
     fun keepRepeating(): Long? {
         if (!abLoop.repeating || !engine.isPlaying) return null
