@@ -70,7 +70,8 @@ class NativeTextTest {
         val w = 640
         val h = 360
         val names = listOf("Directed by", "Anna Berg", "Produced by", "Tom Hale", "Music by", "Mia Roth")
-        // A bright scene that drifts; over its last 30 seconds, two credits at a time in white with a dark edge.
+        // A bright scene that drifts; over its last 20 seconds — in its last quarter, where credits may begin (#554) —
+        // two credits at a time in white with a dark edge.
         fun frame(second: Int): ByteArray {
             val image = BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY)
             val g = image.createGraphics()
@@ -78,10 +79,10 @@ class NativeTextTest {
                 g.color = Color(Color.HSBtoRGB(0f, 0f, 0.35f + 0.3f * ((x + second * 13) % w) / w))
                 g.fillRect(x, 0, 8, h)
             }
-            if (second >= 60) {
+            if (second >= 70) {
                 g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
                 g.font = Font(Font.SANS_SERIF, Font.BOLD, 22)
-                val pair = (second - 60) / 5 % 3
+                val pair = (second - 70) / 5 % 3
                 for ((row, line) in names.subList(pair * 2, pair * 2 + 2).withIndex()) {
                     val x = (w - g.fontMetrics.stringWidth(line)) / 2
                     val y = 150 + row * 40
@@ -109,6 +110,6 @@ class NativeTextTest {
             }
         }
         val start = CreditText.find { at -> CreditReads.read(file.path, null, neural, at) }
-        assertEquals(60_000.0, requireNotNull(start).toDouble(), 1000.0)
+        assertEquals(70_000.0, requireNotNull(start).toDouble(), 1000.0)
     }
 }
