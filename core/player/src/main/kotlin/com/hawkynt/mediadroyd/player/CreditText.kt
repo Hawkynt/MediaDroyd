@@ -140,6 +140,9 @@ object CreditText {
     private const val HIDDEN_MAX_MS = 180_000L
     private const val GAP_READS = 1
 
+    // The shortest scene hidden in credits that a read inside them is taken for: shorter is the reader missing one.
+    private const val MIN_SCENE_MS = 3000L
+
     /**
      * Where the credits begin, from [reads] (the times of frames read [stepMs] apart, each whether it read as
      * credits): the start of the first of their stretches ([creditsSpans]); null where there is none.
@@ -177,6 +180,36 @@ object CreditText {
             .map { run -> TimeRange(reads[run.first].first, reads[run.last].first + stepMs) }
     }
 
+    // [spans] split where a frame read inside one as no credits is a scene hidden there (#559): the seconds around it
+    // read again; [MIN_SCENE_MS] of no credits around it cut the stretch there, a lone miss is the reader's.
+    private fun splitAtScenes(
+        spans: List<TimeRange>,
+        coarse: List<Pair<Long, List<Line>>>,
+        read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?,
+    ): List<TimeRange> {
+        val missed = coarse.filter { (time, lines) ->
+            !isCredits(lines) && spans.any { time > it.startMs && time < it.endMs - STEP_MS }
+        }.map { it.first }
+        if (missed.isEmpty()) return spans
+        fun around(time: Long) = ((time - STEP_MS + FINE_STEP_MS) until (time + STEP_MS) step FINE_STEP_MS)
+        val fine = read { missed.flatMap { around(it) }.distinct() }?.toMap() ?: return spans
+        fun none(time: Long) = time in missed || fine[time]?.let { !isCredits(it) } == true
+        var result = spans
+        for (time in missed) {
+            val first = around(time).filter { it <= time }.reversed().takeWhile(::none).lastOrNull() ?: continue
+            val last = around(time).filter { it >= time }.takeWhile(::none).lastOrNull() ?: continue
+            if (last + FINE_STEP_MS - first < MIN_SCENE_MS) continue
+            result = result.flatMap { span ->
+                if (first > span.startMs && last + FINE_STEP_MS < span.endMs) {
+                    listOf(TimeRange(span.startMs, first), TimeRange(last + FINE_STEP_MS, span.endMs))
+                } else {
+                    listOf(span)
+                }
+            }
+        }
+        return result
+    }
+
     /** Where a video's credits begin by their text: the start of the first stretch [findSpans] finds. */
     fun find(read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?): Long? =
         findSpans(read).firstOrNull()?.startMs
@@ -194,8 +227,9 @@ object CreditText {
             val fromMs = (durationMs - IntroCredits.closingMs(durationMs)).coerceAtLeast(0)
             (fromMs until durationMs step STEP_MS).toList()
         } ?: return emptyList()
-        val spans = creditsSpans(coarse.map { (time, lines) -> time to isCredits(lines) }, STEP_MS)
-        if (spans.isEmpty()) return emptyList()
+        val found = creditsSpans(coarse.map { (time, lines) -> time to isCredits(lines) }, STEP_MS)
+        if (found.isEmpty()) return emptyList()
+        val spans = splitAtScenes(found, coarse, read)
         val lastRead = coarse.maxOf { it.first }
         // The seconds before each stretch, and after each one something else is read after.
         fun before(span: TimeRange) = ((span.startMs - STEP_MS + FINE_STEP_MS) until span.startMs step FINE_STEP_MS)

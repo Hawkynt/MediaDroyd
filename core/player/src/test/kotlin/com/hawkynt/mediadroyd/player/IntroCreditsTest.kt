@@ -3,6 +3,7 @@ package com.hawkynt.mediadroyd.player
 import com.hawkynt.mediadroyd.nfo.TimeRange
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.random.Random
@@ -68,6 +69,28 @@ class IntroCreditsTest {
         near(1470.0, a.endMs)
         near(1581.0, b.startMs)
         near(1650.0, b.endMs)
+    }
+
+    @Test
+    fun `credits split by a scene of each episode's own are two stretches, each in its own time (#559)`() {
+        val before = noise(40.0, 40)
+        val after = noise(45.0, 41)
+        // Closings from 1 000 s and 1 200 s: their story, credits, a scene of their own (30 s, 20 s), credits again.
+        val first = noise(300.0, 42) + before + noise(30.0, 43) + after + noise(10.0, 44)
+        val second = noise(320.0, 45) + reencoded(before, 46) + noise(20.0, 47) + reencoded(after, 48) +
+            noise(30.0, 49)
+        val stretches = IntroCredits.creditsStretches(first, 1_000_000, second, 1_200_000)
+        assertEquals(2, stretches.size)
+        near(1301.0, stretches[0].first.startMs)
+        near(1340.0, stretches[0].first.endMs)
+        near(1371.0, stretches[1].first.startMs)
+        near(1521.0, stretches[0].second.startMs)
+        near(1581.0, stretches[1].second.startMs)
+        // Nothing shared: none; one stretch only: as creditsSpans finds it.
+        assertTrue(IntroCredits.creditsStretches(noise(480.0, 50), 0, noise(480.0, 51), 0).isEmpty())
+        val one = noise(400.0, 17) + before + noise(10.0, 18)
+        val other = noise(380.0, 19) + before + noise(30.0, 21)
+        assertEquals(1, IntroCredits.creditsStretches(one, 0, other, 0).size)
     }
 
     @Test

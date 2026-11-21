@@ -62,7 +62,25 @@ data class FoundSkip(
     val moreCreditsEndMs: Long? = null,
     /** Credits again after more hidden scenes (#557): start and end of each further stretch, one after the other. */
     val laterCredits: List<Long> = emptyList(),
+    /** The finder that looked for the intro ([INTRO_VERSION]); 0: one from before finds carried it. */
+    val introVersion: Int = 0,
+    /** The finder that looked for the credits ([CREDITS_VERSION]); 0: one from before finds carried it. */
+    val creditsVersion: Int = 0,
 ) {
+    companion object {
+        /**
+         * The finder's version for intros, raised whenever it finds them better: a find of an older one is looked at
+         * again (#559). 1: edge to edge, no second inside (#553).
+         */
+        const val INTRO_VERSION = 1
+
+        /**
+         * The finder's version for credits, raised whenever it finds them better: a find of an older one is looked at
+         * again (#559). 1: begun by their pictures, every stretch to the frame, split by a hidden scene (#551, #557).
+         */
+        const val CREDITS_VERSION = 1
+    }
+
     /**
      * The credits found as stretches, start to end; an end of [Long.MAX_VALUE] runs to the end of the video (as
      * SkipRules.creditsSpans has them).

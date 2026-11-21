@@ -143,11 +143,13 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
     /** What looking at [videoPath]'s sound found (IntroCredits); null where it was not looked at yet. */
     fun foundSkipFor(videoPath: String): FoundSkip? = data.foundSkips[videoPath]
 
-    /** Whether [videoPath]'s sound was looked at for its intro already, found or not. */
-    fun hasLookedForSkips(videoPath: String): Boolean = videoPath in data.foundSkips
+    /** Whether [videoPath]'s sound was looked at for its intro already, found or not, by this finder (#559). */
+    fun hasLookedForSkips(videoPath: String): Boolean =
+        (data.foundSkips[videoPath]?.introVersion ?: -1) >= FoundSkip.INTRO_VERSION
 
-    /** Whether [videoPath]'s sound was looked at for its credits already, found or not. */
-    fun hasLookedForCredits(videoPath: String): Boolean = data.foundSkips[videoPath]?.creditsLooked == true
+    /** Whether [videoPath]'s sound was looked at for its credits already, found or not, by this finder (#559). */
+    fun hasLookedForCredits(videoPath: String): Boolean = data.foundSkips[videoPath]
+        ?.let { it.creditsLooked && it.creditsVersion >= FoundSkip.CREDITS_VERSION } == true
 
     /** Keeps what looking at [videoPath]'s sound found. */
     fun saveFoundSkip(videoPath: String, found: FoundSkip) {
