@@ -188,7 +188,8 @@ class SkipFinder(
     // scene after them begins — so the scene plays whole and not a frame of the credits shows.
     private fun pictureSpans(location: String, seen: PictureCues.Frames): List<TimeRange> {
         val endMs = seen.startMs + seen.frames.size * seen.stepMs
-        return PictureCues.creditsSpans(seen).map { span ->
+        val spans = PictureCues.creditsSpans(seen).filter { it.endMs >= endMs || readsAsCredits(seen, it) }
+        return spans.map { span ->
             val start = if (span.startMs <= seen.startMs) {
                 span.startMs
             } else {
@@ -203,6 +204,19 @@ class SkipFinder(
             }
             TimeRange(start, end)
         }
+    }
+
+    // Whether a stretch of black and text frames [seen] shows with story after it reads as credits (#561): a dark
+    // scene or a title card in the story looks the same, and the story after it would be taken for a hidden scene.
+    // Its kept text frames read by [recognise]; taken as credits where the platform cannot tell.
+    private fun readsAsCredits(seen: PictureCues.Frames, span: TimeRange): Boolean {
+        val recognise = recognise ?: return true
+        if (!seen.hasText) return true
+        val frames = (seen.startMs until span.endMs step CreditText.STEP_MS)
+            .filter { it >= span.startMs }
+            .mapNotNull { seen.textAt(it) }
+        if (frames.isEmpty()) return true
+        return frames.any { frame -> recognise(frame)?.let(CreditText::isCredits) ?: true }
     }
 
     // The text at the times [at] gives: from the closing's own frames where they are kept, the rest decoded.
