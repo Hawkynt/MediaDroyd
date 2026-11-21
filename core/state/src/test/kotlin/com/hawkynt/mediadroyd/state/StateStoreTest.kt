@@ -263,7 +263,9 @@ class StateStoreTest {
                 "/s/e1.mkv",
                 FoundSkip(introStartMs = 30_000, introEndMs = 85_000, creditsStartMs = 2_500_000),
             )
-            saveFoundSkip("/s/e2.mkv", FoundSkip())
+            saveFoundSkip("/s/e2.mkv", FoundSkip(introVersion = FoundSkip.INTRO_VERSION))
+            // One an older finder looked at, before finds carried its version: looked at again (#559).
+            saveFoundSkip("/s/e4.mkv", FoundSkip(creditsLooked = true))
         }
         val again = StateStore(file)
         assertEquals(TimeRange(30_000, 85_000), again.foundSkipFor("/s/e1.mkv")?.intro)
@@ -271,5 +273,7 @@ class StateStoreTest {
         assertNull(again.foundSkipFor("/s/e2.mkv")?.intro)
         assertTrue(again.hasLookedForSkips("/s/e2.mkv"))
         assertFalse(again.hasLookedForSkips("/s/e3.mkv"))
+        assertFalse(again.hasLookedForSkips("/s/e4.mkv"))
+        assertFalse(again.hasLookedForCredits("/s/e4.mkv"))
     }
 }

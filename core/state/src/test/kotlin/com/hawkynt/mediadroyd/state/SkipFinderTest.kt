@@ -69,6 +69,19 @@ class SkipFinderTest {
     }
 
     @Test
+    fun `a find an older finder made is looked at again, one of this finder's not (#559)`() {
+        val store = StateStore(Memory())
+        // Kept before finds carried the finder's version: an intro a second inside, credits a second late.
+        val old = FoundSkip(37_000, 86_000, 2_303_000, creditsLooked = true)
+        for (episode in episodes) store.saveFoundSkip(episode, old)
+        assertEquals(4, finder(store).steps(episodes, 1).size)
+        finder(store).around(episodes, 1)
+        assertEquals(36_000.0, store.foundSkipFor(episodes[2])!!.introStartMs!!.toDouble(), 500.0)
+        assertEquals(2_301_000.0, store.foundSkipFor(episodes[2])!!.creditsStartMs!!.toDouble(), 500.0)
+        assertTrue(finder(store).steps(episodes, 1).isEmpty())
+    }
+
+    @Test
     fun `a video whose sound cannot be read is not marked as looked at, and a lone video is left alone`() {
         val store = StateStore(Memory())
         SkipFinder(store) { _, _ -> null }.around(episodes, 0)

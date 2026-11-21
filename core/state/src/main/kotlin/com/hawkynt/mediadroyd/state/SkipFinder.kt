@@ -219,7 +219,11 @@ class SkipFinder(
             store.saveFoundSkip(
                 location,
                 when (step.part) {
-                    Part.INTRO -> before.copy(introStartMs = what.intro?.startMs, introEndMs = what.intro?.endMs)
+                    Part.INTRO -> before.copy(
+                        introStartMs = what.intro?.startMs,
+                        introEndMs = what.intro?.endMs,
+                        introVersion = FoundSkip.INTRO_VERSION,
+                    )
                     Part.CREDITS -> before.copy(
                         creditsStartMs = what.credits.getOrNull(0)?.startMs,
                         creditsEndMs = what.credits.getOrNull(0)?.endMs,
@@ -227,6 +231,7 @@ class SkipFinder(
                         moreCreditsEndMs = what.credits.getOrNull(1)?.endMs,
                         laterCredits = what.credits.drop(2).flatMap { listOf(it.startMs, it.endMs) },
                         creditsLooked = true,
+                        creditsVersion = FoundSkip.CREDITS_VERSION,
                     )
                 },
             )
