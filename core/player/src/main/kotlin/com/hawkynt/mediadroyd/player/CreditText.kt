@@ -183,14 +183,14 @@ object CreditText {
 
     /**
      * Where a video's credits run by their text, read by [read]: it is handed the times to read frames at from the
-     * video's length (every [STEP_MS] across its closing, IntroCredits.CLOSING_MS; then every [FINE_STEP_MS] in the
+     * video's length (every [STEP_MS] across its closing, IntroCredits.closingMs; then every [FINE_STEP_MS] in the
      * five seconds before the first credits found) and gives each time with the lines read there, or null where the
      * video cannot be read. The stretches as [creditsSpans] finds them, the first beginning at the earliest second
      * from which every frame read is credits; none where there are none or nothing could be read.
      */
     fun findSpans(read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?): List<TimeRange> {
         val coarse = read { durationMs ->
-            val fromMs = (durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0)
+            val fromMs = (durationMs - IntroCredits.closingMs(durationMs)).coerceAtLeast(0)
             (fromMs until durationMs step STEP_MS).toList()
         } ?: return emptyList()
         val spans = creditsSpans(coarse.map { (time, lines) -> time to isCredits(lines) }, STEP_MS)

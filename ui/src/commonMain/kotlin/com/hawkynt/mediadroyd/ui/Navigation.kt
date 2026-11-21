@@ -21,6 +21,10 @@ data class Playable(
     val plot: String? = null,
     /** The NFO's facts beyond the plot: year, length, genres, director, cast. */
     val facts: List<String> = emptyList(),
+    /** A movie's file rather than an episode: its credits are looked for alone, its intro not at all (#555). */
+    val movie: Boolean = false,
+    /** The last file of its title (a movie's last part): where its credits are. */
+    val lastPart: Boolean = true,
 )
 
 /** Where the app is: a wall, a place, a tool, a title's details, or the player. */
@@ -57,6 +61,8 @@ fun Movie.playQueue(): List<Playable> = parts.mapIndexed { i, part ->
         nfoWatched = playcount > 0,
         plot = plot,
         facts = aboutOf(this).let { listOfNotNull(it.line) + it.facts },
+        movie = true,
+        lastPart = i == parts.lastIndex,
     )
 }
 

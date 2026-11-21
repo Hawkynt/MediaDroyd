@@ -187,7 +187,9 @@ class PlayerSession(
         val path = current.videoPath
         // Right after Next or Previous the engine still holds the last file: its position is not ours.
         if (engine.openedPath != path) return
-        if (PlaybackMath.isWatched(position, duration, creditsStartMs)) {
+        // Credits that begin before the closing are none (#554): they would make the video watched half way.
+        val credits = creditsStartMs?.takeIf { it >= SkipRules.closingFromMs(duration) }
+        if (PlaybackMath.isWatched(position, duration, credits)) {
             store.markWatched(path)
         } else {
             store.saveResume(path, position, duration, playedMs)
@@ -268,7 +270,7 @@ class PlayerSession(
             if (++ticks % 6 == 0) saveProgress(position)
             return null
         }
-        SkipRules.skipTarget(position, introSpanMs)?.let {
+        SkipRules.skipTarget(position, introSpanMs, engine.durationMs)?.let {
             engine.seekTo(it)
             return it
         }
@@ -290,6 +292,16 @@ class PlayerSession(
         }
         if (++ticks % 6 == 0) saveProgress(position)
         return null
+    }
+
+    /**
+     * How long until [tick] is to look again, playing at [speed]: [tickMs], or just until a known intro or the credits
+     * begin, so the jump comes as they do and not a frame of them shows (SkipRules.waitMs, #553).
+     */
+    fun waitMs(speed: Float, tickMs: Long): Long {
+        if (!engine.isPlaying || abLoop.a != null || engine.openedPath != current.videoPath) return tickMs
+        val credits = if (skipping) creditsSpans else emptyList()
+        return SkipRules.waitMs(engine.positionMs, introSpanMs, credits, speed, tickMs, engine.durationMs)
     }
 
     /** Back to the repeated part's start once its end is reached; returns where it went, or null. */

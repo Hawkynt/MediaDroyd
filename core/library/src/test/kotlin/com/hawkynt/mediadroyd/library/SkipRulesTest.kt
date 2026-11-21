@@ -2,6 +2,7 @@ package com.hawkynt.mediadroyd.library
 
 import com.hawkynt.mediadroyd.nfo.TimeRange
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SkipRulesTest {
@@ -101,8 +102,49 @@ class SkipRulesTest {
         assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(1_950_500, spans, 2_000_000))
         assertEquals(null, SkipRules.creditsAction(1_000_000, spans, 2_000_000))
         // Credits that stop a few seconds short of the end leave nothing worth keeping: the video ends.
-        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(1_000, listOf(0L..1_995_000L), 2_000_000))
+        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(1_901_000, listOf(1_900_000L..1_995_000L), 2_000_000))
         // A stretch whose end is unknown runs to the end.
         assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(130_000, listOf(120_000L..Long.MAX_VALUE), 0))
+    }
+
+    @Test
+    fun theWaitEndsWhereTheNextIntroOrCreditsBeginSoNotAFrameOfThemShows() {
+        val intro = 60_000L..120_000L
+        val credits = listOf(1_800_000L..1_900_000L, 1_950_000L..2_000_000L)
+        // 400 ms before the intro, at normal speed and at 2x: woken just as it begins (#553).
+        assertEquals(400L, SkipRules.waitMs(59_600, intro, credits, speed = 1f, tickMs = 500))
+        assertEquals(200L, SkipRules.waitMs(59_600, intro, credits, speed = 2f, tickMs = 500))
+        // Nothing near: the usual tick; the credits' next stretch counts once the intro is behind.
+        assertEquals(500L, SkipRules.waitMs(1_000_000, intro, credits, speed = 1f, tickMs = 500))
+        assertEquals(100L, SkipRules.waitMs(1_799_900, intro, credits, speed = 1f, tickMs = 500))
+        assertEquals(500L, SkipRules.waitMs(1_000_000, null, emptyList(), speed = 1f, tickMs = 500))
+        // At or a hair before an edge: a short wait, never none (the clock is checked again at once).
+        assertEquals(SkipRules.MIN_WAIT_MS, SkipRules.waitMs(59_999, intro, credits, speed = 1f, tickMs = 500))
+    }
+
+    @Test
+    fun anIntroCountsOnlyNearTheStartAndCreditsOnlyNearTheEnd() {
+        val episode = 45 * 60_000L
+        // The intro where it begins in the opening: the first quarter, at most ten minutes (#554).
+        assertEquals(400_000L, SkipRules.skipTarget(310_000, 300_000L..400_000L, episode))
+        assertNull(SkipRules.skipTarget(1_210_000, 1_200_000L..1_300_000L, episode))
+        assertNull(SkipRules.skipTarget(11 * 60_000L + 5_000, 11 * 60_000L..12 * 60_000L, 3 * 3_600_000L))
+        // Credits where they begin in the last quarter and the last twenty minutes.
+        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(2_600_000, listOf(2_590_000L..episode), episode))
+        assertNull(SkipRules.creditsAction(1_210_000, listOf(1_200_000L..1_300_000L), episode))
+        val film = 3 * 3_600_000L
+        assertNull(SkipRules.creditsAction(film - 25 * 60_000L, listOf(film - 30 * 60_000L..film), film))
+        assertEquals(SkipRules.Credits.End, SkipRules.creditsAction(film - 60_000, listOf(film - 900_000..film), film))
+        // A length not known yet: what is known counts.
+        assertEquals(400_000L, SkipRules.skipTarget(310_000, 300_000L..400_000L, 0))
+        // Nor is it waited for where it is out of place.
+        assertEquals(500L, SkipRules.waitMs(1_199_900, 1_200_000L..1_300_000L, emptyList(), 1f, 500, episode))
+    }
+
+    @Test
+    fun theClosingLookedAtIsWhereCreditsMayBegin() {
+        assertEquals(10 * 60_000L + 30_000L, SkipRules.closingMs(42 * 60_000L))
+        assertEquals(SkipRules.CLOSING_MS, SkipRules.closingMs(120 * 60_000L))
+        assertEquals(0L, SkipRules.closingMs(0))
     }
 }

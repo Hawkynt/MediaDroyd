@@ -12,7 +12,7 @@ import com.hawkynt.mediadroyd.player.TextReads
  * is looked at twice. The episode playing comes first and its intro before anything else, from the two openings alone,
  * so it can still be skipped once it starts (or jumped out of at once, should it be playing already); then its credits,
  * then the next episode's. [print] fingerprints a video's opening (IntroCredits.openingMs from its start) or, where
- * `closing`, its last IntroCredits.CLOSING_MS; null where its sound cannot be read, and the video is then left to be
+ * `closing`, its closing (IntroCredits.closingMs); null where its sound cannot be read, and the video is then left to be
  * looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
  * (PictureCues, #492): both openings' frames for a shared intro, each closing's own frames for its credits — and where
  * those show no black and text frames, the closing's [text] (CreditText, #493): frames read every few seconds by the
@@ -78,9 +78,16 @@ class SkipFinder(
     /**
      * Around [index] of the [queue] (video locations in playing order), the steps still to take, in order: the video
      * itself with its next (else its previous) — its intro, then its credits — then the next one with the one after it
-     * (else the video itself) the same way, so binge-watching starts the next episode with its intro known.
+     * (else the video itself) the same way, so binge-watching starts the next episode with its intro known. Where
+     * [alone] — movies, which share no intro nor closing music with a neighbour (#555) — only the credits of the video
+     * and of the next, each from its own closing ([Step.a] and [Step.b] the same).
      */
-    fun steps(queue: List<String>, index: Int): List<Step> {
+    fun steps(queue: List<String>, index: Int, alone: Boolean = false): List<Step> {
+        if (alone) {
+            return listOf(index, index + 1).mapNotNull { queue.getOrNull(it) }
+                .filter { !looked(it, Part.CREDITS) }
+                .map { Step(Part.CREDITS, it, it) }
+        }
         if (queue.size < 2 || index !in queue.indices) return emptyList()
         fun partner(i: Int) = if (i + 1 < queue.size) i + 1 else i - 1
         val pairs = listOf(index, index + 1).filter { it < queue.size }.map { queue[it] to queue[partner(it)] }
@@ -100,6 +107,15 @@ class SkipFinder(
      */
     fun find(step: Step): Map<String, Found>? {
         val closing = step.part == Part.CREDITS
+        // A video alone (a movie, #555): its credits from its own closing's pictures, else its text; no sound to match.
+        if (step.a == step.b) {
+            val seen = framesOf(step.a, true) ?: return null
+            val spans = PictureCues.creditsSpans(seen).ifEmpty {
+                CreditText.findSpans { at -> textOf(step.a, seen, at) }
+            }
+            dropText(step.a)
+            return mapOf(step.a to Found(null, spans))
+        }
         val a = printOf(step.a, closing)
         val b = if (a != null) printOf(step.b, closing) else null
         val heardBoth = a != null && b != null

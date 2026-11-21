@@ -14,7 +14,7 @@ import com.hawkynt.mediadroyd.player.PictureCues
 object PicturePrints {
     /**
      * The video at [path] ([from] a network source where it lives on one): its opening (IntroCredits.openingMs), or
-     * where [closing] its last IntroCredits.CLOSING_MS, as gray frames; null where it cannot be read or holds no
+     * where [closing] its closing (IntroCredits.closingMs), as gray frames; null where it cannot be read or holds no
      * pictures.
      */
     fun of(
@@ -24,8 +24,8 @@ object PicturePrints {
         keepText: Boolean = false,
     ): PictureCues.Frames? = runCatching {
         MediaReader(path, from, decoders = emptyList()).use { reader ->
-            val startMs = if (closing) (reader.durationMs - IntroCredits.CLOSING_MS).coerceAtLeast(0) else 0
-            val endMs = startMs + if (closing) IntroCredits.CLOSING_MS else IntroCredits.openingMs(reader.durationMs)
+            val startMs = if (closing) (reader.durationMs - IntroCredits.closingMs(reader.durationMs)).coerceAtLeast(0) else 0
+            val endMs = startMs + if (closing) IntroCredits.closingMs(reader.durationMs) else IntroCredits.openingMs(reader.durationMs)
             val stepMs = if (closing) PictureCues.CLOSING_STEP_MS else PictureCues.OPENING_STEP_MS
             // A closing at the text reader's size: decoded once for its pictures and its text (#535).
             val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH

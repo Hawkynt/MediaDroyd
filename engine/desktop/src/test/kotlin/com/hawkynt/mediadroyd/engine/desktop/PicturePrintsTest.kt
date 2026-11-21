@@ -61,10 +61,10 @@ class PicturePrintsTest {
             val second = episode(dir, 2, coldOpen = 30)
             fun frames(file: File, closing: Boolean) = requireNotNull(PicturePrints.of(file.path, null, closing))
             val (a, b) = requireNotNull(PictureCues.intro(frames(first, false), frames(second, false)))
-            // Within the step and the smoothing, the edges a second inside (IntroCredits.MARGIN_MS).
-            assertEquals(13_000.0, a.startMs.toDouble(), 2500.0)
-            assertEquals(51_000.0, a.endMs.toDouble(), 2500.0)
-            assertEquals(31_000.0, b.startMs.toDouble(), 2500.0)
+            // Within the step and the smoothing, the edges where they are (no margin, #553).
+            assertEquals(12_000.0, a.startMs.toDouble(), 2500.0)
+            assertEquals(52_000.0, a.endMs.toDouble(), 2500.0)
+            assertEquals(30_000.0, b.startMs.toDouble(), 2500.0)
             // The credits from the first frame of text, within a step.
             fun credits(file: File) = requireNotNull(PictureCues.creditsStartMs(frames(file, true))).toDouble()
             assertEquals((12 + 40 + STORY) * 1000.0, credits(first), 1000.0)

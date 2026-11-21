@@ -14,17 +14,20 @@ object IntroCredits {
     class SoundPrint(val items: IntArray, val startMs: Long)
 
     /** How much of an episode's opening is fingerprinted to look for its intro, at most ([openingMs]). */
-    const val OPENING_MS = 10 * 60_000L
+    const val OPENING_MS = com.hawkynt.mediadroyd.library.SkipRules.OPENING_MS
 
     /**
-     * How much of an episode [durationMs] long is looked at for its intro: its first quarter, at most [OPENING_MS] — so
-     * the credits of a short episode stay out of it, as Jellyfin's Intro Skipper limits it — or [OPENING_MS] where the
-     * length is unknown.
+     * How much of an episode [durationMs] long is looked at for its intro: where an intro may begin at all
+     * (SkipRules.openingMs, #554) — its first quarter, at most [OPENING_MS], so the credits of a short episode stay out
+     * of it, as Jellyfin's Intro Skipper limits it — or [OPENING_MS] where the length is unknown.
      */
-    fun openingMs(durationMs: Long): Long = if (durationMs <= 0) OPENING_MS else minOf(OPENING_MS, durationMs / 4)
+    fun openingMs(durationMs: Long): Long = com.hawkynt.mediadroyd.library.SkipRules.openingMs(durationMs)
 
-    /** How much before an episode's end is fingerprinted to look for its credits. */
-    const val CLOSING_MS = 8 * 60_000L
+    /**
+     * How much before the end of a video [durationMs] long is looked at for its credits: where they may begin at all
+     * (SkipRules.closingMs, #554) — its last quarter, at most twenty minutes, so a film's long credits fit (#555).
+     */
+    fun closingMs(durationMs: Long): Long = com.hawkynt.mediadroyd.library.SkipRules.closingMs(durationMs)
 
     /** The shortest an intro is taken to be: a channel's jingle or a shared sting is none. */
     const val MIN_INTRO_MS = 15_000L
@@ -36,12 +39,11 @@ object IntroCredits {
     const val MIN_CREDITS_MS = 15_000L
 
     /**
-     * How far inside a found edge the skip begins or ends: the matcher places an edge only to about a second (an item
-     * reads 0.37 s of sound, the smoothing blurs, sound alike for a moment just before extends a match), so the intro
-     * is shrunk by this at both ends and the credits begin this much later — a second of the theme or the credits
-     * shows rather than a second of the story going missing.
+     * How far before the end of the closing music the credits are taken to end: where a scene of the episode's own
+     * follows them (#513) its first second stays rather than going missing. The starts and the intro's end take none:
+     * not a frame of an intro or the credits is to show (#553).
      */
-    const val MARGIN_MS = 1000L
+    const val SCENE_MARGIN_MS = 1000L
 
     /**
      * How far ahead of the sound its items run: Chromaprint makes item k from the image rows k to k + 15 (its
@@ -59,8 +61,8 @@ object IntroCredits {
     class Timing(val itemMs: Double, val leadMs: Long, val threshold: Double = PrintMatcher.MATCH_THRESHOLD) {
         internal fun ms(items: Int) = (items * itemMs).toLong() + leadMs
 
-        internal fun inside(first: Int, length: Int) =
-            TimeRange(ms(first) + MARGIN_MS, ms(first + length) - MARGIN_MS)
+        internal fun span(first: Int, length: Int) =
+            TimeRange(ms(first), ms(first + length))
     }
 
     /** The sound's timing: Chromaprint's items, [LOOKAHEAD_MS] ahead. */
@@ -68,15 +70,15 @@ object IntroCredits {
 
     /**
      * The intro the openings [own] and [other] (prints from each episode's start, items on [timing]) share: its span in
-     * each, from each one's start, [MARGIN_MS] inside at both ends; null where they share no stretch of an intro's
-     * length that matches only where it lines up (PrintMatcher.linedUp).
+     * each, from each one's start, edge to edge (#553); null where they share no stretch of an intro's length that
+     * matches only where it lines up (PrintMatcher.linedUp).
      */
     fun intro(own: IntArray, other: IntArray, timing: Timing = SOUND): Pair<TimeRange, TimeRange>? {
         val piece = PrintMatcher.shared(own, other, timing.threshold)
             .filter { timing.ms(it.length) in MIN_INTRO_MS..MAX_INTRO_MS }
             .filter { PrintMatcher.linedUp(own, other, it, timing.threshold) }
             .maxByOrNull { it.length } ?: return null
-        return timing.inside(piece.first1, piece.length) to timing.inside(piece.first2, piece.length)
+        return timing.span(piece.first1, piece.length) to timing.span(piece.first2, piece.length)
     }
 
     /** [own]'s intro by the longest any of [neighbours]' openings shares with it; null where none does. */
@@ -86,16 +88,16 @@ object IntroCredits {
 
     /**
      * Where the credits begin in each episode, from the closings [own] and [other] (prints of each one's end,
-     * starting [ownStartMs] and [otherStartMs] into the episode): the start of the longest closing music they share,
-     * [MARGIN_MS] later; null where they share none long enough.
+     * starting [ownStartMs] and [otherStartMs] into the episode): the start of the longest closing music they share;
+     * null where they share none long enough.
      */
     fun credits(own: IntArray, ownStartMs: Long, other: IntArray, otherStartMs: Long): Pair<Long, Long>? =
         creditsSpans(own, ownStartMs, other, otherStartMs)?.let { (a, b) -> a.startMs to b.startMs }
 
     /**
      * Where the credits run in each episode, as [credits] finds them: from the start of the longest closing music
-     * they share, [MARGIN_MS] later, to where that music ends, [MARGIN_MS] before it — so a scene of each episode's
-     * own after the credits (#513) is not cut into; null where they share none long enough.
+     * they share to where that music ends, [SCENE_MARGIN_MS] before it — so a scene of each episode's own after the
+     * credits (#513) is not cut into; null where they share none long enough.
      */
     fun creditsSpans(
         own: IntArray,
@@ -108,8 +110,8 @@ object IntroCredits {
             .filter { PrintMatcher.linedUp(own, other, it) }
             .maxByOrNull { it.length } ?: return null
         fun span(startMs: Long, first: Int) = TimeRange(
-            startMs + SOUND.ms(first) + MARGIN_MS,
-            startMs + SOUND.ms(first + piece.length) - MARGIN_MS,
+            startMs + SOUND.ms(first),
+            startMs + SOUND.ms(first + piece.length) - SCENE_MARGIN_MS,
         )
         return span(ownStartMs, piece.first1) to span(otherStartMs, piece.first2)
     }
