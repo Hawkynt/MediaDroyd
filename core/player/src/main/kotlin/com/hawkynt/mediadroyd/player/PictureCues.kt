@@ -255,6 +255,28 @@ object PictureCues {
     }
 
     /**
+     * Where the credits begin within [fine] — frames of the look size, close together, from the story's last frame
+     * the closing's own frames show to the credits' first (#557): after its last frame of anything else, at its first
+     * frame if it holds none; null where its last frame is no credits.
+     */
+    fun creditsStartIn(fine: Frames): Long? {
+        val looks = fine.frames.map { look(it, fine.width, fine.height) }
+        if (looks.isEmpty() || looks.last() == Look.OTHER) return null
+        val after = looks.indexOfLast { it == Look.OTHER } + 1
+        return fine.startMs + after * fine.stepMs
+    }
+
+    /**
+     * Where the credits end within [fine] — frames of the look size, close together, from the credits' last frame the
+     * closing's own frames show to the first of a scene after them (#557): at the scene's first frame; null where it
+     * holds none.
+     */
+    fun creditsEndIn(fine: Frames): Long? {
+        val first = fine.frames.indexOfFirst { look(it, fine.width, fine.height) == Look.OTHER }
+        return if (first < 0) null else fine.startMs + first * fine.stepMs
+    }
+
+    /**
      * The intro the openings [own] and [other] (frames of the hash size, both sampled every [OPENING_STEP_MS]) share in
      * pictures: its span in each video, edge to edge (#553); null where they share none of an intro's length.
      */

@@ -60,6 +60,23 @@ class CreditTextTest {
     }
 
     @Test
+    fun `credits over the picture around a hidden scene are narrowed to the second at each edge (#557)`() {
+        // Credits 2 401..2 443 s, a scene 2 443..2 462 s, credits again from 2 462 s to the end at 2 480 s.
+        val credit = listOf(CreditText.Line(100, 100, 300, 30, "Directed by"))
+        fun shows(time: Long) = time in 2_401_000 until 2_443_000 || time >= 2_462_000
+        val spans = CreditText.findSpans { at ->
+            at(2_480_000).map { time -> time to if (shows(time)) credit else emptyList() }
+        }
+        assertEquals(
+            listOf(
+                com.hawkynt.mediadroyd.nfo.TimeRange(2_401_000, 2_443_000),
+                com.hawkynt.mediadroyd.nfo.TimeRange(2_462_000, 2_480_000),
+            ),
+            spans,
+        )
+    }
+
+    @Test
     fun `the native reader's flat result reads as lines, each box with its text`() {
         val flat = intArrayOf(10, 20, 300, 40) + intArrayOf(3) + ids("Cut") + intArrayOf(5, 80, 120, 30, 0)
         assertEquals(

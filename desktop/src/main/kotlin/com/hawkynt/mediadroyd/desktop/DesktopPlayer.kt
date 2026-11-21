@@ -716,6 +716,12 @@ fun DesktopPlayer(
                 keepText = neural.loaded && neural.ready(com.hawkynt.mediadroyd.player.NeuralModels.PPOCR),
             )
 
+        // And the second around an edge of the credits frame by frame, to the frame (#557).
+        override fun picturesBetween(location: String, fromMs: Long, toMs: Long, stepMs: Long) =
+            com.hawkynt.mediadroyd.engine.desktop.PicturePrints.between(
+                location, places.remoteFile(location), fromMs, toMs, stepMs,
+            )
+
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.engine.desktop.CreditReads.read(location, places.remoteFile(location), neural, at)

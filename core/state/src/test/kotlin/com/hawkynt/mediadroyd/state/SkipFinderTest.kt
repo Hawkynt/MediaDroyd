@@ -230,6 +230,65 @@ class SkipFinderTest {
         assertEquals(1, SkipFinder(StateStore(Memory())) { _, _ -> null }.steps(films.take(1), 0, alone = true).size)
     }
 
+    // A closing (from 2 000 s, a frame a second) of the stretches given: scene or credits on black, seconds each.
+    private fun stretches(vararg parts: Pair<Boolean, Int>): PictureCues.Frames {
+        val w = PictureCues.LOOK_WIDTH
+        val h = PictureCues.LOOK_HEIGHT
+        val scene = ByteArray(w * h) { (80 + it % w / 2).toByte() }
+        val text = ByteArray(w * h) { if (it / w % 9 < 4 && it % 3 == 0 && it % w in 30..130) 230.toByte() else 14 }
+        val frames = parts.flatMap { (credits, seconds) -> List(seconds) { if (credits) text else scene } }
+        return PictureCues.Frames(w, h, 2_000_000, PictureCues.CLOSING_STEP_MS, frames)
+    }
+
+    // From [fromMs] to [toMs] frame by frame (every 40 ms): scene, then credits at [edgeMs] — or the other way round.
+    private fun around(fromMs: Long, toMs: Long, edgeMs: Long, creditsAfter: Boolean): PictureCues.Frames {
+        val w = PictureCues.LOOK_WIDTH
+        val h = PictureCues.LOOK_HEIGHT
+        val scene = ByteArray(w * h) { (80 + it % w / 2).toByte() }
+        val text = ByteArray(w * h) { if (it / w % 9 < 4 && it % 3 == 0 && it % w in 30..130) 230.toByte() else 14 }
+        val frames = List(((toMs - fromMs) / 40).toInt()) { i ->
+            if ((fromMs + i * 40 >= edgeMs) == creditsAfter) text else scene
+        }
+        return PictureCues.Frames(w, h, fromMs, 40, frames)
+    }
+
+    @Test
+    fun `scenes hidden between credits play whole, the credits around them to the frame (#557)`() {
+        // A movie: story, credits, a scene, credits, a scene, credits to the end — every edge 400 ms into its second.
+        val store = StateStore(Memory())
+        val film = "/films/a.mkv"
+        val edges = mapOf(
+            2_299_000L to (2_299_400L to true), 2_359_000L to (2_359_400L to false),
+            2_389_000L to (2_389_400L to true), 2_419_000L to (2_419_400L to false),
+            2_449_000L to (2_449_400L to true),
+        )
+        val finder = SkipFinder(
+            store,
+            pictures = { _, closing ->
+                val parts = arrayOf(false to 300, true to 60, false to 30, true to 30, false to 30, true to 30)
+                if (closing) stretches(*parts) else null
+            },
+            between = { _, fromMs, toMs, _ ->
+                edges[fromMs]?.let { (edge, creditsAfter) -> around(fromMs, toMs, edge, creditsAfter) }
+            },
+            print = { _, _ -> null },
+        )
+        for (step in finder.steps(listOf(film), 0, alone = true)) finder.keep(step, requireNotNull(finder.find(step)))
+        assertEquals(
+            listOf(2_299_400L..2_359_400L, 2_389_400L..2_419_400L, 2_449_400L..2_480_000L),
+            store.foundSkipFor(film)?.credits,
+        )
+    }
+
+    @Test
+    fun `credits heard by their music are split by the scene their pictures show between them (#557)`() {
+        // The shared music from 300 s into the closings (60 s); the pictures: credits, a scene, credits again.
+        val store = StateStore(Memory())
+        val parts = arrayOf(false to 300, true to 25, false to 20, true to 35)
+        finder(store) { _, closing -> if (closing) stretches(*parts) else null }.around(episodes, 1)
+        assertEquals(listOf(2_300_000L..2_325_000L, 2_345_000L..2_380_000L), store.foundSkipFor(episodes[2])?.credits)
+    }
+
     @Test
     fun `credits with a scene hidden after them are kept with their end (#513)`() {
         val store = StateStore(Memory())

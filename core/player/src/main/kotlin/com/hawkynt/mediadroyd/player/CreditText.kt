@@ -184,9 +184,10 @@ object CreditText {
     /**
      * Where a video's credits run by their text, read by [read]: it is handed the times to read frames at from the
      * video's length (every [STEP_MS] across its closing, IntroCredits.closingMs; then every [FINE_STEP_MS] in the
-     * five seconds before the first credits found) and gives each time with the lines read there, or null where the
-     * video cannot be read. The stretches as [creditsSpans] finds them, the first beginning at the earliest second
-     * from which every frame read is credits; none where there are none or nothing could be read.
+     * seconds before each stretch found and after it where something else follows) and gives each time with the lines
+     * read there, or null where the video cannot be read. The stretches as [creditsSpans] finds them, each beginning at
+     * the earliest second from which every frame read is credits and — where a scene follows — ending at the first
+     * second that is none (#557), so a hidden scene plays whole; none where there are none or nothing could be read.
      */
     fun findSpans(read: (at: (durationMs: Long) -> List<Long>) -> List<Pair<Long, List<Line>>>?): List<TimeRange> {
         val coarse = read { durationMs ->
@@ -194,14 +195,24 @@ object CreditText {
             (fromMs until durationMs step STEP_MS).toList()
         } ?: return emptyList()
         val spans = creditsSpans(coarse.map { (time, lines) -> time to isCredits(lines) }, STEP_MS)
-        val startMs = spans.firstOrNull()?.startMs ?: return emptyList()
-        val fine = read { ((startMs - STEP_MS + FINE_STEP_MS) until startMs step FINE_STEP_MS).toList() }
-            ?: return spans
-        var firstMs = startMs
-        for ((time, lines) in fine.sortedByDescending { it.first }) {
-            if (!isCredits(lines)) break
-            firstMs = time
+        if (spans.isEmpty()) return emptyList()
+        val lastRead = coarse.maxOf { it.first }
+        // The seconds before each stretch, and after each one something else is read after.
+        fun before(span: TimeRange) = ((span.startMs - STEP_MS + FINE_STEP_MS) until span.startMs step FINE_STEP_MS)
+        fun after(span: TimeRange) = if (span.endMs - STEP_MS >= lastRead) {
+            LongRange.EMPTY
+        } else {
+            ((span.endMs - STEP_MS + FINE_STEP_MS) until span.endMs step FINE_STEP_MS)
         }
-        return listOf(TimeRange(firstMs, spans.first().endMs)) + spans.drop(1)
+        val fine = read { spans.flatMap { before(it) + after(it) }.distinct() }?.toMap() ?: return spans
+        return spans.map { span ->
+            var startMs = span.startMs
+            for (time in before(span).reversed()) {
+                if (!isCredits(fine[time] ?: break)) break
+                startMs = time
+            }
+            val endMs = after(span).firstOrNull { time -> fine[time]?.let { !isCredits(it) } == true } ?: span.endMs
+            TimeRange(startMs, endMs)
+        }
     }
 }

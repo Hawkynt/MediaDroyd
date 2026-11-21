@@ -1108,6 +1108,9 @@ fun PhonePlayer(
         override fun pictures(location: String, closing: Boolean) =
             com.hawkynt.mediadroyd.data.PicturePrints.of(context, location, closing)
 
+        override fun picturesBetween(location: String, fromMs: Long, toMs: Long, stepMs: Long) =
+            com.hawkynt.mediadroyd.data.PicturePrints.between(context, location, fromMs, toMs, stepMs)
+
         // And by their text where the pictures show no black and text frames: PP-OCRv5 on ncnn (CreditReads).
         override fun readText(location: String, at: (durationMs: Long) -> List<Long>) =
             com.hawkynt.mediadroyd.data.CreditReads.read(context, location, at)

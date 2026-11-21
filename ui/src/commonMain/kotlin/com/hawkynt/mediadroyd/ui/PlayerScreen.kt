@@ -94,6 +94,13 @@ interface PlayerPlatform {
      */
     fun pictures(location: String, closing: Boolean): PictureCues.Frames? = null
 
+    /**
+     * Gray frames of [location] at PictureCues' look size from [fromMs] to [toMs], one every [stepMs] — the second
+     * around an edge of the credits, frame by frame (SkipFinder, #557); null where the platform cannot read them.
+     * Blocks: called off the main thread.
+     */
+    fun picturesBetween(location: String, fromMs: Long, toMs: Long, stepMs: Long): PictureCues.Frames? = null
+
     /** The lines the platform's text recogniser reads in [gray] (CreditText's size); null where it cannot. Blocks. */
     fun recognise(gray: ByteArray): List<CreditText.Line>? = null
 
@@ -297,6 +304,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             text = platform::readText,
             recognise = platform::recognise,
             log = platform::log,
+            between = platform::picturesBetween,
             print = platform::soundPrint,
         )
         val queue = session.queue.map { it.videoPath }
