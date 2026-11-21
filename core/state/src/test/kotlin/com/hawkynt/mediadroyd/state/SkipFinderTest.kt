@@ -140,8 +140,11 @@ class SkipFinderTest {
         assertEquals(2_400_000L, found.creditsStartMs)
         assertTrue(decoded.isNotEmpty())
         decoded.clear()
-        finder(StateStore(Memory())) { location, _ -> null.also { decoded += location } }.around(episodes, 0)
-        assertTrue("pictures decoded though the sound found it: $decoded", decoded.isEmpty())
+        // The openings' pictures not at all; the closings' only to see whether the credits begin earlier (#551).
+        finder(StateStore(Memory())) { location, closing ->
+            null.also { if (!closing) decoded += location }
+        }.around(episodes, 0)
+        assertTrue("openings decoded though the sound found the intro: $decoded", decoded.isEmpty())
     }
 
     @Test
@@ -174,6 +177,30 @@ class SkipFinderTest {
         assertEquals(2_401_000L, store.foundSkipFor(episodes[0])?.creditsStartMs)
         // Every five seconds, then every second just before the first credits read.
         assertTrue(asked.count { it % 5000 == 0L } >= 90 && 2_401_000L in asked)
+    }
+
+    // A closing (from 2 000 s, a frame a second): a scene, then credits on black from [creditsAt] s into it for 64 s.
+    private fun blackCredits(creditsAt: Int): PictureCues.Frames {
+        val w = PictureCues.LOOK_WIDTH
+        val h = PictureCues.LOOK_HEIGHT
+        val scene = ByteArray(w * h) { (80 + it % w / 2).toByte() }
+        val text = ByteArray(w * h) { if (it / w % 9 < 4 && it % 3 == 0 && it % w in 30..130) 230.toByte() else 14 }
+        val frames = List(creditsAt) { scene } + List(364 - creditsAt) { text } + List(16) { scene }
+        return PictureCues.Frames(w, h, 2_000_000, PictureCues.CLOSING_STEP_MS, frames)
+    }
+
+    @Test
+    fun `credits heard late begin where their black and text frames running into them begin (#551)`() {
+        // The shared music from 300 s into the closings; the credits on black from 296 s, over each one's own sound.
+        val store = StateStore(Memory())
+        finder(store) { _, closing -> if (closing) blackCredits(296) else null }.around(episodes, 1)
+        assertEquals(2_296_000L, store.foundSkipFor(episodes[2])?.creditsStartMs)
+        // Black and text frames long before the music, or ending before it, are the story's: the sound's start kept.
+        for (pictures in listOf(blackCredits(240), null)) {
+            val kept = StateStore(Memory())
+            finder(kept) { _, closing -> if (closing) pictures else null }.around(episodes, 1)
+            assertEquals(2_302_000.0, kept.foundSkipFor(episodes[2])!!.creditsStartMs!!.toDouble(), 500.0)
+        }
     }
 
     @Test

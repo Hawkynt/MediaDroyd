@@ -26,6 +26,7 @@ class SkipFinder(
     private val pictures: (location: String, closing: Boolean) -> PictureCues.Frames? = { _, _ -> null },
     private val text: TextReads = { _, _ -> null },
     private val recognise: ((gray: ByteArray) -> List<CreditText.Line>?)? = null,
+    private val log: (String) -> Unit = {},
     private val print: (location: String, closing: Boolean) -> IntroCredits.SoundPrint?,
 ) {
     /** What one step looks for. */
@@ -49,7 +50,18 @@ class SkipFinder(
 
     private fun printOf(location: String, closing: Boolean): IntroCredits.SoundPrint? =
         synchronized(prints) { prints[location to closing] }
-            ?: print(location, closing)?.also { made -> synchronized(prints) { prints[location to closing] = made } }
+            ?: timed("sound print", closing) { print(location, closing) }
+                ?.also { made -> synchronized(prints) { prints[location to closing] = made } }
+
+    // [made], its time logged: which kind of look, opening or closing, how long, and whether it gave anything.
+    private fun <T> timed(what: String, closing: Boolean, made: () -> T?): T? {
+        val began = System.nanoTime()
+        return made().also {
+            val part = if (closing) "closing" else "opening"
+            val ms = (System.nanoTime() - began) / 1_000_000
+            log("skips: $what of the $part in $ms ms: ${if (it == null) "none" else "made"}")
+        }
+    }
 
     // The frames decoded, by location and opening or closing: fewer, a closing's are some megabytes.
     private val frames = object : LinkedHashMap<Pair<String, Boolean>, PictureCues.Frames>(4, 0.75f, true) {
@@ -60,7 +72,8 @@ class SkipFinder(
 
     private fun framesOf(location: String, closing: Boolean): PictureCues.Frames? =
         synchronized(frames) { frames[location to closing] }
-            ?: pictures(location, closing)?.also { made -> synchronized(frames) { frames[location to closing] = made } }
+            ?: timed("pictures", closing) { pictures(location, closing) }
+                ?.also { made -> synchronized(frames) { frames[location to closing] = made } }
 
     /**
      * Around [index] of the [queue] (video locations in playing order), the steps still to take, in order: the video
@@ -101,8 +114,8 @@ class SkipFinder(
                 PictureCues.creditsSpans(it).ifEmpty { CreditText.findSpans { at -> textOf(location, it, at) } }
             }.orEmpty().also { dropText(location) }
             mapOf(
-                step.a to Found(null, heard?.first?.let(::listOf) ?: read(step.a, seenA)),
-                step.b to Found(null, heard?.second?.let(::listOf) ?: read(step.b, seenB)),
+                step.a to Found(null, heard?.first?.let { listOf(earlier(step.a, it)) } ?: read(step.a, seenA)),
+                step.b to Found(null, heard?.second?.let { listOf(earlier(step.b, it)) } ?: read(step.b, seenB)),
             )
         } else {
             val heard = if (heardBoth) {
@@ -118,6 +131,17 @@ class SkipFinder(
         }
     }
 
+    // The credits [heard] in [location]'s closing music, begun earlier where its black and text frames run into them
+    // from at most [EARLIER_MS] before: credits whose first seconds lie over each episode's own sound (#551).
+    private fun earlier(location: String, heard: TimeRange): TimeRange {
+        val seen = framesOf(location, true) ?: return heard
+        val start = PictureCues.creditsSpans(seen)
+            .firstOrNull { it.startMs < heard.startMs && it.endMs >= heard.startMs }
+            ?.startMs?.takeIf { heard.startMs - it <= EARLIER_MS }
+        dropText(location)
+        return if (start == null) heard else TimeRange(start, heard.endMs)
+    }
+
     // The text at the times [at] gives: from the closing's own frames where they are kept, the rest decoded.
     private fun textOf(
         location: String,
@@ -125,11 +149,13 @@ class SkipFinder(
         at: (durationMs: Long) -> List<Long>,
     ): List<Pair<Long, List<CreditText.Line>>>? {
         val recognise = recognise
-        if (recognise == null || !seen.hasText || seen.durationMs <= 0) return text(location, at)
+        if (recognise == null || !seen.hasText || seen.durationMs <= 0) {
+            return timed("text", true) { text(location, at) }
+        }
         val times = at(seen.durationMs)
         val kept = times.mapNotNull { time -> seen.textAt(time)?.let(recognise)?.let { time to it } }
         val rest = times - kept.map { it.first }.toSet()
-        val more = if (rest.isEmpty()) emptyList() else text(location) { rest } ?: emptyList()
+        val more = if (rest.isEmpty()) emptyList() else timed("text", true) { text(location) { rest } } ?: emptyList()
         return (kept + more).sortedBy { it.first }.takeIf { it.isNotEmpty() || times.isEmpty() }
     }
 
@@ -172,5 +198,8 @@ class SkipFinder(
 
         // Frames kept: the two openings or closings of one step and the next one's.
         const val CACHED_FRAMES = 4
+
+        // How much earlier than their music the credits' pictures may begin: more is the story's own text (#551).
+        const val EARLIER_MS = 30_000L
     }
 }

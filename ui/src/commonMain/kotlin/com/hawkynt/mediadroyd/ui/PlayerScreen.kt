@@ -296,10 +296,26 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             pictures = platform::pictures,
             text = platform::readText,
             recognise = platform::recognise,
+            log = platform::log,
             print = platform::soundPrint,
         )
         val queue = session.queue.map { it.videoPath }
-        for (step in finder.steps(queue, session.index)) {
+        // What is kept already around this episode, found or not, before anything is looked at again.
+        val steps = finder.steps(queue, session.index)
+        platform.log("skips: episode ${session.index + 1} of ${queue.size}, ${steps.size} steps to take")
+        for (offset in -3..1) {
+            val location = queue.getOrNull(session.index + offset) ?: continue
+            val kept = state.store.foundSkipFor(location)
+            val which = if (offset == 0) "this episode" else "episode ${if (offset > 0) "+" else ""}$offset"
+            platform.log(
+                "skips kept for $which: " + when (kept) {
+                    null -> "not looked at"
+                    else -> "intro ${kept.introStartMs?.div(1000)}…${kept.introEndMs?.div(1000)} s, credits " +
+                        if (!kept.creditsLooked) "not looked at" else "${kept.creditsStartMs?.div(1000)} s"
+                },
+            )
+        }
+        for (step in steps) {
             val began = System.nanoTime()
             val found = withContext(Dispatchers.Default) { runCatching { finder.find(step) }.getOrNull() }
             // Which episode and what was found, by place in the queue rather than by name (#548).
