@@ -76,9 +76,10 @@ data class FoundSkip(
 
         /**
          * The finder's version for credits, raised whenever it finds them better: a find of an older one is looked at
-         * again (#559). 1: begun by their pictures, every stretch to the frame, split by a hidden scene (#551, #557).
+         * again (#559). 1: begun by their pictures, every stretch to the frame, split by a hidden scene (#551, #557);
+         * 2: a stretch with story after it only where its text reads as credits (#561).
          */
-        const val CREDITS_VERSION = 1
+        const val CREDITS_VERSION = 2
     }
 
     /**

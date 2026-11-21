@@ -315,6 +315,54 @@ class SkipFinderTest {
         assertEquals(2_391_000.0, found[1].first.toDouble(), 500.0)
     }
 
+    // A closing at the text reader's size, its text kept (from 2 000 s): a scene, a dark stretch with text that reads
+    // as credits where [creditsFirst] (else a title card), a scene, credits to the end.
+    private fun readableClosing(creditsFirst: Boolean): PictureCues.Frames {
+        val w = CreditText.WIDTH
+        val h = CreditText.HEIGHT
+        fun text(mark: Byte) = ByteArray(w * h) { i ->
+            val x = i % w / 6
+            val y = i / w / 6
+            if (y % 9 < 4 && x % 3 == 0 && x in 30..130) 230.toByte() else 14
+        }.also { it[0] = mark }
+        val credits = text(1)
+        val card = text(2)
+        val scene = ByteArray(w * h) { (80 + it % w / 12).toByte() }
+        val frames = sequence {
+            repeat(300) { yield(scene) }
+            repeat(60) { yield(if (creditsFirst) credits else card) }
+            repeat(30) { yield(scene) }
+            repeat(30) { yield(credits) }
+        }
+        return PictureCues.closing(2_000_000, 2_420_000, frames, keepText = true)
+    }
+
+    @Test
+    fun `a dark stretch with story after it is credits only where its text reads as credits (#561)`() {
+        for (creditsFirst in listOf(true, false)) {
+            val store = StateStore(Memory())
+            val closing = readableClosing(creditsFirst)
+            val finder = SkipFinder(
+                store,
+                pictures = { _, isClosing -> if (isClosing) closing else null },
+                recognise = { gray ->
+                    val credit = CreditText.Line(100, 100, 300, 30, "Directed by")
+                    if (gray[0] == 1.toByte()) listOf(credit) else emptyList()
+                },
+                print = { _, _ -> null },
+            )
+            for (step in finder.steps(listOf("/films/a.mkv"), 0, alone = true)) {
+                finder.keep(step, requireNotNull(finder.find(step)))
+            }
+            val want = if (creditsFirst) {
+                listOf(2_300_000L..2_360_000L, 2_390_000L..2_420_000L)
+            } else {
+                listOf(2_390_000L..2_420_000L)
+            }
+            assertEquals(want, store.foundSkipFor("/films/a.mkv")?.credits)
+        }
+    }
+
     @Test
     fun `credits heard by their music are split by the scene their pictures show between them (#557)`() {
         // The shared music from 300 s into the closings (60 s); the pictures: credits, a scene, credits again.
