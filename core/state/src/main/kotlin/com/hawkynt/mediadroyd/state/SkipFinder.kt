@@ -122,7 +122,12 @@ class SkipFinder(
         val b = if (a != null) printOf(step.b, closing) else null
         val heardBoth = a != null && b != null
         return if (closing) {
-            val heard = if (heardBoth) IntroCredits.creditsSpans(a.items, a.startMs, b.items, b.startMs) else null
+            // Every stretch of closing music both share, split by a scene of each one's own (#559).
+            val heard = if (heardBoth) {
+                IntroCredits.creditsStretches(a.items, a.startMs, b.items, b.startMs).takeIf { it.isNotEmpty() }
+            } else {
+                null
+            }
             // Each closing's own pictures where the sound gave no credits: they need no neighbour.
             val seenA = if (heard == null) framesOf(step.a, true) else null
             val seenB = if (heard == null) framesOf(step.b, true) else null
@@ -132,8 +137,10 @@ class SkipFinder(
                 pictureSpans(location, it).ifEmpty { CreditText.findSpans { at -> textOf(location, it, at) } }
             }.orEmpty().also { dropText(location) }
             mapOf(
-                step.a to Found(null, heard?.first?.let { withPictures(step.a, it) } ?: read(step.a, seenA)),
-                step.b to Found(null, heard?.second?.let { withPictures(step.b, it) } ?: read(step.b, seenB)),
+                step.a to Found(null, heard?.let { withPictures(step.a, it.map(Pair<TimeRange, *>::first)) }
+                    ?: read(step.a, seenA)),
+                step.b to Found(null, heard?.let { withPictures(step.b, it.map(Pair<*, TimeRange>::second)) }
+                    ?: read(step.b, seenB)),
             )
         } else {
             val heard = if (heardBoth) {
@@ -153,6 +160,15 @@ class SkipFinder(
     // their black and text frames run into them from at most [EARLIER_MS] before — credits whose first seconds lie
     // over each episode's own sound —, and split where the pictures show a scene between two stretches of credits
     // within the music, each picture edge to the frame; the music alone where the pictures show no credits in it.
+    private fun withPictures(location: String, stretches: List<TimeRange>): List<TimeRange> {
+        val shownWith = withPictures(location, stretches.first())
+        // The music's later stretches where the pictures showed none of their own there (#559).
+        val more = stretches.drop(1).filter { heard ->
+            shownWith.none { it.startMs <= heard.endMs && it.endMs >= heard.startMs }
+        }
+        return (shownWith + more).sortedBy { it.startMs }
+    }
+
     private fun withPictures(location: String, heard: TimeRange): List<TimeRange> {
         val seen = framesOf(location, true) ?: return listOf(heard)
         val spans = pictureSpans(location, seen)

@@ -115,4 +115,45 @@ object IntroCredits {
         )
         return span(ownStartMs, piece.first1) to span(otherStartMs, piece.first2)
     }
+
+    /**
+     * Every stretch of the credits in each episode by their music (#559): the stretches of closing music [own] and
+     * [other] share that [creditsSpans] would take, the longest and those lying after or before it in both, in the same
+     * order, each at most [SCENE_GAP_MAX_MS] from the next — credits split by a scene of each episode's own between
+     * them —, in order; each as [creditsSpans] has it. Empty where they share none long enough.
+     */
+    fun creditsStretches(
+        own: IntArray,
+        ownStartMs: Long,
+        other: IntArray,
+        otherStartMs: Long,
+    ): List<Pair<TimeRange, TimeRange>> {
+        val pieces = PrintMatcher.shared(own, other)
+            .filter { SOUND.ms(it.length) >= MIN_CREDITS_MS }
+            .filter { PrintMatcher.linedUp(own, other, it) }
+        val longest = pieces.maxByOrNull { it.length } ?: return emptyList()
+        val gap = (SCENE_GAP_MAX_MS / SOUND.itemMs).toInt()
+        val chain = ArrayList<PrintMatcher.Shared>().apply { add(longest) }
+        // Those after it, one after the other in both prints, then those before it the same way.
+        for (piece in pieces.sortedBy { it.first1 }) {
+            val last = chain.last()
+            val gap1 = piece.first1 - (last.first1 + last.length)
+            val gap2 = piece.first2 - (last.first2 + last.length)
+            if (gap1 in 0..gap && gap2 in 0..gap) chain += piece
+        }
+        for (piece in pieces.sortedByDescending { it.first1 }) {
+            val next = chain.first()
+            val gap1 = next.first1 - (piece.first1 + piece.length)
+            val gap2 = next.first2 - (piece.first2 + piece.length)
+            if (gap1 in 0..gap && gap2 in 0..gap) chain.add(0, piece)
+        }
+        fun span(startMs: Long, first: Int, length: Int) = TimeRange(
+            startMs + SOUND.ms(first),
+            startMs + SOUND.ms(first + length) - SCENE_MARGIN_MS,
+        )
+        return chain.map { span(ownStartMs, it.first1, it.length) to span(otherStartMs, it.first2, it.length) }
+    }
+
+    /** The longest scene of an episode's own between two stretches of its credits ([creditsStretches]). */
+    const val SCENE_GAP_MAX_MS = 180_000L
 }

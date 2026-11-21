@@ -294,6 +294,28 @@ class SkipFinderTest {
     }
 
     @Test
+    fun `credits over the picture split by a scene of each episode's own are two stretches by their music (#559)`() {
+        val store = StateStore(Memory())
+        val more = noise(40.0, 3)
+        // Each closing (from 2 000 s): its story, the credits music, a scene of its own of 20 + 5 n s, more music.
+        val finder = SkipFinder(store) { location, closing ->
+            val n = episodes.indexOf(location) + 1
+            if (closing) {
+                val items = noise(300.0, 300 + n) + credits + noise(20.0 + 5 * n, 500 + n) + more
+                IntroCredits.SoundPrint(items, 2_000_000)
+            } else {
+                null
+            }
+        }
+        val step = finder.steps(episodes, 1).first { it.part == SkipFinder.Part.CREDITS }
+        finder.keep(step, requireNotNull(finder.find(step)))
+        val found = requireNotNull(store.foundSkipFor(episodes[1])?.credits)
+        assertEquals(2, found.size)
+        assertEquals(2_301_000.0, found[0].first.toDouble(), 500.0)
+        assertEquals(2_391_000.0, found[1].first.toDouble(), 500.0)
+    }
+
+    @Test
     fun `credits heard by their music are split by the scene their pictures show between them (#557)`() {
         // The shared music from 300 s into the closings (60 s); the pictures: credits, a scene, credits again.
         val store = StateStore(Memory())
