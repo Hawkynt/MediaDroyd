@@ -77,6 +77,27 @@ class CreditTextTest {
     }
 
     @Test
+    fun `a short scene inside credits read by their text splits them, a single missed read does not (#559)`() {
+        val credit = listOf(CreditText.Line(100, 100, 300, 30, "Directed by"))
+        fun spans(shows: (Long) -> Boolean) = CreditText.findSpans { at ->
+            at(2_480_000).map { time -> time to if (shows(time)) credit else emptyList() }
+        }
+        // A six-second scene at 2 431..2 437 s: only the read at 2 435 s falls into it.
+        assertEquals(
+            listOf(
+                com.hawkynt.mediadroyd.nfo.TimeRange(2_401_000, 2_431_000),
+                com.hawkynt.mediadroyd.nfo.TimeRange(2_437_000, 2_480_000),
+            ),
+            spans { it >= 2_401_000 && it !in 2_431_000 until 2_437_000 },
+        )
+        // The reader missing the credits at 2 435 s alone: one stretch still.
+        assertEquals(
+            listOf(com.hawkynt.mediadroyd.nfo.TimeRange(2_401_000, 2_480_000)),
+            spans { it >= 2_401_000 && it != 2_435_000L },
+        )
+    }
+
+    @Test
     fun `the native reader's flat result reads as lines, each box with its text`() {
         val flat = intArrayOf(10, 20, 300, 40) + intArrayOf(3) + ids("Cut") + intArrayOf(5, 80, 120, 30, 0)
         assertEquals(
