@@ -73,4 +73,31 @@ class PicturePrintsTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `the second around an edge of the credits is decoded frame by frame, the edge found to the frame (#557)`() {
+        val dir = kotlin.io.path.createTempDirectory("edges").toFile()
+        try {
+            // 25 frames a second: a scene to 4.36 s, credits to 8.36 s, a scene hidden after them to 12 s.
+            val scene = shots(2, 3).first()
+            val text = credits(1).first()
+            val file = File(dir, "edges.y4m")
+            file.outputStream().buffered().use { out ->
+                out.write("YUV4MPEG2 W$w H$h F25:1 Ip A1:1 C420jpeg\n".toByteArray())
+                val chroma = ByteArray(w / 2 * (h / 2)) { 128.toByte() }
+                for (frame in 0 until 300) {
+                    out.write("FRAME\n".toByteArray())
+                    out.write(if (frame in 109 until 209) text else scene)
+                    out.write(chroma)
+                    out.write(chroma)
+                }
+            }
+            fun between(fromMs: Long) =
+                requireNotNull(PicturePrints.between(file.path, null, fromMs, fromMs + 1000, 40))
+            assertEquals(4_360L, PictureCues.creditsStartIn(between(4_000)))
+            assertEquals(8_360L, PictureCues.creditsEndIn(between(8_000)))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }

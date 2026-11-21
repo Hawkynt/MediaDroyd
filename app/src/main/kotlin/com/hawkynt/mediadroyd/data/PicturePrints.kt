@@ -33,9 +33,10 @@ object PicturePrints {
             try {
                 val durationUs = demuxer.durationUs().takeIf { it != FfmpegDemuxer.TIME_UNSET && it > 0 }
                 if (closing && durationUs == null) return null
-                val startUs = if (closing) (durationUs!! - IntroCredits.closingMs(durationUs / 1000) * 1000).coerceAtLeast(0) else 0L
+                val closingUs = if (closing) IntroCredits.closingMs(durationUs!! / 1000) * 1000 else 0L
+                val startUs = if (closing) (durationUs!! - closingUs).coerceAtLeast(0) else 0L
                 val openingMs = IntroCredits.openingMs((durationUs ?: 0) / 1000)
-                val endUs = startUs + (if (closing) IntroCredits.closingMs(durationUs!! / 1000) else openingMs) * 1000
+                val endUs = startUs + if (closing) closingUs else openingMs * 1000
                 val stepMs = if (closing) PictureCues.CLOSING_STEP_MS else PictureCues.OPENING_STEP_MS
                 // A closing at the text reader's size: decoded once for its pictures and its text (#535).
                 val width = if (closing) CreditText.WIDTH else PictureCues.HASH_WIDTH
@@ -51,6 +52,36 @@ object PicturePrints {
                 val gray = demuxer.pictures(startUs, endUs, stepMs * 1000, width, height) ?: return null
                 val frames = List(gray.size / size) { gray.copyOfRange(it * size, (it + 1) * size) }
                 if (frames.isEmpty()) null else PictureCues.Frames(width, height, startUs / 1000, stepMs, frames)
+            } finally {
+                demuxer.close()
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { local?.close() }
+        }
+    }
+
+    /**
+     * The video at [location] from [fromMs] to [toMs], one picture every [stepMs] at PictureCues' look size, gray —
+     * the second around an edge of the credits, frame by frame (#557); null where it cannot be read or holds none.
+     */
+    fun between(context: Context, location: String, fromMs: Long, toMs: Long, stepMs: Long): PictureCues.Frames? {
+        if (!FfmpegDemuxer.isAvailable() || toMs <= fromMs) return null
+        val local = if (location.startsWith("/")) runCatching { RandomAccessFile(location, "r") }.getOrNull() else null
+        return try {
+            val input = when {
+                local != null -> FfmpegInputs.local(local)
+                location.startsWith("/") -> return null
+                else -> FfmpegInputs.remote(SourceAccess.resolve(context, location) ?: return null)
+            }
+            val demuxer = FfmpegDemuxer.open(input) ?: return null
+            try {
+                val w = PictureCues.LOOK_WIDTH
+                val h = PictureCues.LOOK_HEIGHT
+                val gray = demuxer.pictures(fromMs * 1000, toMs * 1000, stepMs * 1000, w, h) ?: return null
+                val frames = List(gray.size / (w * h)) { gray.copyOfRange(it * w * h, (it + 1) * w * h) }
+                if (frames.isEmpty()) null else PictureCues.Frames(w, h, fromMs, stepMs, frames)
             } finally {
                 demuxer.close()
             }

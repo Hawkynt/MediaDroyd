@@ -12,8 +12,8 @@ import com.hawkynt.mediadroyd.player.TextReads
  * is looked at twice. The episode playing comes first and its intro before anything else, from the two openings alone,
  * so it can still be skipped once it starts (or jumped out of at once, should it be playing already); then its credits,
  * then the next episode's. [print] fingerprints a video's opening (IntroCredits.openingMs from its start) or, where
- * `closing`, its closing (IntroCredits.closingMs); null where its sound cannot be read, and the video is then left to be
- * looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
+ * `closing`, its closing (IntroCredits.closingMs); null where its sound cannot be read, and the video is then left to
+ * be looked at another time. Where the sound finds nothing — or cannot be read — the [pictures] are looked at
  * (PictureCues, #492): both openings' frames for a shared intro, each closing's own frames for its credits — and where
  * those show no black and text frames, the closing's [text] (CreditText, #493): frames read every few seconds by the
  * platform's text recogniser. They are decoded only then. Each print and each video's frames are made once while this
@@ -27,6 +27,8 @@ class SkipFinder(
     private val text: TextReads = { _, _ -> null },
     private val recognise: ((gray: ByteArray) -> List<CreditText.Line>?)? = null,
     private val log: (String) -> Unit = {},
+    private val between: (location: String, fromMs: Long, toMs: Long, stepMs: Long) -> PictureCues.Frames? =
+        { _, _, _, _ -> null },
     private val print: (location: String, closing: Boolean) -> IntroCredits.SoundPrint?,
 ) {
     /** What one step looks for. */
@@ -110,7 +112,7 @@ class SkipFinder(
         // A video alone (a movie, #555): its credits from its own closing's pictures, else its text; no sound to match.
         if (step.a == step.b) {
             val seen = framesOf(step.a, true) ?: return null
-            val spans = PictureCues.creditsSpans(seen).ifEmpty {
+            val spans = pictureSpans(step.a, seen).ifEmpty {
                 CreditText.findSpans { at -> textOf(step.a, seen, at) }
             }
             dropText(step.a)
@@ -127,11 +129,11 @@ class SkipFinder(
             if (!heardBoth && seenA == null && seenB == null) return null
             // Then their text, where the pictures could be read but showed no black and text frames.
             fun read(location: String, seen: PictureCues.Frames?): List<TimeRange> = seen?.let {
-                PictureCues.creditsSpans(it).ifEmpty { CreditText.findSpans { at -> textOf(location, it, at) } }
+                pictureSpans(location, it).ifEmpty { CreditText.findSpans { at -> textOf(location, it, at) } }
             }.orEmpty().also { dropText(location) }
             mapOf(
-                step.a to Found(null, heard?.first?.let { listOf(earlier(step.a, it)) } ?: read(step.a, seenA)),
-                step.b to Found(null, heard?.second?.let { listOf(earlier(step.b, it)) } ?: read(step.b, seenB)),
+                step.a to Found(null, heard?.first?.let { withPictures(step.a, it) } ?: read(step.a, seenA)),
+                step.b to Found(null, heard?.second?.let { withPictures(step.b, it) } ?: read(step.b, seenB)),
             )
         } else {
             val heard = if (heardBoth) {
@@ -147,15 +149,44 @@ class SkipFinder(
         }
     }
 
-    // The credits [heard] in [location]'s closing music, begun earlier where its black and text frames run into them
-    // from at most [EARLIER_MS] before: credits whose first seconds lie over each episode's own sound (#551).
-    private fun earlier(location: String, heard: TimeRange): TimeRange {
-        val seen = framesOf(location, true) ?: return heard
-        val start = PictureCues.creditsSpans(seen)
-            .firstOrNull { it.startMs < heard.startMs && it.endMs >= heard.startMs }
-            ?.startMs?.takeIf { heard.startMs - it <= EARLIER_MS }
+    // The credits [heard] in [location]'s closing music with what its pictures show (#551, #557): begun earlier where
+    // their black and text frames run into them from at most [EARLIER_MS] before — credits whose first seconds lie
+    // over each episode's own sound —, and split where the pictures show a scene between two stretches of credits
+    // within the music, each picture edge to the frame; the music alone where the pictures show no credits in it.
+    private fun withPictures(location: String, heard: TimeRange): List<TimeRange> {
+        val seen = framesOf(location, true) ?: return listOf(heard)
+        val spans = pictureSpans(location, seen)
         dropText(location)
-        return if (start == null) heard else TimeRange(start, heard.endMs)
+        val first = spans.indexOfFirst { it.startMs <= heard.endMs && it.endMs >= heard.startMs }
+        if (first < 0) return listOf(heard)
+        val shown = spans[first]
+        val start = shown.startMs.takeIf { it < heard.startMs && heard.startMs - it <= EARLIER_MS } ?: heard.startMs
+        val next = spans.getOrNull(first + 1)
+        // A scene within the music: the credits end where it begins; else where the music or the pictures end last.
+        val end = if (next != null && next.startMs < heard.endMs) shown.endMs else maxOf(shown.endMs, heard.endMs)
+        return listOf(TimeRange(start, end)) + spans.drop(first + 1).filter { it.startMs >= end }
+    }
+
+    // The stretches of credits [seen] shows (PictureCues.creditsSpans), each edge narrowed to the frame where the
+    // platform decodes the second around it frame by frame ([between], #557): where the credits begin, and where a
+    // scene after them begins — so the scene plays whole and not a frame of the credits shows.
+    private fun pictureSpans(location: String, seen: PictureCues.Frames): List<TimeRange> {
+        val endMs = seen.startMs + seen.frames.size * seen.stepMs
+        return PictureCues.creditsSpans(seen).map { span ->
+            val start = if (span.startMs <= seen.startMs) {
+                span.startMs
+            } else {
+                between(location, span.startMs - seen.stepMs, span.startMs, FINE_STEP_MS)
+                    ?.let(PictureCues::creditsStartIn) ?: span.startMs
+            }
+            val end = if (span.endMs >= endMs) {
+                span.endMs
+            } else {
+                between(location, span.endMs - seen.stepMs, span.endMs, FINE_STEP_MS)
+                    ?.let(PictureCues::creditsEndIn) ?: span.endMs
+            }
+            TimeRange(start, end)
+        }
     }
 
     // The text at the times [at] gives: from the closing's own frames where they are kept, the rest decoded.
@@ -194,6 +225,7 @@ class SkipFinder(
                         creditsEndMs = what.credits.getOrNull(0)?.endMs,
                         moreCreditsStartMs = what.credits.getOrNull(1)?.startMs,
                         moreCreditsEndMs = what.credits.getOrNull(1)?.endMs,
+                        laterCredits = what.credits.drop(2).flatMap { listOf(it.startMs, it.endMs) },
                         creditsLooked = true,
                     )
                 },
@@ -217,5 +249,8 @@ class SkipFinder(
 
         // How much earlier than their music the credits' pictures may begin: more is the story's own text (#551).
         const val EARLIER_MS = 30_000L
+
+        // The frames around a picture edge, one every this: about every frame of a film (#557).
+        const val FINE_STEP_MS = 40L
     }
 }

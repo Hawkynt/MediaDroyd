@@ -54,4 +54,35 @@ object PicturePrints {
             }
         }
     }.getOrNull()
+
+    /**
+     * The video at [path] ([from] a network source where it lives on one) from [fromMs] to [toMs], one picture every
+     * [stepMs] at PictureCues' look size, gray — the second around an edge of the credits, frame by frame (#557); null
+     * where it cannot be read or holds no pictures there.
+     */
+    fun between(path: String, from: FsFile?, fromMs: Long, toMs: Long, stepMs: Long): PictureCues.Frames? =
+        runCatching {
+            MediaReader(path, from, decoders = emptyList()).use { reader ->
+                reader.seek(fromMs)
+                val frames = ArrayList<ByteArray>()
+                var nextMs = fromMs
+                while (nextMs < toMs) {
+                    val item = reader.read() ?: break
+                    val picture = (item as? MediaReader.Picture)?.eightBit() ?: continue
+                    if (picture.ptsMs < nextMs) continue
+                    val gray = PictureCues.gray(
+                        picture.rgba, picture.width, picture.height, PictureCues.LOOK_WIDTH, PictureCues.LOOK_HEIGHT,
+                    )
+                    while (nextMs <= picture.ptsMs && nextMs < toMs) {
+                        frames += gray
+                        nextMs += stepMs
+                    }
+                }
+                if (frames.isEmpty()) {
+                    null
+                } else {
+                    PictureCues.Frames(PictureCues.LOOK_WIDTH, PictureCues.LOOK_HEIGHT, fromMs, stepMs, frames)
+                }
+            }
+        }.getOrNull()
 }

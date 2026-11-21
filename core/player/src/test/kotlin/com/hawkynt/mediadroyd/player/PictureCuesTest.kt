@@ -240,4 +240,20 @@ class PictureCuesTest {
         for (n in 0 until 20) assertEquals(10 * n, closing.frames[n][0].toInt() and 0xff)
         assertEquals(50, closing.textAt(105_000)!![0].toInt() and 0xff)
     }
+
+    @Test
+    fun `the credits' edges narrowed to the frame within the second around them (#557)`() {
+        // Every 40 ms over a second: the story to 1 300 360 ms, then credits — their start in it.
+        val into = PictureCues.Frames(w, h, 1_300_000, 40, List(25) { if (it < 9) scene(it) else credits(it) })
+        assertEquals(1_300_360L, PictureCues.creditsStartIn(into))
+        // The credits to 1 360 600 ms, then the scene hidden after them: where it begins.
+        val out = PictureCues.Frames(w, h, 1_360_000, 40, List(25) { if (it < 15) credits(it) else scene(it) })
+        assertEquals(1_360_600L, PictureCues.creditsEndIn(out))
+        // A fade through black belongs to the credits' side: the scene begins with its first frame of its own.
+        val fade = PictureCues.Frames(w, h, 1_360_000, 40, List(25) { if (it < 20) black else scene(it) })
+        assertEquals(1_360_800L, PictureCues.creditsEndIn(fade))
+        // Nothing to tell in the second: no narrower edge.
+        assertNull(PictureCues.creditsStartIn(PictureCues.Frames(w, h, 0, 40, List(25) { scene(it) })))
+        assertNull(PictureCues.creditsEndIn(PictureCues.Frames(w, h, 0, 40, List(25) { credits(it) })))
+    }
 }
