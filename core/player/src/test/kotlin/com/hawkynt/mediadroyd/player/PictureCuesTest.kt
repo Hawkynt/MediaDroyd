@@ -205,7 +205,7 @@ class PictureCuesTest {
         val h = CreditText.HEIGHT
         // 20 s of closing, a frame a second, each its own brightness ramp.
         val big = List(20) { n -> ByteArray(w * h) { i -> ((i % w) * 200 / w + n).toByte() } }
-        val closing = PictureCues.closing(startMs = 100_000, durationMs = 120_000, frames = big, keepText = true)
+        val closing = PictureCues.closing(100_000, durationMs = 120_000, frames = big.asSequence(), keepText = true)
         assertEquals(PictureCues.LOOK_WIDTH, closing.width)
         assertEquals(PictureCues.CLOSING_STEP_MS, closing.stepMs)
         assertEquals(20, closing.frames.size)
@@ -220,6 +220,24 @@ class PictureCuesTest {
         assertTrue(closing.textAt(105_000)!!.contentEquals(big[5]))
         assertNull(closing.textAt(106_000))
         assertNull(closing.withoutText().textAt(105_000))
-        assertNull(PictureCues.closing(100_000, 120_000, big, keepText = false).textAt(105_000))
+        assertNull(PictureCues.closing(100_000, 120_000, big.asSequence(), keepText = false).textAt(105_000))
+    }
+
+    @Test
+    fun `a closing's frames are taken one at a time, none of them held, as eight minutes do not fit at once (#551)`() {
+        val w = CreditText.WIDTH
+        val h = CreditText.HEIGHT
+        // Every frame handed over in the same buffer, overwritten for the next: what is kept must be its own copy.
+        val buffer = ByteArray(w * h)
+        val frames = sequence {
+            for (n in 0 until 20) {
+                buffer.fill((10 * n).toByte())
+                yield(buffer)
+            }
+        }
+        val closing = PictureCues.closing(startMs = 100_000, durationMs = 120_000, frames = frames, keepText = true)
+        assertEquals(20, closing.frames.size)
+        for (n in 0 until 20) assertEquals(10 * n, closing.frames[n][0].toInt() and 0xff)
+        assertEquals(50, closing.textAt(105_000)!![0].toInt() and 0xff)
     }
 }

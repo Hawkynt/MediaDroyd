@@ -212,7 +212,7 @@ class SkipFinderTest {
             pictures = { _, closing ->
                 // Credits over the scene from 2 401 s to the end at 2 480 s.
                 val frames = List(480) { if (2_000_000 + it * 1000L >= 2_401_000) titled else scene }
-                if (closing) PictureCues.closing(2_000_000, 2_480_000, frames, keepText = true) else null
+                if (closing) PictureCues.closing(2_000_000, 2_480_000, frames.asSequence(), keepText = true) else null
             },
             text = { _, at -> at(2_480_000).map { time -> decoded += time; time to credits(time) } },
             recognise = { gray -> credits(if (gray[0] == 1.toByte()) 2_401_000 else 0) },
