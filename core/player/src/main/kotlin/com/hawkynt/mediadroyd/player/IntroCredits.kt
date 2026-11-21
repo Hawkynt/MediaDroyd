@@ -14,14 +14,14 @@ object IntroCredits {
     class SoundPrint(val items: IntArray, val startMs: Long)
 
     /** How much of an episode's opening is fingerprinted to look for its intro, at most ([openingMs]). */
-    const val OPENING_MS = 10 * 60_000L
+    const val OPENING_MS = com.hawkynt.mediadroyd.library.SkipRules.OPENING_MS
 
     /**
-     * How much of an episode [durationMs] long is looked at for its intro: its first quarter, at most [OPENING_MS] — so
-     * the credits of a short episode stay out of it, as Jellyfin's Intro Skipper limits it — or [OPENING_MS] where the
-     * length is unknown.
+     * How much of an episode [durationMs] long is looked at for its intro: where an intro may begin at all
+     * (SkipRules.openingMs, #554) — its first quarter, at most [OPENING_MS], so the credits of a short episode stay out
+     * of it, as Jellyfin's Intro Skipper limits it — or [OPENING_MS] where the length is unknown.
      */
-    fun openingMs(durationMs: Long): Long = if (durationMs <= 0) OPENING_MS else minOf(OPENING_MS, durationMs / 4)
+    fun openingMs(durationMs: Long): Long = com.hawkynt.mediadroyd.library.SkipRules.openingMs(durationMs)
 
     /** How much before an episode's end is fingerprinted to look for its credits. */
     const val CLOSING_MS = 8 * 60_000L

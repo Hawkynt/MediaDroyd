@@ -26,13 +26,37 @@ object SkipRules {
         chapters.firstOrNull { INTRO_TITLE.containsMatchIn(it.title) && it.endMs > 0 }?.let { it.startMs..it.endMs }
             ?: intro?.let { it.startMs..it.endMs }
 
+    /** The longest stretch of a video's start an intro may begin in ([openingMs]). */
+    const val OPENING_MS = 10 * 60_000L
+
     /**
-     * Where to jump when playback is at [positionMs]: the intro's end while inside the intro, else
-     * null. A cold open before the intro plays; the last second is left alone so a seek landing just
-     * short of the end cannot loop.
+     * How far into a video [durationMs] long an intro may begin: its first quarter, so a short episode's credits stay
+     * out, at most [OPENING_MS]; [OPENING_MS] where the length is unknown. Also how much of an opening is looked at.
      */
-    fun skipTarget(positionMs: Long, intro: LongRange?): Long? {
-        if (intro == null) return null
+    fun openingMs(durationMs: Long): Long = if (durationMs <= 0) OPENING_MS else minOf(OPENING_MS, durationMs / 4)
+
+    /** The longest stretch of a video's end its credits may begin in ([closingFromMs]). */
+    const val CLOSING_MS = 20 * 60_000L
+
+    /**
+     * Where in a video [durationMs] long its credits may begin from: its last quarter, and at most [CLOSING_MS]
+     * before its end; anywhere (0) where the length is unknown.
+     */
+    fun closingFromMs(durationMs: Long): Long =
+        if (durationMs <= 0) 0 else maxOf(durationMs - durationMs / 4, durationMs - CLOSING_MS)
+
+    // An intro past the opening or credits before the closing are none, whatever named them (#554).
+    private fun introInPlace(intro: LongRange, durationMs: Long) = intro.first <= openingMs(durationMs)
+
+    private fun creditsInPlace(span: LongRange, durationMs: Long) = span.first >= closingFromMs(durationMs)
+
+    /**
+     * Where to jump when playback is at [positionMs] of a video [durationMs] long (0: unknown): the intro's end while
+     * inside the intro, else null; an intro that does not begin in the opening ([openingMs]) is none. A cold open
+     * before the intro plays; the last second is left alone so a seek landing just short of the end cannot loop.
+     */
+    fun skipTarget(positionMs: Long, intro: LongRange?, durationMs: Long = 0): Long? {
+        if (intro == null || !introInPlace(intro, durationMs)) return null
         return if (positionMs >= intro.first && positionMs < intro.last - 1000) intro.last else null
     }
 
@@ -67,11 +91,14 @@ object SkipRules {
     /**
      * What to do at [positionMs] among the credits' [spans] in a video [durationMs] long (0: unknown): inside credits
      * that run to its end — or to within [HIDDEN_SCENE_MIN_MS] of it — [Credits.End]; inside credits a scene follows,
-     * [Credits.Jump] to their end, so the scene plays; elsewhere null. The last second of a stretch is left alone, so a
-     * jump landing just short of its end cannot loop.
+     * [Credits.Jump] to their end, so the scene plays; elsewhere null — and for credits that do not begin in the
+     * closing ([closingFromMs]). The last second of a stretch is left alone, so a jump landing just short of its end
+     * cannot loop.
      */
     fun creditsAction(positionMs: Long, spans: List<LongRange>, durationMs: Long): Credits? {
-        val span = spans.firstOrNull { positionMs >= it.first && positionMs < it.last - 1000 } ?: return null
+        val span = spans.firstOrNull {
+            creditsInPlace(it, durationMs) && positionMs >= it.first && positionMs < it.last - 1000
+        } ?: return null
         val toEnd = span.last == Long.MAX_VALUE || durationMs <= 0 || span.last >= durationMs - HIDDEN_SCENE_MIN_MS
         return if (toEnd) Credits.End else Credits.Jump(span.last)
     }
@@ -80,13 +107,22 @@ object SkipRules {
     const val MIN_WAIT_MS = 10L
 
     /**
-     * How long to wait at [positionMs], playing at [speed], before looking again: [tickMs], or less where the [intro]
-     * or a stretch of the [credits] begins sooner — just until it does, so the jump comes as it begins and not a frame
-     * of it shows (#553); at least [MIN_WAIT_MS].
+     * How long to wait at [positionMs] of a video [durationMs] long (0: unknown), playing at [speed], before looking
+     * again: [tickMs], or less where the [intro] or a stretch of the [credits] begins sooner — just until it does, so
+     * the jump comes as it begins and not a frame of it shows (#553); at least [MIN_WAIT_MS]. Ones out of place count
+     * not.
      */
-    fun waitMs(positionMs: Long, intro: LongRange?, credits: List<LongRange>, speed: Float, tickMs: Long): Long {
-        val next = (listOfNotNull(intro?.first) + credits.map { it.first }).filter { it > positionMs }.minOrNull()
-            ?: return tickMs
+    fun waitMs(
+        positionMs: Long,
+        intro: LongRange?,
+        credits: List<LongRange>,
+        speed: Float,
+        tickMs: Long,
+        durationMs: Long = 0,
+    ): Long {
+        val starts = listOfNotNull(intro?.takeIf { introInPlace(it, durationMs) }?.first) +
+            credits.filter { creditsInPlace(it, durationMs) }.map { it.first }
+        val next = starts.filter { it > positionMs }.minOrNull() ?: return tickMs
         val wait = ((next - positionMs) / speed.coerceAtLeast(0.1f)).toLong()
         return wait.coerceIn(MIN_WAIT_MS, tickMs)
     }
