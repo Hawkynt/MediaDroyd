@@ -165,6 +165,8 @@ data class PictureOverride(
     val edgeRight: Int = 0,
     val edgeBottom: Int = 0,
     val edgesAuto: Boolean = false,
+    /** A look: a `.cube` table's file name in the shader folder (CubeLuts, #448), or null. */
+    val lut: String? = null,
 )
 
 /** How one output screen is set up (see [com.hawkynt.mediadroyd.player.ScreenSetup]); names, as kept. */
@@ -180,6 +182,8 @@ data class ScreenOverride(
     val keystoneHorizontal: Float = 0f,
     /** An OLED screen: the picture and the overlays drift (BurnInDrift). */
     val burnInCare: Boolean = false,
+    /** The screen's calibration: a `.cube` table's file name in the shader folder (CubeLuts, #448), or null. */
+    val lut: String? = null,
 )
 
 /**

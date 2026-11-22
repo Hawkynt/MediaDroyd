@@ -34,6 +34,7 @@ import com.hawkynt.mediadroyd.state.StateStore
 import com.hawkynt.mediadroyd.ui.platform.LocalSettingsPlatform
 import com.hawkynt.mediadroyd.ui.platform.PlatformSetting
 import kotlin.math.roundToInt
+import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.Keystone
 import com.hawkynt.mediadroyd.player.ScreenSetup
 import com.hawkynt.mediadroyd.player.ScreenShape
@@ -117,6 +118,25 @@ private fun ScreenSetupRows(name: String, key: String, store: StateStore) {
     )
     val gridOffered = PlatformSetting.KEYSTONE_GRID in platform.offered
     ProjectorRows(setup, ::save, onGrid = { grid = true }.takeIf { gridOffered })
+    // A calibration from the .cube tables in the shader folder (CubeLuts, #448): the screen's own, the last colour step.
+    if (CubeLuts.choices.isNotEmpty() || setup.lut != null) {
+        Text("Calibration", fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (listOf<String?>(null) + CubeLuts.choices).forEach { name ->
+                FilterChip(
+                    selected = setup.lut == name,
+                    onClick = { save(setup.copy(lut = name)) },
+                    label = { Text(name?.let(CubeLuts::label) ?: "None", fontSize = 16.sp) },
+                )
+            }
+        }
+        Text(
+            "A .cube file from the shader folder that a calibration tool made for this screen or projector: every " +
+                "picture shown on it, test patterns too, passes through it last.",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     SwitchLine(
         "OLED screen: burn-in care",
         "The picture, its black bars and the subtitles drift a few pixels every half minute, too slowly to see, " +

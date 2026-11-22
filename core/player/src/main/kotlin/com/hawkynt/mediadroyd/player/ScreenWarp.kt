@@ -86,7 +86,8 @@ object Keystone {
  * What the stage's last pass does to the picture's geometry on one screen: from each point of the screen to the point
  * of the picture it shows — one projective map ([matrix]): mirrored or upside down for a projector, through the
  * keystone's trapezoid, into the rectangle the picture takes on the screen — then the [panorama]'s widening across
- * the picture ([Panorama]). Points the map takes outside the picture are black.
+ * the picture ([Panorama]). Points the map takes outside the picture are black. Then the screen's [calibration], a
+ * `.cube` table's file name (CubeLuts), as the last colour step.
  */
 class ScreenWarp private constructor(
     private val rows: DoubleArray,
@@ -96,7 +97,12 @@ class ScreenWarp private constructor(
     val panorama: Float,
     /** Whether the whole screen is drawn by the stage (a keystone): the picture's place on it is in the map. */
     val wholeScreen: Boolean,
+    /** The screen's calibration: a `.cube` table's file name (ScreenSetup.lut), or null. */
+    val calibration: String? = null,
 ) {
+    /** Whether the stage's last pass has anything to do on this screen: bending the picture, or calibrating it. */
+    val drawsLastPass: Boolean get() = !isIdentity || calibration != null
+
     /** Nothing bent at all: the stage's last pass draws the picture as it is. */
     val isIdentity: Boolean
         get() = panorama <= 1f && rows.indices.all { rows[it] == IDENTITY[it] }
@@ -148,7 +154,8 @@ class ScreenWarp private constructor(
     }
 
     override fun equals(other: Any?): Boolean = other is ScreenWarp && other.rows.contentEquals(rows) &&
-        other.overlayRows.contentEquals(overlayRows) && other.panorama == panorama && other.wholeScreen == wholeScreen
+        other.overlayRows.contentEquals(overlayRows) && other.panorama == panorama && other.wholeScreen == wholeScreen &&
+        other.calibration == calibration
 
     override fun hashCode(): Int = rows.contentHashCode() * 31 + panorama.hashCode()
 
@@ -183,9 +190,9 @@ class ScreenWarp private constructor(
             val overlay = times(square, seen).let { m -> DoubleArray(9) { m[it] / m[8] } }
             // Exact where nothing bends, so an untouched screen is the identity, not something a rounding away.
             if (!setup.mirror && !setup.flip && !setup.keystoned) {
-                return ScreenWarp(IDENTITY, IDENTITY, panorama, false)
+                return ScreenWarp(IDENTITY, IDENTITY, panorama, false, setup.lut)
             }
-            return ScreenWarp(rows, overlay, panorama, setup.keystoned)
+            return ScreenWarp(rows, overlay, panorama, setup.keystoned, setup.lut)
         }
 
         private fun times(a: DoubleArray, b: DoubleArray) = DoubleArray(9) { i ->
