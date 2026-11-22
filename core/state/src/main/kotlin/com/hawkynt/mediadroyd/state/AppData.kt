@@ -196,6 +196,8 @@ data class Settings(
     var defaultSpeed: Float = 1.0f,
     var loudness: Float = 0f,                 // dB, -12..12
     var voices: Float = 0f,                   // dB the dialogue is raised by, 0..12 (VoiceBoost, #452)
+    var headphoneSound: Boolean = true,       // crossfeed and virtual surround on headphones (HeadphoneSound, #453)
+    var headphonesInUse: Boolean = false,     // the desktop's sound goes to headphones: it cannot tell (#453)
     var dubbing: Boolean = false,            // the voice-over on, for the next video too (#539)
     var captioning: Boolean = false,         // subtitles made from the speech on, for the next video too (#539)
     var nightMode: Boolean = false,          // the player's night mode, for the next video too (#539)

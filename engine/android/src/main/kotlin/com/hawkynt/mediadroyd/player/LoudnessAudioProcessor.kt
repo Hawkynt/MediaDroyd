@@ -27,6 +27,7 @@ class LoudnessAudioProcessor(
     private val eqPreampDb: () -> Float = { 0f },
     private val eqBandsDb: () -> List<Float> = { emptyList() },
     private val voiceOver: () -> com.hawkynt.mediadroyd.engine.VoiceOver? = { null },
+    private val headphones: () -> Boolean = { false },
 ) : BaseAudioProcessor() {
 
     // Where the sound passing stands in the film (VoiceOver, #531): the stream's position at the last flush — where
@@ -70,7 +71,7 @@ class LoudnessAudioProcessor(
         framesSince += frames
         checkNotNull(chain).process(
             samples, 0, frames, gainDb(), nightMode(), normalize(), fileLoudness(), voiceBoostDb(),
-            eqPreampDb(), eqBandsDb(),
+            eqPreampDb(), eqBandsDb(), headphones(),
         )
         val buffer = replaceOutputBuffer(count * 2)
         buffer.asShortBuffer().put(samples, 0, count)

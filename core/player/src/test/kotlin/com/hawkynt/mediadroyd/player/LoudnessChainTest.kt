@@ -166,4 +166,17 @@ class LoudnessChainTest {
         chain.process(samples, 0, 32, 0f, false, true, FileLoudness("x.flac", -20f))
         assertTrue(samples.all { it == 1000.toShort() })
     }
+
+    @Test
+    fun `on headphones stereo is crossfed last, a sound hard left reaching the right ear (#453)`() {
+        val chain = LoudnessChain(48000, 2)
+        val sound = ShortArray(9600) { i ->
+            if (i % 2 == 0) (if (i / 2 % 48 < 24) 8000 else -8000).toShort() else 0
+        }
+        val plain = sound.copyOf()
+        LoudnessChain(48000, 2).process(plain, 0, 4800, 0f, false, false, null)
+        chain.process(sound, 0, 4800, 0f, false, false, null, headphones = true)
+        assertTrue((2400 until 4800).all { plain[it * 2 + 1] == 0.toShort() })
+        assertTrue((2400 until 4800).any { sound[it * 2 + 1] != 0.toShort() })
+    }
 }

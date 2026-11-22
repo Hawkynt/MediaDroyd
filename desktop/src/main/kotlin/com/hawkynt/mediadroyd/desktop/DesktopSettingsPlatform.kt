@@ -100,6 +100,7 @@ class DesktopSettingsPlatform(
         /** The rows only some platforms act on that the desktop player does wherever it runs. */
         val OFFERED: Set<PlatformSetting> = setOf(
             PlatformSetting.SHADER_FOLDER,
+            PlatformSetting.HEADPHONES_IN_USE,
             PlatformSetting.BINGE_WATCHING,
             PlatformSetting.SKIP_INTRO_CREDITS,
             PlatformSetting.EVEN_FRAMES,
