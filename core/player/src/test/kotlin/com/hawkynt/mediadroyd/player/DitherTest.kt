@@ -108,6 +108,7 @@ class DitherTest {
         assertTrue(Dither.applies(8, 8, plain.copy(contrast = 1.2f)))
         assertTrue(Dither.applies(8, 8, plain.copy(gamma = 0.9f)))
         assertTrue(Dither.applies(8, 8, plain.copy(deband = 0.5f)))
+        assertTrue(Dither.applies(8, 8, plain.copy(lut = "warm.cube")))
         // A screen as deep as the picture, or a 16-bit one (libplacebo leaves those alone).
         assertFalse(Dither.applies(10, 10, plain))
         assertFalse(Dither.applies(16, 16, plain.copy(contrast = 1.2f)))

@@ -29,12 +29,13 @@ object Dither {
 
     /**
      * Whether the last pass dithers: where the picture reaching it holds more than a [screenBits] screen shows — a source
-     * of [sourceBits] deeper than the screen, or [picture]'s colour correction or debanding, whose float results fall
-     * between the screen's levels. A plain 8-bit picture on an 8-bit screen is left as it is, and a screen of 16 bits
+     * of [sourceBits] deeper than the screen, or [picture]'s colour correction, debanding or look (a `.cube` table),
+     * whose float results fall between the screen's levels. A plain 8-bit picture on an 8-bit screen is left as it is, and a screen of 16 bits
      * or more is never dithered, as libplacebo's renderer leaves it.
      */
     fun applies(sourceBits: Int, screenBits: Int, picture: PictureAdjustment): Boolean =
-        screenBits < 16 && (sourceBits > screenBits || !picture.isColorNeutral || picture.deband > 0f)
+        screenBits < 16 &&
+            (sourceBits > screenBits || !picture.isColorNeutral || picture.deband > 0f || picture.lut != null)
 
     /**
      * libplacebo's blue-noise matrix as ranks: [SIZE] rows of [SIZE], each 0 to [SIZE]² − 1 and every rank once — the

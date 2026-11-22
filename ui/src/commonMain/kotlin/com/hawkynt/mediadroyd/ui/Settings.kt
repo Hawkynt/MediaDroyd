@@ -365,15 +365,22 @@ fun SettingsScreen(
             fontSize = 15.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // The folder of mpv user shaders (.glsl): picked once and kept, or the platform's own; its shaders offered below.
+        // The folder of mpv user shaders (.glsl) and .cube tables: picked once and kept, or the platform's own; its
+        // shaders offered below, its tables as looks in the gear and as calibrations under Screens.
         if (offers(PlatformSetting.SHADER_FOLDER)) {
             var shaderCount by remember { mutableStateOf(com.hawkynt.mediadroyd.player.MpvShaders.choices.size) }
+            var lutCount by remember { mutableStateOf(com.hawkynt.mediadroyd.player.CubeLuts.choices.size) }
             val shaderFolder = platform.rememberShaderFolder {
                 shaderCount = com.hawkynt.mediadroyd.player.MpvShaders.choices.size
+                lutCount = com.hawkynt.mediadroyd.player.CubeLuts.choices.size
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
-                    if (!platform.hasShaderFolder) "No folder of mpv shaders" else "mpv shaders found: $shaderCount",
+                    if (!platform.hasShaderFolder) {
+                        "No folder of mpv shaders"
+                    } else {
+                        "mpv shaders found: $shaderCount, .cube tables: $lutCount"
+                    },
                     fontSize = 16.sp,
                     modifier = Modifier.weight(1f),
                 )
@@ -411,6 +418,7 @@ fun SettingsScreen(
                     it.shader = defaultPicture.shader
                     it.temporalDenoise = defaultPicture.temporalDenoise
                     it.dotCrawl = defaultPicture.dotCrawl
+                    it.chromaDenoise = defaultPicture.chromaDenoise
                 }
             },
             check = platform.pictureCheck,

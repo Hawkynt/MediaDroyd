@@ -3,17 +3,23 @@ package com.hawkynt.mediadroyd.data
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.MpvShaders
 
 /**
  * The folder of mpv user shaders the household picked in Settings (a document tree, its permission kept across
- * restarts): its `.glsl` files read into [MpvShaders], which the picture's shader choices and the stage take them from.
+ * restarts): its `.glsl` files read into [MpvShaders], which the picture's shader choices and the stage take them from,
+ * and its `.cube` tables into [CubeLuts], for looks and screens' calibrations.
  */
 object MpvShaderFolder {
-    /** Reads the `.glsl` files of [tree] (a tree URI as Settings keeps it; empty: none) into [MpvShaders]. */
+    /**
+     * Reads the shader and `.cube` files of [tree] (a tree URI as Settings keeps it; empty: none) into [MpvShaders] and
+     * [CubeLuts].
+     */
     fun load(context: Context, tree: String) {
         if (tree.isEmpty()) {
             MpvShaders.load(emptyMap())
+            CubeLuts.load(emptyMap())
             return
         }
         val files = runCatching {
@@ -32,7 +38,7 @@ object MpvShaderFolder {
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(1) ?: continue
-                    if (!MpvShaders.isShader(name)) continue
+                    if (!MpvShaders.isShader(name) && !CubeLuts.isLut(name)) continue
                     val document = DocumentsContract.buildDocumentUriUsingTree(root, cursor.getString(0))
                     context.contentResolver.openInputStream(document)?.use { found[name] = String(it.readBytes()) }
                 }
@@ -40,5 +46,6 @@ object MpvShaderFolder {
             found
         }.getOrDefault(emptyMap())
         MpvShaders.load(files)
+        CubeLuts.load(files)
     }
 }

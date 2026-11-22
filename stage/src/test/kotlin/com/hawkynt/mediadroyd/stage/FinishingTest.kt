@@ -1,5 +1,6 @@
 package com.hawkynt.mediadroyd.stage
 
+import com.hawkynt.mediadroyd.player.CubeLut
 import com.hawkynt.mediadroyd.player.MotionInterpolation
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.player.ScreenWarp
@@ -62,5 +63,16 @@ class FinishingTest {
         finishing.adjust(FakeTarget(1, 8, 8), FakeTarget(2, 8, 8), PictureAdjustment.Neutral, ScreenWarp.None)
         assertTrue(gl.calls.contains("uWarp = matrix3"))
         assertTrue(gl.calls.contains("uWarped = 1.0"))
+    }
+
+    @Test
+    fun `a cube table's texture is made once, its slices and domain handed to the pass`() {
+        val text = "LUT_3D_SIZE 5\nDOMAIN_MAX 2 2 2\n" + "0.5 0.5 0.5\n".repeat(125)
+        val lut = requireNotNull(CubeLut.parse(text))
+        repeat(2) { finishing.lut(FakeTarget(1, 8, 8), FakeTarget(2, 8, 8), lut) }
+        assertEquals(1, gl.calls.count { it.startsWith("texImage") })
+        assertTrue(gl.calls.contains("uSize = 5"))
+        assertTrue(gl.calls.contains("uTiles = 3"))
+        assertTrue(gl.calls.contains("uDomainMax = 2.0, 2.0, 2.0"))
     }
 }

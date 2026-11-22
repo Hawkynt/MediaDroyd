@@ -1,6 +1,7 @@
 package com.hawkynt.mediadroyd.stage
 
 import com.hawkynt.mediadroyd.player.Cdef
+import com.hawkynt.mediadroyd.player.ChromaDenoise
 import com.hawkynt.mediadroyd.player.Deband
 import com.hawkynt.mediadroyd.player.Deblock
 import com.hawkynt.mediadroyd.player.LogoMask
@@ -10,9 +11,9 @@ import com.hawkynt.mediadroyd.player.TemporalDenoise
 import com.hawkynt.mediadroyd.shaders.Shaders
 
 /**
- * The restoration passes at the picture's own size — dot crawl, temporal denoising, deblocking and deringing, the
- * station logo, debanding, denoising and sharpening: which shader, which textures and which uniforms, the same on every
- * platform; which frames they read and draw into, and in what order, the platform stage's.
+ * The restoration passes at the picture's own size — dot crawl, temporal denoising, a tape's colour noise, deblocking
+ * and deringing, the station logo, debanding, denoising and sharpening: which shader, which textures and which
+ * uniforms, the same on every platform; which frames they read and draw into, and in what order, the platform stage's.
  */
 class Restoration(private val gl: Gles, private val passes: Passes) {
 
@@ -43,6 +44,28 @@ class Restoration(private val gl: Gles, private val passes: Passes) {
             set("uTexel", 1f / shown.width, 1f / shown.height)
             set("uThreshold", threshold)
         }
+    }
+
+    /**
+     * [shown]'s colour denoised (ChromaDenoise) into [into] against [prev] and [next], its brightness kept; every
+     * texel read as it is.
+     */
+    fun chromaDenoise(
+        shown: DrawTarget,
+        prev: DrawTarget,
+        next: DrawTarget,
+        into: DrawTarget,
+        params: ChromaDenoise.Params,
+    ): DrawTarget = passes.draw(
+        Shaders.VIDEO_CHROMA_DENOISE,
+        into,
+        shown.texture,
+        listOf(prev.texture to "uPrev", next.texture to "uNext"),
+        nearest = true,
+    ) {
+        set("uTexel", 1f / shown.width, 1f / shown.height)
+        set("uGuide2", 2f * params.guide * params.guide)
+        set("uMotion", params.motion)
     }
 
     /**
@@ -218,7 +241,7 @@ class Restoration(private val gl: Gles, private val passes: Passes) {
     fun build(es3: Boolean) {
         val all = listOf(
             Shaders.VIDEO_DOT_CRAWL, Shaders.VIDEO_DOT_CRAWL_PAL, Shaders.VIDEO_TEMPORAL_DENOISE,
-            Shaders.VIDEO_LOGO_MASK, Shaders.VIDEO_DENOISE, Shaders.VIDEO_SHARPEN,
+            Shaders.VIDEO_LOGO_MASK, Shaders.VIDEO_DENOISE, Shaders.VIDEO_SHARPEN, Shaders.VIDEO_CHROMA_DENOISE,
         )
         all.forEach { passes.program(it) }
         passes.program(if (es3) Shaders.VIDEO_DEBAND_ES3 else Shaders.VIDEO_DEBAND)

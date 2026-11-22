@@ -924,7 +924,7 @@ fun PhonePlayer(
             ?.warpFor(format) ?: ScreenWarp.None
         val wanted =
             (ffmpegVideo || toneMapped ||
-                ((shownPicture.hasFilters || !bend.isIdentity || state.histogramShown) && transfer == null)) &&
+                ((shownPicture.hasFilters || bend.drawsLastPass || state.histogramShown) && transfer == null)) &&
                 target != null && target.holder.surface.isValid
         val stage = filterStage[0] ?: com.hawkynt.mediadroyd.player.VideoFilterStage().also { made ->
             filterStage[0] = made

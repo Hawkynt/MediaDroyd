@@ -1,5 +1,7 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
+import com.hawkynt.mediadroyd.player.ChromaDenoise
+import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.Deblock
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.DotCrawl
@@ -415,12 +417,14 @@ class GlStage(
         // Where the picture holds more than the 8 bits it is read back in — HDR's tone-mapped floats, the colour
         // correction's or debanding's results — every pass draws into half floats and the last one dithers (Dither);
         // a plain 8-bit picture keeps its 8-bit frames, untouched.
-        deep = Dither.applies(if (m.shown.hdr != null) 16 else 8, SCREEN_BITS, a)
+        // The look's and the screen's .cube tables (CubeLuts), after the colour correction, in half floats too.
+        val luts = CubeLuts.chosen(a, warp)
+        deep = Dither.applies(if (m.shown.hdr != null) 16 else 8, SCREEN_BITS, a) || luts.isNotEmpty()
         // A change to the filters, to the part shown, or to the frames' depth makes every kept picture stale.
         val look = listOf(
             a.deinterlace, a.stereo, a.deband, a.noise, a.sharpness, a.clarity, crop, deep, a.chroma, a.colorize,
             a.logo, a.deblock, a.dering, a.chromaShiftX, a.chromaShiftY,
-            a.temporalDenoise, a.dotCrawl, a.colourSystem, planeHooked, lumaPlanes,
+            a.temporalDenoise, a.dotCrawl, a.chromaDenoise, a.colourSystem, planeHooked, lumaPlanes,
         )
         // Another chroma upscaler, or another shader hooking the planes, makes every picture uploaded from its planes
         // stale.
@@ -484,11 +488,15 @@ class GlStage(
         // To the shown size, colour-corrected, its geometry bent (ScreenWarp).
         val shown = target("shown", outW, outH, half = deep)
         finishing.adjust(source, shown, a, warp)
-        if (!deep) return shown
+        var last = shown
+        luts.forEachIndexed { k, lut ->
+            last = finishing.lut(last, target("lut$k", outW, outH, half = true), lut) as Target
+        }
+        if (!deep) return last
         // Dithered to 8 bits, the last pass before the picture is read back: libplacebo's blue noise
         // (glsl/video/dither.glsl).
         // The frame's top row is where v is 1 (see upload).
-        return finishing.dither(shown, target("dithered", outW, outH)) as Target
+        return finishing.dither(last, target("dithered", outW, outH)) as Target
     }
 
     /**
@@ -591,7 +599,7 @@ class GlStage(
         } ?: raw
         // The pictures either side moved onto it along the motion between them once the search has it — until then
         // read as they are, and filtered again.
-        val shown = if (a.temporalDenoise > 0f) {
+        val quiet = if (a.temporalDenoise > 0f) {
             val region = region(picture, crop, a.stereo)
             fun side(other: MediaReader.Picture?, earlier: Boolean): Pair<Target, MotionSearch.Vectors?>? {
                 other ?: return null
@@ -613,6 +621,12 @@ class GlStage(
         } else {
             combed
         }
+        // 0b. A tape's colour noise (ChromaDenoise, #446), against the pictures either side as decoded.
+        val shown = ChromaDenoise.params(a.chromaDenoise)?.let { params ->
+            fun near(p: MediaReader.Picture?) = p?.let(::neighbour)?.takeIf { it.width == w && it.height == h } ?: raw
+            restoration.chromaDenoise(quiet, near(before), near(after), target("chromaDenoised", w, h, half = deep),
+                params) as Target
+        } ?: quiet
         source = shown
         // 1. Deinterlacing.
         if (a.deinterlace.isTemporal) {
@@ -823,7 +837,7 @@ class GlStage(
      */
     private fun atDecodedSize(a: PictureAdjustment): Boolean =
         a.deinterlace != PictureAdjustment.Deinterlace.OFF || a.deblock > 0f || a.dering > 0f ||
-            DotCrawl.threshold(a.dotCrawl) != null || a.temporalDenoise > 0f ||
+            DotCrawl.threshold(a.dotCrawl) != null || a.temporalDenoise > 0f || a.chromaDenoise > 0f ||
             a.interpolation != PictureAdjustment.Interpolation.OFF || a.chromaShiftX != 0f || a.chromaShiftY != 0f
 
     /** The least recently used of [slots], now holding [picture]. */

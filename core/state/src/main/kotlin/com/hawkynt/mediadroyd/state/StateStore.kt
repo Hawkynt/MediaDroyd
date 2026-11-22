@@ -238,6 +238,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = shader,
             temporalDenoise = temporalDenoise,
             dotCrawl = dotCrawl,
+            chromaDenoise = chromaDenoise,
             colorize = colorizeOf(colorize),
             hue = hue,
             tint = tint,
@@ -276,6 +277,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = picture.shader
             temporalDenoise = picture.temporalDenoise
             dotCrawl = picture.dotCrawl
+            chromaDenoise = picture.chromaDenoise
             colorize = picture.colorize.name
         }
         save()
@@ -368,7 +370,9 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
     /** How the output screen [key] is set up; the default until it is set. */
     fun screenSetup(key: String): ScreenSetup =
         data.settings.screens[key]?.let {
-            ScreenSetup.of(it.shape, it.mirror, it.flip, it.keystoneVertical, it.keystoneHorizontal, it.burnInCare)
+            ScreenSetup.of(
+                it.shape, it.mirror, it.flip, it.keystoneVertical, it.keystoneHorizontal, it.burnInCare, it.lut,
+            )
         } ?: ScreenSetup.Default
 
     /** Keeps [setup] for the output screen [key]; the default drops its entry. */
@@ -379,7 +383,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             data.settings.screens + (
                 key to ScreenOverride(
                     setup.shape.name, setup.mirror, setup.flip, setup.keystoneVertical, setup.keystoneHorizontal,
-                    setup.burnInCare,
+                    setup.burnInCare, setup.lut,
                 )
             )
         }
@@ -456,6 +460,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = it.shader,
             temporalDenoise = it.temporalDenoise,
             dotCrawl = it.dotCrawl,
+            chromaDenoise = it.chromaDenoise,
             colorize = colorizeOf(it.colorize),
             colourSystem = runCatching { PictureAdjustment.ColourSystem.valueOf(it.colourSystem) }
                 .getOrDefault(PictureAdjustment.ColourSystem.AUTO),
@@ -470,6 +475,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             edgeRight = it.edgeRight,
             edgeBottom = it.edgeBottom,
             edgesAuto = it.edgesAuto,
+            lut = it.lut,
         )
 
         /** A picture as kept, the choices by name. */
@@ -499,6 +505,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = picture.shader,
             temporalDenoise = picture.temporalDenoise,
             dotCrawl = picture.dotCrawl,
+            chromaDenoise = picture.chromaDenoise,
             colorize = picture.colorize.name,
             colourSystem = picture.colourSystem.name,
             hue = picture.hue,
@@ -512,6 +519,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             edgeRight = picture.edgeRight,
             edgeBottom = picture.edgeBottom,
             edgesAuto = picture.edgesAuto,
+            lut = picture.lut,
         )
 
         private fun chromaOf(name: String) =

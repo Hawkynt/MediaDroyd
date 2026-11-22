@@ -109,6 +109,7 @@ enum class TestPattern(val label: String, val hint: String) {
             logo = null,
             temporalDenoise = 0f,
             dotCrawl = 0f,
+            chromaDenoise = 0f,
             colorize = PictureAdjustment.Colorize.OFF,
         )
 
