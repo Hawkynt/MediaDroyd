@@ -148,6 +148,9 @@ fun DesktopPlayer(
     val tuning = remember {
         object : PlaybackTuning by knobs {
             override val voiceBoostDb get() = store.state.data.settings.voices
+            // The desktop cannot tell headphones from speakers: the household says (#453).
+            override val headphones
+                get() = store.state.data.settings.let { it.headphoneSound && it.headphonesInUse }
             override val subtitleDelayMs get() = screenState[0]?.subtitleDelayNow ?: knobs.subtitleDelayMs
             override val voiceOver get() = screenState[0]?.voiceOver
         }

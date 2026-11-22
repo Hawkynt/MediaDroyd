@@ -25,6 +25,12 @@ interface PlaybackTuning {
     /** The equalizer's gains in dB, one per band (Equalizer.HZ); empty or all 0: no band changed. */
     val equalizerBandsDb: List<Float> get() = emptyList()
 
+    /**
+     * Whether the sound is shaped for headphones (HeadphoneSound, #453): stereo crossfed, 5.1 and 7.1 placed around
+     * the head. The screens answer it from the household's switch and the output playing.
+     */
+    val headphones: Boolean get() = false
+
     /** Spoken subtitles mixed into the sound as it plays (Dub, #531); null for none. */
     val voiceOver: VoiceOver? get() = null
 
@@ -39,5 +45,6 @@ interface PlaybackTuning {
         @Volatile override var voiceOver: VoiceOver? = null
         @Volatile override var equalizerPreampDb: Float = 0f
         @Volatile override var equalizerBandsDb: List<Float> = emptyList()
+        @Volatile override var headphones: Boolean = false
     }
 }

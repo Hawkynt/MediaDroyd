@@ -25,6 +25,7 @@
 | [NVIDIA Image Scaling SDK](https://github.com/NVIDIAGameWorks/NVIDIAImageScaling) v1.0.3 `NIS_Scaler.h` (NVScaler) and `NIS_Config.h` (settings, coefficient tables) — © 2022 NVIDIA Corporation | MIT | `Nis`, and the app's GL pass written from it (licence text: `app/THIRD-PARTY-NOTICE.NVIDIA-Image-Scaling.txt`) |
 | [FFmpeg](https://ffmpeg.org) `libavfilter/vf_minterpolate.c` and `motion_estimation.c` (bilateral EPZS search, OBMC, `obmc_linear32`, scene change) — © 2014-2015 Michael Niedermayer, 2016 Davinder Singh | LGPL-2.1-or-later | `MotionInterpolation`, and the app's GL pass written from it |
 | [libebur128](https://github.com/jiixyj/libebur128) v1.2.6 `ebur128/ebur128.c` (`ebur128_init_filter`, the filter, `ebur128_calc_gating_block`, `ebur128_gated_loudness`) — © 2011 Jan Kokemüller | MIT | `LoudnessMeter` — EBU R128 integrated loudness (licence text: `app/THIRD-PARTY-NOTICE.libebur128.txt`) |
+| [libbs2b](https://bs2b.sourceforge.net) 3.1.0 `src/bs2b.c` (`init`, `cross_feed_d`, `bs2b_cross_feed_s16`'s clipping, `BS2B_DEFAULT_CLEVEL`) — © 2005 Boris Mikhaylov | MIT | `Crossfeed` — Bauer's stereo-to-binaural crossfeed for headphones (licence text: `app/THIRD-PARTY-NOTICE.bs2b.txt`) |
 
 The Bessel function J1 in `Ewa` follows Abramowitz & Stegun, *Handbook of Mathematical Functions*, 9.4.4 and 9.4.6.
 `Histogram` turns RGB into Y'CbCr by ITU-R BT.709-6's luma weights and colour-difference scales (items 3.2 to 3.4), at
@@ -35,6 +36,9 @@ follows DScaler's `Help/Calibration.htm` (GPL-2.0, read only for its kinds of pa
 they are set in: brightness, contrast, colour).
 `TemporalDenoise.noiseSigma` follows J. Immerkær, "Fast Noise Variance Estimation", *Computer Vision and Image
 Understanding* 64(2), 1996, pp. 300-302: the difference-of-Laplacians mask and the √(π/2) / 6 scale.
+`VirtualSurround`'s head-related impulse responses are MIT's KEMAR measurements (Bill Gardner and Keith Martin, MIT
+Media Lab, 1994; free to use, the authors cited — `app/THIRD-PARTY-NOTICE.KEMAR.txt`), the normal pinna, read from
+libmysofa's SOFA copy by `tools/hrir/hrir.c`; the loudspeakers' directions are ITU-R BS.775's.
 `Keystone.squareToQuad` follows Paul Heckbert, *Fundamentals of Texture Mapping and Image Warping* (UC Berkeley, 1989),
 §2.2.3, the projective map of the unit square onto a quadrilateral.
 
@@ -126,3 +130,6 @@ whose output over five frames `make-expected.sh` first holds to FFmpeg n9.0.2's 
 `src/test/resources/cube/` — `look.cube`, `curve.cube` and `picture.rgb` written by `make-input.py` there; the
 `look-*.rgb` and `curve-linear.rgb` files FFmpeg n9.1's `lut3d` (tetrahedral, trilinear) and `lut1d` (linear) for them,
 made by `make-expected.sh`.
+`src/test/resources/headphones/` — `stereo.s16`, `surround51.s16` and `surround71.s16` written by `make-input.py` and
+`make-surround.py` there; `stereo-bs2b.s16` libbs2b 3.1.0's own crossfeed of it through FFmpeg n9.1's `bs2b` filter, the
+`*-headphone.s16` files FFmpeg n9.1's `headphone` filter over the app's own responses, made by `make-expected.sh`.

@@ -333,6 +333,24 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         EqualizerControls(settings.equalizer, { e -> update { it.equalizer = e } })
+        // Sound around you on headphones (HeadphoneSound, #453): crossfeed for stereo, virtual surround for 5.1/7.1.
+        SwitchRow(
+            label = "Sound around you on headphones",
+            detail = "Stereo no longer hard left and right, and 5.1 or 7.1 heard from around you, as from " +
+                "loudspeakers in the room." +
+                if (offers(PlatformSetting.HEADPHONES_IN_USE)) "" else " Only while headphones play the sound.",
+            checked = settings.headphoneSound,
+            onChange = { c -> update { it.headphoneSound = c } },
+        )
+        if (offers(PlatformSetting.HEADPHONES_IN_USE) && settings.headphoneSound) {
+            SwitchRow(
+                label = "Headphones in use",
+                detail = "This computer cannot tell headphones from loudspeakers: switch on while listening on " +
+                    "headphones.",
+                checked = settings.headphonesInUse,
+                onChange = { c -> update { it.headphonesInUse = c } },
+            )
+        }
         SwitchRow(
             label = "Even loudness",
             detail = "Every film and song plays about as loud as the last: by its ReplayGain tags where it has them, " +

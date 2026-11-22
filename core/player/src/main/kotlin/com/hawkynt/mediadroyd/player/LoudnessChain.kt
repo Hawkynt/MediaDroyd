@@ -6,9 +6,8 @@ import kotlin.math.abs
  * The household's sound settings on the decoded sound, one chain per playback and sound format: the loudness gain in
  * dB ([LoudnessCurve]), with even loudness the file's own correction on top ([LoudnessNormalization]: its ReplayGain
  * from [FileLoudness], else its loudness measured as it plays), clearer voices ([VoiceBoost]), the equalizer
- * ([Equalizer]) and night mode
- * ([NightModeCompressor], one gain per
- * frame from its loudest channel, so the stereo image stays put). The knobs are passed with every buffer, so a slider
+ * ([Equalizer]), night mode ([NightModeCompressor], one gain per frame from its loudest channel, so the stereo
+ * image stays put) and last, on headphones, the sound around you ([HeadphoneSound]: crossfeed, virtual surround). The knobs are passed with every buffer, so a slider
  * takes effect mid-playback; a new [FileLoudness] — the next file, another audio track — starts the correction afresh.
  *
  * Android's audio processor and the desktop engine both run their PCM through it.
@@ -19,6 +18,7 @@ class LoudnessChain(private val sampleRate: Int, channels: Int) {
     private val compressor = NightModeCompressor(sampleRate)
     private val voices = VoiceBoost(sampleRate, channels)
     private val equalizer = Equalizer(sampleRate, channels)
+    private val headphoneSound = HeadphoneSound(sampleRate, this.channels)
     private var normalization: LoudnessNormalization? = null
     private var normalizationFor: FileLoudness? = null
 
@@ -26,7 +26,7 @@ class LoudnessChain(private val sampleRate: Int, channels: Int) {
      * Applies the settings in place to [frames] frames of interleaved 16-bit samples from [offset]: the voices raised
      * by [voiceBoostDb] first ([VoiceBoost]), then the equalizer's [eqPreampDb] and [eqBandsDb] ([Equalizer]), then
      * the loudness [gainDb], [nightMode], and with [normalize] the
-     * correction for [file].
+     * correction for [file]; with [headphones] the sound around you last ([HeadphoneSound]).
      */
     fun process(
         samples: ShortArray,
@@ -39,8 +39,25 @@ class LoudnessChain(private val sampleRate: Int, channels: Int) {
         voiceBoostDb: Float = 0f,
         eqPreampDb: Float = 0f,
         eqBandsDb: List<Float> = emptyList(),
+        headphones: Boolean = false,
     ) {
         if (frames <= 0) return
+        levels(samples, offset, frames, gainDb, nightMode, normalize, file, voiceBoostDb, eqPreampDb, eqBandsDb)
+        headphoneSound.process(samples, offset, frames, headphones)
+    }
+
+    private fun levels(
+        samples: ShortArray,
+        offset: Int,
+        frames: Int,
+        gainDb: Float,
+        nightMode: Boolean,
+        normalize: Boolean,
+        file: FileLoudness?,
+        voiceBoostDb: Float,
+        eqPreampDb: Float,
+        eqBandsDb: List<Float>,
+    ) {
         voices.process(samples, offset, frames, voiceBoostDb)
         equalizer.process(samples, offset, frames, eqPreampDb, eqBandsDb)
         val factor = LoudnessCurve.factorFor(gainDb + normalizationDb(samples, offset, frames, normalize, file))
