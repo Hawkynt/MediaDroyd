@@ -138,6 +138,7 @@ private fun kindLabel(kind: SourceKind) = when (kind) {
     SourceKind.SFTP -> "SFTP"
     SourceKind.WEBDAV -> "WebDAV"
     SourceKind.DOCUMENTS -> "Cloud"
+    SourceKind.UPNP -> "Media server (DLNA)"
 }
 
 private const val SMB_FOLDER_HINT = "Share and folder — media/movies"
@@ -147,10 +148,17 @@ private const val NFS_FOLDER_HINT = "Export — /volume1/video"
 /** The kinds that cannot do without a share or export to read. */
 private val FOLDER_REQUIRED = setOf(SourceKind.SMB, SourceKind.NFS)
 private const val WEBDAV_HINT = "Address — https://cloud.example.org/remote.php/dav/files/me/Videos"
+private const val UPNP_HINT = "Server — picked above, or its description: http://nas:8200/rootDesc.xml"
+
+/** The kinds addressed by one URL rather than a server, a port and a folder. */
+private val URL_KINDS = setOf(SourceKind.WEBDAV, SourceKind.UPNP)
 
 /** The kinds of network source the dialog adds. */
 private val NETWORK_KINDS =
-    listOf(SourceKind.SMB, SourceKind.NFS, SourceKind.FTP, SourceKind.FTPS, SourceKind.SFTP, SourceKind.WEBDAV)
+    listOf(
+        SourceKind.SMB, SourceKind.NFS, SourceKind.FTP, SourceKind.FTPS, SourceKind.SFTP, SourceKind.WEBDAV,
+        SourceKind.UPNP,
+    )
 
 /**
  * The fields of a network source — a Windows / Samba share, FTP, FTPS or SFTP — with a test that lists
@@ -168,7 +176,7 @@ private fun NetworkSourceDialog(
     val scope = rememberCoroutineScope()
     var kind by remember { mutableStateOf(source.kind) }
     var name by remember { mutableStateOf(source.name) }
-    var server by remember { mutableStateOf(if (source.kind == SourceKind.WEBDAV) source.url else source.host) }
+    var server by remember { mutableStateOf(if (source.kind in URL_KINDS) source.url else source.host) }
     var port by remember { mutableStateOf(source.port.takeIf { it > 0 }?.toString().orEmpty()) }
     var folder by remember { mutableStateOf(source.path.trim('/')) }
     var user by remember { mutableStateOf(source.user) }
@@ -176,7 +184,20 @@ private fun NetworkSourceDialog(
     var hostKey by remember { mutableStateOf(source.hostKey) }
     var status by remember { mutableStateOf<String?>(null) }
 
-    fun edited() = if (kind == SourceKind.WEBDAV) {
+    fun edited() = if (kind == SourceKind.UPNP) {
+        // A media server: the address of its description; no user, no folder — its own containers are the folders.
+        val url = server.trim().let { if ("://" in it) it else "http://$it" }
+        source.copy(
+            kind = kind,
+            name = name.trim().ifEmpty { url.substringAfter("://").substringBefore('/') },
+            host = url.substringAfter("://").substringBefore('/'),
+            port = 0,
+            path = "",
+            url = url,
+            user = "",
+            hostKey = "",
+        )
+    } else if (kind == SourceKind.WEBDAV) {
         val url = server.trim().let { if ("://" in it) it else "https://$it" }.trimEnd('/')
         source.copy(
             kind = kind,
@@ -245,22 +266,49 @@ private fun NetworkSourceDialog(
                         }
                     }
                 }
+                // Media servers answering on the local network (SSDP), one tap to fill in.
+                val media by LocalSourceKeeper.current.upnpServers(active = kind == SourceKind.UPNP)
+                if (kind == SourceKind.UPNP) {
+                    Text(
+                        if (media.isEmpty()) "Looking for media servers on this network…" else "On this network",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        media.forEach { found ->
+                            FilterChip(
+                                selected = server == found.host,
+                                onClick = {
+                                    server = found.host
+                                    if (name.isBlank()) name = found.name
+                                },
+                                label = { Text(found.name) },
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     server,
                     { server = it },
                     label = {
-                        Text(if (kind == SourceKind.WEBDAV) WEBDAV_HINT else "Server — nas.local or 192.168.1.10")
+                        Text(
+                            when (kind) {
+                                SourceKind.WEBDAV -> WEBDAV_HINT
+                                SourceKind.UPNP -> UPNP_HINT
+                                else -> "Server — nas.local or 192.168.1.10"
+                            },
+                        )
                     },
                     singleLine = true,
                 )
-                if (kind != SourceKind.WEBDAV) OutlinedTextField(
+                if (kind !in URL_KINDS) OutlinedTextField(
                     port,
                     { port = it.filter(Char::isDigit) },
                     label = { Text("Port — empty for the usual one") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
-                if (kind != SourceKind.WEBDAV) OutlinedTextField(
+                if (kind !in URL_KINDS) OutlinedTextField(
                     folder,
                     { folder = it },
                     label = {
@@ -274,7 +322,8 @@ private fun NetworkSourceDialog(
                     },
                     singleLine = true,
                 )
-                OutlinedTextField(
+                // A media server signs nobody in.
+                if (kind != SourceKind.UPNP) OutlinedTextField(
                     user,
                     { user = it },
                     label = {
@@ -289,7 +338,7 @@ private fun NetworkSourceDialog(
                     singleLine = true,
                 )
                 // NFSv3 signs in by user id alone; there is no password to ask for.
-                if (kind != SourceKind.NFS) OutlinedTextField(
+                if (kind != SourceKind.NFS && kind != SourceKind.UPNP) OutlinedTextField(
                     secret,
                     { secret = it },
                     label = { Text(if (kind == SourceKind.SFTP) "Password, or a private key" else "Password") },
