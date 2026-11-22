@@ -40,6 +40,31 @@ class MediaReaderTest {
     }
 
     @Test
+    fun `5_1 for headphones is placed around the head as it is read, not folded down (#453)`() {
+        // surround.flac: half a second of a 500 Hz tone in the left surround alone, 5.1(side), written by FFmpeg.
+        val file = File(requireNotNull(javaClass.getResource("/surround.flac")).toURI()).path
+        fun ears(place: Boolean): Triple<Long, Long, Boolean> = MediaReader(file).use { r ->
+            r.placeSurround = place
+            val sound = generateSequence { r.read() }.filterIsInstance<MediaReader.Sound>().toList()
+            var left = 0L
+            var right = 0L
+            for (s in sound) {
+                val pcm = java.nio.ByteBuffer.wrap(s.pcm).order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                for (f in 0 until pcm.limit() / 2) {
+                    left += kotlin.math.abs(pcm.get(f * 2).toInt())
+                    right += kotlin.math.abs(pcm.get(f * 2 + 1).toInt())
+                }
+            }
+            Triple(left, right, sound.all { it.binaural })
+        }
+        val (foldedLeft, foldedRight, foldedBinaural) = ears(false)
+        assertTrue("$foldedLeft / $foldedRight", foldedLeft > 0 && foldedRight == 0L && !foldedBinaural)
+        // Placed: the far ear hears it too, through the head, but less — at 500 Hz the head shadows it by a few dB.
+        val (left, right, binaural) = ears(true)
+        assertTrue("$left / $right", binaural && right > 0 && left > 3 * right / 2)
+    }
+
+    @Test
     fun `the ReplayGain of the sound playing is read from the file's tags`() {
         val tagged = File(requireNotNull(javaClass.getResource("/replaygain.flac")).toURI()).path
         MediaReader(tagged).use { assertEquals(-7.5f, it.replayGain?.trackGainDb) }

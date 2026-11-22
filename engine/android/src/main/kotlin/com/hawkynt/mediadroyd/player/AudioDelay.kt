@@ -35,8 +35,11 @@ class DelayedAudioSink(sink: AudioSink, private val delayMs: () -> Int) : Forwar
     }
 }
 
-/** Which audio output plays right now, as a key to remember a delay by and a name to show. */
-data class AudioOutput(val key: String, val name: String)
+/**
+ * Which audio output plays right now, as a key to remember a delay by and a name to show, and whether it is worn on
+ * the head ([headphones]: wired, a USB headset, Bluetooth headphones — not a Bluetooth speaker where it says so).
+ */
+data class AudioOutput(val key: String, val name: String, val headphones: Boolean = false)
 
 /**
  * The output media audio goes to: on Android 13+ as the system routes it; before that the most likely
@@ -66,7 +69,12 @@ fun currentAudioOutput(context: Context): AudioOutput {
         "hdmi" -> product.ifEmpty { "HDMI" }
         else -> product.ifEmpty { kind.replaceFirstChar { it.uppercase() } }
     }
-    return AudioOutput(if (kind == "speaker" || kind == "wired") kind else "$kind:$product", name)
+    val worn = when (device.type) {
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET,
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET -> true
+        else -> false
+    }
+    return AudioOutput(if (kind == "speaker" || kind == "wired") kind else "$kind:$product", name, worn)
 }
 
 private fun rank(type: Int): Int = when (type) {
