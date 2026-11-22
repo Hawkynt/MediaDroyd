@@ -123,3 +123,6 @@ them, on Mesa's OpenGL through `tools/shader-check/placebo.cpp`, made by `make-e
 `src/test/resources/temporal-denoise/` — `frame0..4.ppm` written by `make-input.py` there; the other `.ppm` files the middle
 frame denoised against its neighbours by FFmpeg's own atadenoise filter (n8.0's `vf_atadenoise.c`) run by `harness.c`,
 whose output over five frames `make-expected.sh` first holds to FFmpeg n9.0.2's command line, byte for byte.
+`src/test/resources/cube/` — `look.cube`, `curve.cube` and `picture.rgb` written by `make-input.py` there; the
+`look-*.rgb` and `curve-linear.rgb` files FFmpeg n9.1's `lut3d` (tetrahedral, trilinear) and `lut1d` (linear) for them,
+made by `make-expected.sh`.
