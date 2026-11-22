@@ -252,7 +252,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.PicturePage(
         }
         PictureSliders(
             picture, onChange = onPicture, onDone = onPictureDone, stereo = true, logo = true, colourOffset = true,
-            tapeEdges = true, look = true,
+            tapeEdges = true, look = true, steady = true,
             check = check,
             colorizers = colorizers, neuralModels = neuralModels,
         )

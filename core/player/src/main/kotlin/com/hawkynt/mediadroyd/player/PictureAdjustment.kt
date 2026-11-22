@@ -126,6 +126,11 @@ data class PictureAdjustment(
      * and before the screen's calibration; null for none. A video's or a folder's own.
      */
     val lut: String? = null,
+    /**
+     * A shaky home video steadied (Deshake, #449): the camera's jitter found from Motion's search and undone, the
+     * picture zoomed slightly to hide the edges. A video's or a folder's own.
+     */
+    val steady: Boolean = false,
 ) {
     /** The tape's edges as one. */
     val edges: VhsEdges.Edges get() = VhsEdges.Edges(edgeLeft, edgeTop, edgeRight, edgeBottom)
@@ -422,7 +427,7 @@ data class PictureAdjustment(
             deinterlace != Deinterlace.OFF ||
             upscaler != Upscaler.STANDARD || interpolation != Interpolation.OFF || stereo != Stereo.OFF ||
             colorize != Colorize.OFF || chromaShiftX != 0f || chromaShiftY != 0f || chromaShiftAuto ||
-            !edges.isNone || edgesAuto || lut != null ||
+            !edges.isNone || edgesAuto || lut != null || steady ||
             !isColorNeutral
 
     /**
