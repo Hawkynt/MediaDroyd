@@ -239,6 +239,9 @@ fun PhonePlayer(
             override val voiceBoostDb get() = settings.voices
             override val equalizerPreampDb get() = equalizer.preampDb
             override val equalizerBandsDb get() = equalizer.bandsDb
+            // On headphones, unless the system's own spatializer places the sound already (#453).
+            override val headphones get() = settings.headphoneSound && audioOutput.headphones &&
+                !(spatialAudio && spatializerAvailable)
         }
     }
     val engine = remember {

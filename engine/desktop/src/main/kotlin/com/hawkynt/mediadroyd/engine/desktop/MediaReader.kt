@@ -14,6 +14,9 @@ import com.hawkynt.mediadroyd.player.YuvMatrix
 import com.hawkynt.mediadroyd.player.FilmSound
 import com.hawkynt.mediadroyd.player.LiveCaptions
 import com.hawkynt.mediadroyd.player.ReadAhead
+import com.hawkynt.mediadroyd.player.VirtualSurround
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.bytedeco.ffmpeg.avcodec.AVCodec
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext
 import org.bytedeco.ffmpeg.avcodec.AVPacket
@@ -87,8 +90,17 @@ class MediaReader(
      */
     @Volatile var keepPlanes = false
 
-    /** Decoded sound: [pcm] is interleaved 16-bit little-endian stereo at [SAMPLE_RATE]. */
-    class Sound(val ptsMs: Long, val pcm: ByteArray)
+    /**
+     * Whether 5.1 and 7.1 are placed around the head for headphones as they are read (VirtualSurround, #453), rather
+     * than folded down; set from any thread, taken from the next sound.
+     */
+    @Volatile var placeSurround = false
+
+    /**
+     * Decoded sound: [pcm] is interleaved 16-bit little-endian stereo at [SAMPLE_RATE]; [binaural] where it was placed
+     * around the head already ([placeSurround]).
+     */
+    class Sound(val ptsMs: Long, val pcm: ByteArray, val binaural: Boolean = false)
 
     /**
      * A subtitle line shown from [startMs] to [endMs], as text (SubtitleText). A teletext page's ([UNTIL_REPLACED])
@@ -888,13 +900,26 @@ class MediaReader(
         return Planes(plane(0, w, h), u, v, YuvMatrix.of(signalled, h), full)
     }
 
+    // The resampler's output channels, and the surround placed for headphones where that is on.
+    private var swrChannels = 2
+    private var placer: VirtualSurround? = null
+
     private fun sound(ptsMs: Long): Sound? {
         if (audio == null) return null
-        // swr_convert_frame configures the resampler from the two frames: the decoder's, and 16-bit stereo at
-        // SAMPLE_RATE.
+        // 5.1 and 7.1 kept as they are for headphones, placed below; else folded down to stereo.
+        val sourceChannels = frame.ch_layout().nb_channels()
+        val place = placeSurround && (sourceChannels == 6 || sourceChannels == 8)
+        val outChannels = if (place) sourceChannels else 2
+        // swr_convert_frame configures the resampler from the two frames: the decoder's, and 16-bit at SAMPLE_RATE in
+        // outChannels; another output layout needs a resampler of its own.
+        if (outChannels != swrChannels) {
+            swr?.let { swresample.swr_free(it) }
+            swr = null
+            swrChannels = outChannels
+        }
         val resampler = swr ?: swresample.swr_alloc().also { swr = it }
         avutil.av_frame_unref(soundFrame)
-        avutil.av_channel_layout_default(soundFrame.ch_layout(), 2)
+        avutil.av_channel_layout_default(soundFrame.ch_layout(), outChannels)
         soundFrame.sample_rate(SAMPLE_RATE).format(avutil.AV_SAMPLE_FMT_S16)
         // A layout of unspecified order (PCM in WAV, some raw streams) is the default one for its channel count:
         // swr_convert_frame compares it with the one it was set up from on every frame, and an unspecified one never
@@ -905,9 +930,24 @@ class MediaReader(
         if (swresample.swr_convert_frame(resampler, soundFrame, frame) < 0) return null
         val samples = soundFrame.nb_samples()
         if (samples <= 0) return null
+        if (!place) {
+            val pcm = ByteArray(samples * 4)
+            soundFrame.data(0).get(pcm)
+            return Sound(ptsMs, pcm)
+        }
+        val all = ShortArray(samples * outChannels)
+        soundFrame.data(0).limit(all.size * 2L).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+            .get(all)
+        val surround = placer?.takeIf { it.channels == outChannels }
+            ?: VirtualSurround(SAMPLE_RATE, outChannels).also { placer = it }
+        surround.process(all, 0, samples)
         val pcm = ByteArray(samples * 4)
-        soundFrame.data(0).get(pcm)
-        return Sound(ptsMs, pcm)
+        val out = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        for (f in 0 until samples) {
+            out.put(all[f * outChannels])
+            out.put(all[f * outChannels + 1])
+        }
+        return Sound(ptsMs, pcm, binaural = true)
     }
 
     override fun close() {

@@ -355,6 +355,8 @@ class DesktopPlaybackEngine(
                         }
                     }
                     is MediaReader.Sound -> {
+                        // Surround placed around the head as it is read from here on, on headphones (#453).
+                        source.placeSurround = tuning.headphones
                         // Spoken subtitles at the film's own time, before the speed (VoiceOver, #531).
                         tuning.voiceOver?.let { over ->
                             val count = item.pcm.size / 2
@@ -370,8 +372,10 @@ class DesktopPlaybackEngine(
                             val t = tuning
                             val eqBands = t.equalizerBandsDb
                             val equalized = t.equalizerPreampDb != 0f || eqBands.any { it != 0f }
+                            // Crossfeed for stereo on headphones; surround the reader placed already is left.
+                            val crossfeed = t.headphones && !item.binaural
                             if (t.loudnessDb != 0f || t.nightMode || t.normalizeLoudness || t.voiceBoostDb != 0f ||
-                                equalized
+                                equalized || crossfeed
                             ) {
                                 val count = pcm.size / 2
                                 if (samples.size < count) samples = ShortArray(count)
@@ -379,7 +383,7 @@ class DesktopPlaybackEngine(
                                 view.get(samples, 0, count)
                                 chain.process(
                                     samples, 0, count / 2, t.loudnessDb, t.nightMode, t.normalizeLoudness, loudness,
-                                    t.voiceBoostDb, t.equalizerPreampDb, eqBands,
+                                    t.voiceBoostDb, t.equalizerPreampDb, eqBands, crossfeed,
                                 )
                                 view.clear()
                                 view.put(samples, 0, count)

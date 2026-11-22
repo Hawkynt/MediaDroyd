@@ -1,0 +1,11 @@
+MIT KEMAR head-related impulse responses (https://sound.media.mit.edu/resources/KEMAR.html)
+
+core/player/src/main/resources/com/hawkynt/mediadroyd/player/hrir-44100.f32 and hrir-48000.f32 hold the responses
+of the normal pinna for nine directions on the horizontal plane, read from libmysofa's SOFA copy
+(MIT_KEMAR_normal_pinna.sofa) by tools/hrir/hrir.c; VirtualSurround places 5.1 and 7.1 with them.
+
+Bill Gardner and Keith Martin, "HRTF Measurements of a KEMAR Dummy-Head Microphone", MIT Media Lab Perceptual
+Computing Technical Report #280, May 1994.
+
+This data is Copyright 1994 by the MIT Media Laboratory. It is provided free with no restrictions on use, provided
+the authors are cited when the data is used in any research or commercial application.

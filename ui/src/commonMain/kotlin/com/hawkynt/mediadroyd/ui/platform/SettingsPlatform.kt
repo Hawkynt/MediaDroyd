@@ -53,6 +53,9 @@ enum class PlatformSetting {
 
     /** A projector's keystone corrected with the grid on its screen. */
     KEYSTONE_GRID,
+
+    /** Whether the sound goes to headphones, where the platform cannot tell (#453). */
+    HEADPHONES_IN_USE,
 }
 
 /** An output screen whose setup Settings → Screens keeps: its [key] (StateStore.screenSetup) and its [name]. */

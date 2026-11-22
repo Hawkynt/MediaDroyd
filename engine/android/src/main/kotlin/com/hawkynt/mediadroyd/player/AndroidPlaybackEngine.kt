@@ -250,6 +250,7 @@ class AndroidPlaybackEngine(
                                         { tuning.equalizerPreampDb },
                                         { tuning.equalizerBandsDb },
                                         { tuning.voiceOver },
+                                        { tuning.headphones },
                                     ),
                                 ),
                             )
