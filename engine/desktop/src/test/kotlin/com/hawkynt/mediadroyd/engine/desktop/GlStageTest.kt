@@ -1,6 +1,7 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
 import com.hawkynt.mediadroyd.player.Cdef
+import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.Deblock
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.Dither
@@ -756,6 +757,42 @@ class GlStageTest {
         }
         assertTrue("off by $worst", worst <= 2)
         assertTrue(!expected.contentEquals(rgb(frames[1])))
+    }
+
+    @Test
+    fun `a look and a screen's calibration are applied as the cube reference reads them (#448)`() {
+        // A warm look and a calibration lifting the blacks: 5 and 3 entries a side.
+        fun cube(n: Int, f: (Float, Float, Float) -> Triple<Float, Float, Float>) = buildString {
+            append("LUT_3D_SIZE $n\n")
+            for (b in 0 until n) for (g in 0 until n) for (r in 0 until n) {
+                val (x, y, z) = f(r / (n - 1f), g / (n - 1f), b / (n - 1f))
+                append("$x $y $z\n")
+            }
+        }
+        val look = cube(5) { r, g, b -> Triple(minOf(1f, r * 1.1f + 0.02f), g * g, b * 0.8f + 0.1f * r) }
+        val screen = cube(3) { r, g, b -> Triple(0.05f + 0.9f * r, 0.04f + 0.92f * g, 0.06f + 0.9f * b) }
+        CubeLuts.load(mapOf("look.cube" to look, "screen.cube" to screen))
+        try {
+            val w = picture.width
+            val h = picture.height
+            val warp = ScreenWarp.of(ScreenSetup(lut = "screen.cube"))
+            val out = stage.process(Moment(picture), PictureAdjustment(lut = "look.cube"), w, h, warp = warp).rgba
+            val (first, second) = CubeLuts.chosen(PictureAdjustment(lut = "look.cube"), warp)
+            var worst = 0
+            for (i in 0 until w * h) {
+                val (r, g, b) = (0..2).map { (picture.rgba[i * 4 + it].toInt() and 255) / 255f }
+                val once = first.apply(r, g, b)
+                val twice = second.apply(once[0], once[1], once[2])
+                for (c in 0..2) {
+                    val expected = (twice[c] * 255f).roundToInt()
+                    worst = maxOf(worst, abs(expected - (out[i * 4 + c].toInt() and 255)))
+                }
+            }
+            // Within the dither's step.
+            assertTrue("off by $worst", worst <= 2)
+        } finally {
+            CubeLuts.load(emptyMap())
+        }
     }
 
     @Test

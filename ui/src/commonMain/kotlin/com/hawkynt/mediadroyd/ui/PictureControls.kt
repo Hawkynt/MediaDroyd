@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hawkynt.mediadroyd.player.LogoMask
+import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.MpvShaders
 import com.hawkynt.mediadroyd.player.NeuralEnlarging
 import com.hawkynt.mediadroyd.player.PictureAdjustment
@@ -51,6 +52,8 @@ fun PictureSliders(
     colourOffset: Boolean = false,
     /** Offer cutting a tape's edges away (VhsEdges); per video or folder, not a household default. */
     tapeEdges: Boolean = false,
+    /** Offer a look from a `.cube` table (CubeLuts); per video or folder, not a household default. */
+    look: Boolean = false,
     /**
      * Tries a choice of deinterlacing, upscaling or smooth motion before it is taken (see pictureCheck); a choice it
      * refuses is not taken, and why shows below its row. Takes everything by default.
@@ -390,6 +393,31 @@ fun PictureSliders(
                 "Off: no mpv shader runs."
             },
         )
+        // A look from the .cube tables in the same folder (CubeLuts, #448), after the colour correction.
+        if (look) {
+            Text("Look", fontSize = 16.sp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (listOf<String?>(null) + CubeLuts.choices).forEach { name ->
+                    FilterChip(
+                        selected = picture.lut == name,
+                        onClick = {
+                            onChange(picture.copy(lut = name))
+                            onDone()
+                        },
+                        label = { Text(name?.let(CubeLuts::label) ?: "Off", fontSize = 15.sp) },
+                    )
+                }
+            }
+            Text(
+                if (CubeLuts.choices.isEmpty()) {
+                    "Put .cube files in the shader folder picked in Settings to choose a look here."
+                } else {
+                    "A colour look from a .cube file, for this video or its folder."
+                },
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         val motion = remember { Trial() }
         Text("Smooth motion", fontSize = 16.sp)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

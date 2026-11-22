@@ -5,7 +5,8 @@ package com.hawkynt.mediadroyd.player
  * seen at ([ScreenShape], an anamorphic lens), and for a projector the picture [mirror]ed (rear projection), turned
  * upside down ([flip], ceiling mount) and its keystone corrected ([keystoneVertical], [keystoneHorizontal], see
  * [Keystone]); for an OLED screen, burn-in care ([burnInCare], see [BurnInDrift]) — off for every other screen, and
- * no screen says which it is, so it is the household's to switch on.
+ * no screen says which it is, so it is the household's to switch on. A calibration ([lut]: a `.cube` table's file name in
+ * the shader folder, see CubeLuts) maps every picture shown on it, test patterns too, as the last colour step.
  */
 data class ScreenSetup(
     val shape: ScreenShape = ScreenShape.AUTO,
@@ -14,6 +15,7 @@ data class ScreenSetup(
     val keystoneVertical: Float = 0f,
     val keystoneHorizontal: Float = 0f,
     val burnInCare: Boolean = false,
+    val lut: String? = null,
 ) {
     /** The picture is drawn as a trapezoid: the whole screen is the stage's to draw on, bars and all. */
     val keystoned: Boolean get() = keystoneVertical != 0f || keystoneHorizontal != 0f
@@ -32,6 +34,7 @@ data class ScreenSetup(
             keystoneVertical: Float = 0f,
             keystoneHorizontal: Float = 0f,
             burnInCare: Boolean = false,
+            lut: String? = null,
         ): ScreenSetup = ScreenSetup(
             shape = ScreenShape.entries.firstOrNull { it.name == shape } ?: ScreenShape.AUTO,
             mirror = mirror,
@@ -39,6 +42,7 @@ data class ScreenSetup(
             keystoneVertical = keystoneVertical.coerceIn(-Keystone.LIMIT, Keystone.LIMIT),
             keystoneHorizontal = keystoneHorizontal.coerceIn(-Keystone.LIMIT, Keystone.LIMIT),
             burnInCare = burnInCare,
+            lut = lut?.takeIf { it.isNotEmpty() },
         )
     }
 }

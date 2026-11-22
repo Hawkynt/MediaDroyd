@@ -1,17 +1,21 @@
 package com.hawkynt.mediadroyd.stage
 
+import com.hawkynt.mediadroyd.player.CubeLut
 import com.hawkynt.mediadroyd.player.Dither
 import com.hawkynt.mediadroyd.player.MotionInterpolation
 import com.hawkynt.mediadroyd.player.NeuralInterpolation
 import com.hawkynt.mediadroyd.player.PictureAdjustment
 import com.hawkynt.mediadroyd.player.ScreenWarp
 import com.hawkynt.mediadroyd.shaders.Shaders
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * The passes that finish a picture: two pictures mixed (blend.frag: smooth motion's blending, an upscaler's strength, a
  * plain copy) or built along the motion between them (motion.frag: Motion, MotionInterpolation; rife-warp-es3.frag:
  * RIFE's flow), the colour correction
- * with the projector's warp and the panorama (adjust.frag), and the dither to 8 bits (dither-es3.frag, dither.frag,
+ * with the projector's warp and the panorama (adjust.frag), a `.cube` table's look or calibration (lut-es3.frag), and
+ * the dither to 8 bits (dither-es3.frag, dither.frag,
  * libplacebo's blue noise, its table made on first use).
  */
 class Finishing(private val passes: Passes) {
@@ -98,6 +102,32 @@ class Finishing(private val passes: Passes) {
         }
     }
 
+    // The tables' textures, the most recently used last: a look and a screen's calibration at most at a time.
+    private val lutTextures = LinkedHashMap<CubeLut, Int>()
+
+    /**
+     * [from] through the `.cube` table [lut] into [into] (CubeLut, by tetrahedra): its texture made on first use and
+     * kept while it is one of the last [LUTS] tables used. GLSL ES 3.00.
+     */
+    fun lut(from: DrawTarget, into: DrawTarget, lut: CubeLut): DrawTarget {
+        val texture = lutTextures.remove(lut) ?: run {
+            val t = lut.texture()
+            val data = ByteBuffer.allocateDirect(t.rgba.size * 4).order(ByteOrder.nativeOrder())
+            data.asFloatBuffer().put(t.rgba)
+            // The least recently used table's texture refilled where there are enough.
+            val reuse = if (lutTextures.size >= LUTS) lutTextures.remove(lutTextures.keys.first()) ?: 0 else 0
+            passes.floats(reuse, t.width, t.height, 4, data)
+        }
+        lutTextures[lut] = texture
+        return passes.draw(Shaders.VIDEO_LUT_ES3, into, from.texture, listOf(texture to "uLut")) {
+            setInt("uSize", lut.size)
+            setInt("uTiles", lut.tilesAcross)
+            setInt("uThreeD", if (lut.threeD) 1 else 0)
+            set("uDomainMin", lut.domainMin[0], lut.domainMin[1], lut.domainMin[2])
+            set("uDomainMax", lut.domainMax[0], lut.domainMax[1], lut.domainMax[2])
+        }
+    }
+
     private fun columns(m: FloatArray) = FloatArray(9) { m[(it % 3) * 3 + it / 3] }
 
     /**
@@ -118,5 +148,10 @@ class Finishing(private val passes: Passes) {
     /** Builds the programs: blending, Motion and the colour correction everywhere. */
     fun build() {
         listOf(Shaders.VIDEO_BLEND, Shaders.VIDEO_MOTION, Shaders.VIDEO_ADJUST).forEach { passes.program(it) }
+    }
+
+    private companion object {
+        /** How many tables' textures are kept: a look and a calibration. */
+        const val LUTS = 2
     }
 }
