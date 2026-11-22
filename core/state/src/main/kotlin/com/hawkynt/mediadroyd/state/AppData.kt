@@ -167,6 +167,8 @@ data class PictureOverride(
     val edgesAuto: Boolean = false,
     /** A look: a `.cube` table's file name in the shader folder (CubeLuts, #448), or null. */
     val lut: String? = null,
+    /** A shaky video steadied (Deshake, #449). */
+    val steady: Boolean = false,
 )
 
 /** How one output screen is set up (see [com.hawkynt.mediadroyd.player.ScreenSetup]); names, as kept. */

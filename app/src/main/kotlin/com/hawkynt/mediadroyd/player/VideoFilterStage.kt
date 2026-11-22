@@ -465,7 +465,7 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
     private val peakBufferSizes = IntArray(2)
     private val peakPending = IntArray(2)
     private var peakSlot = 0
-    private val frames = Array(CHROMA_DENOISED + 1) { Frame(gl) }
+    private val frames = Array(STEADIED + 1) { Frame(gl) }
 
     // Temporal deinterlacing: the last three decoded frames (frames[8] to [10], taking turns), oldest
     // first, with when each was due; the picture shown is the middle one, one frame behind.
@@ -1405,7 +1405,7 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         grainNow = 0f
         EGL14.eglMakeCurrent(display, idle, idle, context)
         if (picture.deinterlace.isTemporal || picture.temporalDenoiseParams() != null || picture.dotCrawl > 0f ||
-            picture.chromaDenoise > 0f
+            picture.chromaDenoise > 0f || picture.steady
         ) {
             return temporal(picture, width, height, fresh, secondField)
         }
@@ -1459,7 +1459,8 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             } else {
                 consoleLumas.fill(null)
             }
-            if (picture.temporalDenoise > 0f) {
+            // Motion's search between each frame and the one before, for temporal denoising and for steadying.
+            if (picture.temporalDenoise > 0f || picture.steady) {
                 searchDenoise(width, height, afresh)
             } else if (denoisePrevious != null) {
                 // Off for a while: the frames read back so far are no neighbours of the next.
@@ -1559,9 +1560,26 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             }
             else -> shown
         }
-        val shrunk = reduced(deinterlaced)
+        // A shaky video steadied (Deshake, #449): the shown frame's correction once its pair's search is in, else the
+        // last one.
+        val steadied = if (picture.steady) {
+            steadyCorrections[historyAt[if (historyCount >= 2) 1 else 2]]?.let { steadyCorrection = it }
+            val w = deinterlaced.width
+            val h = deinterlaced.height
+            val into = frames[STEADIED].ensure(w, h, deepInput(picture))
+            restoration.steady(deinterlaced, into, Deshake.textureMatrix(Deshake.matrix(steadyCorrection, w, h), w, h))
+            into
+        } else {
+            deinterlaced
+        }
+        val shrunk = reduced(steadied)
         return denoised(picture, shrunk, shrunk.width, shrunk.height)
     }
+
+    // Steadying's path (Deshake, #449): its smoothing, the corrections by the frame they are for, the last one shown.
+    private val steadySmoother = Deshake.Smoother()
+    private val steadyCorrections = LinkedHashMap<Long, Deshake.Motion>()
+    private var steadyCorrection = Deshake.Motion()
 
     /**
      * Adaptive (see MotionAdaptive): the newest frame's luma, every fourth column, read back and weighed against the
@@ -2250,6 +2268,9 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             denoisePrevious = null
             denoiseVectorsFor = 0L
             denoiseLuma.drop()
+            steadySmoother.reset()
+            steadyCorrections.clear()
+            steadyCorrection = Deshake.Motion()
         }
         val pace = denoiseScale?.takeIf { it.width == width && it.height == height }
             ?: SearchScale(width, height).also { denoiseScale = it }
@@ -2282,6 +2303,7 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             }
             val wide = search.blocksWide
             val high = search.blocksHigh
+            val half = search.vectors.copyOf(wide * high * 2)
             handler.post {
                 busy {
                     // Vectors for a pair no longer beside the frame shown are past, and the search too slow.
@@ -2299,6 +2321,17 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
                     denoiseVectorsCut = cut
                     denoiseVectorsFor = pair
                     noiseLevel.add(noise)
+                    // Steadying (Deshake, #449): the correction for the later frame of the pair, in the pairs' order.
+                    if (cut) steadySmoother.reset()
+                    val found = if (cut) {
+                        null
+                    } else {
+                        Deshake.global(TemporalDenoise.Motion(wide, high, scale, half), width, height)
+                    }
+                    steadyCorrections[pair] = found?.let(steadySmoother::next) ?: Deshake.Motion()
+                    while (steadyCorrections.size > STEADY_KEPT) {
+                        steadyCorrections.remove(steadyCorrections.keys.first())
+                    }
                 }
             }
         }
@@ -3124,6 +3157,10 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
 
         /** The frame shown with a tape's colour noise smoothed (see ChromaDenoise). */
         private const val CHROMA_DENOISED = COLOURED + 1
+
+        /** The frame shown steadied (see Deshake), and how many frames' corrections are kept. */
+        private const val STEADIED = CHROMA_DENOISED + 1
+        private const val STEADY_KEPT = 8
 
         /** 10-bit limited-range BT.2020 YUV to RGB, for the decoder's HDR frames read as YUV (copy-y2y-es3.frag). */
         private val BT2020_TEN_BIT = YuvMatrix.BT2020.toRgbTenBit()
