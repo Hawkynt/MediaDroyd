@@ -519,7 +519,7 @@ fun DesktopPlayer(
                     }
                     shownSize = IntSize(outW, outH)
                     val throughStage = picture.hasFilters || pixelAspect != 1f || widening != 1f ||
-                        !warp.isIdentity || raw.hdr != null || engine.drawsSubtitles || raw.planes != null
+                        warp.drawsLastPass || raw.hdr != null || engine.drawsSubtitles || raw.planes != null
                     staging = throughStage && stage.ready && outW > 0 && outH > 0
                     // Shown by the stage itself, every picture goes through it: it is the one that draws.
                     staged = if (pictureWindow != null) {

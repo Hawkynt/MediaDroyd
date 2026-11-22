@@ -132,4 +132,15 @@ class ScreenWarpTest {
         assertEquals(Keystone.LIMIT, Keystone.nudge(Keystone.LIMIT, 1), 1e-6f)
         assertEquals(-Keystone.LIMIT, Keystone.nudge(-0.398f, -5), 1e-6f)
     }
+
+    @Test
+    fun `a screen's calibration goes with its warp, and gives the last pass something to do`() {
+        val calibrated = ScreenWarp.of(ScreenSetup(lut = "projector.cube"))
+        assertEquals("projector.cube", calibrated.calibration)
+        assertTrue(calibrated.isIdentity)
+        assertTrue(calibrated.drawsLastPass)
+        assertFalse(ScreenWarp.of(ScreenSetup.Default).drawsLastPass)
+        assertFalse(calibrated == ScreenWarp.of(ScreenSetup.Default))
+        assertEquals("projector.cube", ScreenWarp.of(ScreenSetup(mirror = true, lut = "projector.cube")).calibration)
+    }
 }

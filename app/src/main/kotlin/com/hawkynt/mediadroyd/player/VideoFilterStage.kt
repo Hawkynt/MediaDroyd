@@ -2442,6 +2442,9 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         // shader hooks it there.
         ditherNow = dithers(picture)
         val bend = warp
+        // The look's and the screen's .cube tables (CubeLuts) after the colour correction, in half floats, dithered.
+        val luts = if (ditherReady && es3 && halfTargets) CubeLuts.chosen(picture, bend) else emptyList()
+        if (luts.isNotEmpty()) ditherNow = true
         val adjusting = !picture.isColorNeutral || ditherNow || !bend.isIdentity || afterHooks
         val upscaling = picture.upscales && outWidth > width
         if (!upscaling) {
@@ -2564,6 +2567,12 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
                 WindowTarget(outWidth, outHeight)
             }
             finishing.adjust(frames[ADJUSTED], into, picture, bend)
+        }
+        for (lut in luts) {
+            val into = (if (last === frames[DITHER_INPUT]) frames[ADJUSTED] else frames[DITHER_INPUT])
+                .ensure(outWidth, outHeight, half = true)
+            finishing.lut(last, into, lut)
+            last = into
         }
         // The window's top row is where gl_FragCoord.y is the height.
         if (ditherNow) finishing.dither(last, WindowTarget(outWidth, outHeight), ditherEs3)

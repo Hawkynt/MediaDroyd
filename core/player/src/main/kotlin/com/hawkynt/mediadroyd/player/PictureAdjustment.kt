@@ -121,6 +121,11 @@ data class PictureAdjustment(
     val edgeBottom: Int = 0,
     /** The head-switching tear at the bottom found as the video plays (VhsEdges.Auto). */
     val edgesAuto: Boolean = false,
+    /**
+     * A look: a `.cube` table's file name in the shader folder (CubeLuts, #448), applied after the colour correction
+     * and before the screen's calibration; null for none. A video's or a folder's own.
+     */
+    val lut: String? = null,
 ) {
     /** The tape's edges as one. */
     val edges: VhsEdges.Edges get() = VhsEdges.Edges(edgeLeft, edgeTop, edgeRight, edgeBottom)
@@ -417,7 +422,7 @@ data class PictureAdjustment(
             deinterlace != Deinterlace.OFF ||
             upscaler != Upscaler.STANDARD || interpolation != Interpolation.OFF || stereo != Stereo.OFF ||
             colorize != Colorize.OFF || chromaShiftX != 0f || chromaShiftY != 0f || chromaShiftAuto ||
-            !edges.isNone || edgesAuto ||
+            !edges.isNone || edgesAuto || lut != null ||
             !isColorNeutral
 
     /**

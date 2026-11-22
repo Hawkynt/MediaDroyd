@@ -1,6 +1,7 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
 import com.hawkynt.mediadroyd.player.ChromaDenoise
+import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.Deblock
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.DotCrawl
@@ -416,7 +417,9 @@ class GlStage(
         // Where the picture holds more than the 8 bits it is read back in — HDR's tone-mapped floats, the colour
         // correction's or debanding's results — every pass draws into half floats and the last one dithers (Dither);
         // a plain 8-bit picture keeps its 8-bit frames, untouched.
-        deep = Dither.applies(if (m.shown.hdr != null) 16 else 8, SCREEN_BITS, a)
+        // The look's and the screen's .cube tables (CubeLuts), after the colour correction, in half floats too.
+        val luts = CubeLuts.chosen(a, warp)
+        deep = Dither.applies(if (m.shown.hdr != null) 16 else 8, SCREEN_BITS, a) || luts.isNotEmpty()
         // A change to the filters, to the part shown, or to the frames' depth makes every kept picture stale.
         val look = listOf(
             a.deinterlace, a.stereo, a.deband, a.noise, a.sharpness, a.clarity, crop, deep, a.chroma, a.colorize,
@@ -485,11 +488,15 @@ class GlStage(
         // To the shown size, colour-corrected, its geometry bent (ScreenWarp).
         val shown = target("shown", outW, outH, half = deep)
         finishing.adjust(source, shown, a, warp)
-        if (!deep) return shown
+        var last = shown
+        luts.forEachIndexed { k, lut ->
+            last = finishing.lut(last, target("lut$k", outW, outH, half = true), lut) as Target
+        }
+        if (!deep) return last
         // Dithered to 8 bits, the last pass before the picture is read back: libplacebo's blue noise
         // (glsl/video/dither.glsl).
         // The frame's top row is where v is 1 (see upload).
-        return finishing.dither(shown, target("dithered", outW, outH)) as Target
+        return finishing.dither(last, target("dithered", outW, outH)) as Target
     }
 
     /**
