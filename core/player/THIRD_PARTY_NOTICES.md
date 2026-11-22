@@ -1,5 +1,11 @@
 # Third-party notices — `:core:player`
 
+## Vendored code
+
+| Source | Licence | Used for |
+| --- | --- | --- |
+| [mpv-prescalers](https://github.com/bjin/mpv-prescalers) at `b3f0a59d`, `nnedi3-nns16-win8x4.hook` and `nnedi3-nns32-win8x4.hook` — © Bin Jin; the weights tritical's NNEDI3 | LGPL-3.0-or-later | `Prescalers`: NNEDI3 as an upscaler and a deinterlacer; verbatim in `Vendored/mpv-prescalers` with its `LICENSE.txt` |
+
 ## Converted code
 
 | Source | Licence | Used for |

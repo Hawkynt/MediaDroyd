@@ -2,13 +2,15 @@ package com.hawkynt.mediadroyd.stage
 
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.PictureAdjustment
+import com.hawkynt.mediadroyd.player.Prescalers
 import com.hawkynt.mediadroyd.shaders.Shaders
 
 /**
  * The deinterlacers' passes (PictureAdjustment.Deinterlace): the temporal ones on three pictures (glsl/video/
  * temporal.frag: YADIF, BWDIF, Greedy HM, Greedy 2-Frame, TomsMoComp, Old console, Adaptive's weave), MC Smooth's
- * averaging along the motion, and the spatial ones on one (deinterlace.frag: Auto, Blend, Bob). Which pictures they
- * read is the platform stage's; [topFirst] the field order, which decides the rows a field is.
+ * averaging along the motion, NNEDI3 on the field kept, and the spatial ones on one (deinterlace.frag: Auto, Blend,
+ * Bob). Which pictures they read is the platform stage's; [topFirst] the field order, which decides the rows a field
+ * is.
  */
 class Deinterlacing(private val passes: Passes) {
 
@@ -89,9 +91,42 @@ class Deinterlacing(private val passes: Passes) {
         set("uParity", Deinterlacer.rebuiltParity(false, topFirst).toFloat())
     }
 
+    /**
+     * [cur] into [into] with one field rebuilt by NNEDI3 (Prescalers.rows, #443): the field kept — the rows of the
+     * parity Deinterlacer.rebuiltParity names for [second] and [topFirst] — taken out as a picture of half the height
+     * into [field], its height doubled by the network through [hooks] (every other line kept, the ones between its
+     * answers), and for a field of odd rows moved down a row into [into] so its lines land where they were. An odd
+     * height loses its last row to the field and is stretched back by that row.
+     */
+    fun nnedi3(
+        cur: DrawTarget,
+        field: DrawTarget,
+        into: DrawTarget,
+        hooks: MpvHooks,
+        finishing: Finishing,
+        second: Boolean,
+        topFirst: Boolean = true,
+    ): DrawTarget {
+        val parity = Deinterlacer.rebuiltParity(second, topFirst)
+        passes.draw(Shaders.VIDEO_FIELD, field, cur.texture, nearest = true) {
+            set("uSize", cur.width.toFloat(), cur.height.toFloat())
+            set("uParity", parity.toFloat())
+        }
+        val sizes = MpvHooks.Sizes(cur.width, cur.height, cur.width, cur.height)
+        val doubled = hooks.run(Prescalers.rows, field, listOf("LUMA"), sizes)
+        // The network keeps the field's rows at the even rows from the top: a field of odd rows moves down by one,
+        // reading a row higher up (towards v = 1, where the top row is).
+        val shift = if (parity == 1) 1f / into.height else 0f
+        val matrix = floatArrayOf(1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, shift, 0f, 1f)
+        return finishing.copy(doubled, into, matrix)
+    }
+
     /** Builds every program the deinterlacers use. */
     fun build() {
-        listOf(Shaders.VIDEO_TEMPORAL, Shaders.VIDEO_MC_SMOOTH, Shaders.VIDEO_MC_SHARPEN, Shaders.VIDEO_DEINTERLACE)
+        listOf(
+            Shaders.VIDEO_TEMPORAL, Shaders.VIDEO_MC_SMOOTH, Shaders.VIDEO_MC_SHARPEN, Shaders.VIDEO_DEINTERLACE,
+            Shaders.VIDEO_FIELD,
+        )
             .forEach { passes.program(it) }
     }
 }

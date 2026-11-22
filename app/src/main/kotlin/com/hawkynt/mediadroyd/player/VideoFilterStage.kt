@@ -1532,6 +1532,15 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             into
         } ?: quiet
         val deinterlaced = when {
+            // NNEDI3 (#443): the field kept, its other one the network's — where the chip runs mpv's shaders (half
+            // floats, GLSL ES 3); YADIF where it does not.
+            picture.deinterlace == PictureAdjustment.Deinterlace.NNEDI3 && halfTargets && es3 -> {
+                deinterlacing.nnedi3(
+                    shown, mpvFrame("nnedi3Field", width, height / 2), woven, mpvHooks, finishing, secondField,
+                    fieldOrder.topFieldFirst,
+                )
+                woven
+            }
             picture.deinterlace.isTemporal -> {
                 val adaptiveWeave =
                     picture.deinterlace == PictureAdjustment.Deinterlace.ADAPTIVE && motionAdaptive.weave
@@ -2460,8 +2469,10 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         grainToShow = filters.grain
         val outWidth = query(EGL14.EGL_WIDTH)
         val outHeight = query(EGL14.EGL_HEIGHT)
-        val user = picture.shader?.let { MpvShaders.library[it] }
-            ?.takeIf { MpvShaders.runnable(it) && halfTargets && es3 }
+        // NNEDI3 as the upscaler (#443) runs as the shader does, where no shader of the household's is chosen.
+        val user = (picture.shader?.let { MpvShaders.library[it] } ?: Prescalers.nnedi3.takeIf {
+            picture.upscaler == PictureAdjustment.Upscaler.NNEDI3 && picture.plainShare < 1f
+        })?.takeIf { MpvShaders.runnable(it) && halfTargets && es3 }
         if (user != null) {
             // Its LUMA hooks ran on the decoder's Y plane as the frame came in, where they could (lumaOnPlanes).
             val stages = if (lumaOnPlanes(user)) MpvShader.BEFORE_SCALING - "LUMA" else MpvShader.BEFORE_SCALING
@@ -2479,7 +2490,8 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         val luts = if (ditherReady && es3 && halfTargets) CubeLuts.chosen(picture, bend) else emptyList()
         if (luts.isNotEmpty()) ditherNow = true
         val adjusting = !picture.isColorNeutral || ditherNow || !bend.isIdentity || afterHooks
-        val upscaling = picture.upscales && outWidth > width
+        // NNEDI3 doubled the brightness among the hooks: the screen's own scaling does the rest.
+        val upscaling = picture.upscales && picture.upscaler != PictureAdjustment.Upscaler.NNEDI3 && outWidth > width
         if (!upscaling) {
             // 4: sharpness and clarity, drawn onto the screen at its size by its own bilinear scaling.
             restoration.sharpen(source, toScreen(outWidth, outHeight, adjusting), picture.sharpness, picture.clarity)
