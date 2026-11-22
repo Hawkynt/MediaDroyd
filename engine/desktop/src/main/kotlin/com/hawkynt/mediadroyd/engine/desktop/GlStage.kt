@@ -1,5 +1,6 @@
 package com.hawkynt.mediadroyd.engine.desktop
 
+import com.hawkynt.mediadroyd.player.ChromaDenoise
 import com.hawkynt.mediadroyd.player.Deblock
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.DotCrawl
@@ -420,7 +421,7 @@ class GlStage(
         val look = listOf(
             a.deinterlace, a.stereo, a.deband, a.noise, a.sharpness, a.clarity, crop, deep, a.chroma, a.colorize,
             a.logo, a.deblock, a.dering, a.chromaShiftX, a.chromaShiftY,
-            a.temporalDenoise, a.dotCrawl, a.colourSystem, planeHooked, lumaPlanes,
+            a.temporalDenoise, a.dotCrawl, a.chromaDenoise, a.colourSystem, planeHooked, lumaPlanes,
         )
         // Another chroma upscaler, or another shader hooking the planes, makes every picture uploaded from its planes
         // stale.
@@ -591,7 +592,7 @@ class GlStage(
         } ?: raw
         // The pictures either side moved onto it along the motion between them once the search has it — until then
         // read as they are, and filtered again.
-        val shown = if (a.temporalDenoise > 0f) {
+        val quiet = if (a.temporalDenoise > 0f) {
             val region = region(picture, crop, a.stereo)
             fun side(other: MediaReader.Picture?, earlier: Boolean): Pair<Target, MotionSearch.Vectors?>? {
                 other ?: return null
@@ -613,6 +614,12 @@ class GlStage(
         } else {
             combed
         }
+        // 0b. A tape's colour noise (ChromaDenoise, #446), against the pictures either side as decoded.
+        val shown = ChromaDenoise.params(a.chromaDenoise)?.let { params ->
+            fun near(p: MediaReader.Picture?) = p?.let(::neighbour)?.takeIf { it.width == w && it.height == h } ?: raw
+            restoration.chromaDenoise(quiet, near(before), near(after), target("chromaDenoised", w, h, half = deep),
+                params) as Target
+        } ?: quiet
         source = shown
         // 1. Deinterlacing.
         if (a.deinterlace.isTemporal) {
@@ -823,7 +830,7 @@ class GlStage(
      */
     private fun atDecodedSize(a: PictureAdjustment): Boolean =
         a.deinterlace != PictureAdjustment.Deinterlace.OFF || a.deblock > 0f || a.dering > 0f ||
-            DotCrawl.threshold(a.dotCrawl) != null || a.temporalDenoise > 0f ||
+            DotCrawl.threshold(a.dotCrawl) != null || a.temporalDenoise > 0f || a.chromaDenoise > 0f ||
             a.interpolation != PictureAdjustment.Interpolation.OFF || a.chromaShiftX != 0f || a.chromaShiftY != 0f
 
     /** The least recently used of [slots], now holding [picture]. */

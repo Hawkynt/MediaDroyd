@@ -393,6 +393,7 @@ fun SettingsScreen(
                     it.shader = defaultPicture.shader
                     it.temporalDenoise = defaultPicture.temporalDenoise
                     it.dotCrawl = defaultPicture.dotCrawl
+                    it.chromaDenoise = defaultPicture.chromaDenoise
                 }
             },
             check = platform.pictureCheck,

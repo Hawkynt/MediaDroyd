@@ -4,6 +4,7 @@ import com.hawkynt.mediadroyd.player.Cdef
 import com.hawkynt.mediadroyd.player.Deblock
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.Dither
+import com.hawkynt.mediadroyd.player.ChromaDenoise
 import com.hawkynt.mediadroyd.player.ChromaUpscaling
 import com.hawkynt.mediadroyd.player.DotCrawl
 import com.hawkynt.mediadroyd.player.LogoMask
@@ -723,6 +724,37 @@ class GlStageTest {
             worst = maxOf(worst, abs((out.rgba[i * 4 + c].toInt() and 255) - (expected[i * 3 + c].toInt() and 255)))
         }
         assertTrue("off by $worst", worst <= 1)
+        assertTrue(!expected.contentEquals(rgb(frames[1])))
+    }
+
+    @Test
+    fun `a tape's colour noise is smoothed as the reference smooths it, the brightness kept (#446)`() {
+        val w = 48
+        val h = 32
+        // A still picture whose colour carries blotches that change from frame to frame, a bar that moves over it.
+        fun captured(k: Int) = MediaReader.Picture(k * 40L, w, h, ByteArray(w * h * 4) { i ->
+            val x = i / 4 % w
+            val y = i / 4 / w
+            val bar = x in 10 + 4 * k until 16 + 4 * k
+            val noise = ((x / 2 * 31 + y / 2 * 17 + k * 13) % 9 - 4) * 3
+            when (i % 4) {
+                0 -> if (bar) 200 else 160 + noise
+                1 -> if (bar) 200 else 120
+                2 -> if (bar) 200 else 100 - noise
+                else -> 255
+            }.toByte()
+        })
+        val frames = (0..2).map(::captured)
+        val look = PictureAdjustment(chromaDenoise = 0.6f)
+        val out = stage.process(Moment(frames[1], frames[0], frames[2]), look, w, h)
+        fun rgb(p: MediaReader.Picture) = ByteArray(w * h * 3) { p.rgba[it / 3 * 4 + it % 3] }
+        val params = requireNotNull(ChromaDenoise.params(look.chromaDenoise))
+        val expected = ChromaDenoise.apply(rgb(frames[0]), rgb(frames[1]), rgb(frames[2]), w, h, params)
+        var worst = 0
+        for (i in 0 until w * h) for (c in 0..2) {
+            worst = maxOf(worst, abs((out.rgba[i * 4 + c].toInt() and 255) - (expected[i * 3 + c].toInt() and 255)))
+        }
+        assertTrue("off by $worst", worst <= 2)
         assertTrue(!expected.contentEquals(rgb(frames[1])))
     }
 

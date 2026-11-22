@@ -465,7 +465,7 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
     private val peakBufferSizes = IntArray(2)
     private val peakPending = IntArray(2)
     private var peakSlot = 0
-    private val frames = Array(COLOURED + 1) { Frame(gl) }
+    private val frames = Array(CHROMA_DENOISED + 1) { Frame(gl) }
 
     // Temporal deinterlacing: the last three decoded frames (frames[8] to [10], taking turns), oldest
     // first, with when each was due; the picture shown is the middle one, one frame behind.
@@ -1404,7 +1404,9 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
     ): Frame {
         grainNow = 0f
         EGL14.eglMakeCurrent(display, idle, idle, context)
-        if (picture.deinterlace.isTemporal || picture.temporalDenoiseParams() != null || picture.dotCrawl > 0f) {
+        if (picture.deinterlace.isTemporal || picture.temporalDenoiseParams() != null || picture.dotCrawl > 0f ||
+            picture.chromaDenoise > 0f
+        ) {
             return temporal(picture, width, height, fresh, secondField)
         }
         historyCount = 0
@@ -1497,7 +1499,7 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
         // Temporal denoising on the frame shown, against its neighbours as decoded, before any deinterlacing: each
         // moved onto it along the newest vectors its search has — the frame before along them, the one after against
         // them, as if the motion went on — or read as it is while there are none; a side behind a cut is not taken.
-        val shown = picture.temporalDenoiseParams(noiseLevel.sigma)?.let { params ->
+        val quiet = picture.temporalDenoiseParams(noiseLevel.sigma)?.let { params ->
             val into = frames[TEMPORAL_DENOISED].ensure(width, height, deepInput(picture))
             val along = denoiseVectorsFor != 0L && denoiseVectorsFor in historyAt &&
                 denoiseFrame[0] == width && denoiseFrame[1] == height
@@ -1522,6 +1524,12 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
             restoration.temporalDenoise(combed, side(prev, prevMode), side(next, nextMode), obmcTexture, params, into)
             into
         } ?: combed
+        // A tape's colour noise (ChromaDenoise, #446), against the neighbours as decoded.
+        val shown = ChromaDenoise.params(picture.chromaDenoise)?.let { params ->
+            val into = frames[CHROMA_DENOISED].ensure(width, height, deepInput(picture))
+            restoration.chromaDenoise(quiet, prev, next, into, params)
+            into
+        } ?: quiet
         val deinterlaced = when {
             picture.deinterlace.isTemporal -> {
                 val adaptiveWeave =
@@ -3104,6 +3112,9 @@ class VideoFilterStage : androidx.media3.exoplayer.video.VideoDecoderOutputBuffe
 
         /** The picture in colour (see coloured). */
         private const val COLOURED = EARLIEST + OLDER
+
+        /** The frame shown with a tape's colour noise smoothed (see ChromaDenoise). */
+        private const val CHROMA_DENOISED = COLOURED + 1
 
         /** 10-bit limited-range BT.2020 YUV to RGB, for the decoder's HDR frames read as YUV (copy-y2y-es3.frag). */
         private val BT2020_TEN_BIT = YuvMatrix.BT2020.toRgbTenBit()

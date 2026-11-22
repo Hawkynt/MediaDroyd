@@ -145,6 +145,8 @@ data class PictureOverride(
     val temporalDenoise: Float = 0f,
     /** Dot crawl and rainbows combed out, 0 (off) .. 1. */
     val dotCrawl: Float = 0f,
+    /** A tape's colour noise smoothed, 0 (off) .. 1. */
+    val chromaDenoise: Float = 0f,
     /** PictureAdjustment.Colorize name: colour for a black-and-white video. */
     val colorize: String = "OFF",
     /** PictureAdjustment.ColourSystem name: a composite capture's colour system, kept per video or folder only. */
@@ -232,6 +234,7 @@ data class Settings(
     var shaderFolder: String = "",            // the folder of mpv user shaders, a document tree URI; "" none
     var temporalDenoise: Float = 0f,          // 0 (off) .. 1, grain averaged with the frames either side
     var dotCrawl: Float = 0f,                 // 0 (off) .. 1, a composite capture's dots and rainbows combed out
+    var chromaDenoise: Float = 0f,            // 0 (off) .. 1, a tape's colour noise smoothed
     var colorize: String = "OFF",             // PictureAdjustment.Colorize name: the household's colour (desktop)
     var subtitlesOn: Boolean = true,
     var subtitleLanguage: String = "",
