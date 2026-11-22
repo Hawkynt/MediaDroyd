@@ -56,6 +56,7 @@ class SourceFiles(
             SourceKind.SFTP -> SftpFs(source, secrets)
             SourceKind.WEBDAV -> WebDavFs(source, secrets)
             SourceKind.NFS -> NfsFs(source)
+            SourceKind.UPNP -> UpnpFs(source)
             else -> null
         }
     }

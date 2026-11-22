@@ -14,7 +14,8 @@
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
-    <!-- Network sources: SMB, FTP, SFTP and WebDAV shares, and finding SMB servers on the local network. -->
+    <!-- Network sources: SMB, FTP, SFTP and WebDAV shares and DLNA media servers, and finding SMB and DLNA
+         servers on the local network. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -27,8 +28,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MediaDroyd"
         android:usesCleartextTraffic="true">
-        <!-- Cleartext: a WebDAV share on a home NAS is often plain http:// on the local network; the
-             app talks to no server of its own, only to the sources the household adds. -->
+        <!-- Cleartext: a WebDAV share on a home NAS is often plain http:// on the local network, and a DLNA
+             media server always is; the app talks to no server of its own, only to the sources the household
+             adds. -->
         <!-- The app handles rotation and display changes itself: a recreated activity would
              tear down the playing video, its position and any open panel. -->
         <activity

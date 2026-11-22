@@ -26,6 +26,9 @@ enum class SourceKind(val scheme: String?) {
 
     /** A folder from an Android document provider — Drive, OneDrive, Dropbox; [Source.url] is its tree URI. */
     DOCUMENTS(null),
+
+    /** A UPnP / DLNA media server; [Source.url] is the address of its description, as SSDP found it (#454). */
+    UPNP(null),
 }
 
 /**
@@ -56,7 +59,7 @@ data class Source(
     val rootUri: String
         get() = when (kind) {
             SourceKind.LOCAL -> path.trimEnd('/').ifEmpty { "/" }
-            SourceKind.WEBDAV, SourceKind.DOCUMENTS -> url.trimEnd('/')
+            SourceKind.WEBDAV, SourceKind.DOCUMENTS, SourceKind.UPNP -> url.trimEnd('/')
             else -> buildString {
                 append(kind.scheme).append("://").append(host)
                 if (port > 0) append(':').append(port)
