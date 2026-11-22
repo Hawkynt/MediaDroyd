@@ -157,12 +157,14 @@ class TestPatternTest {
             temporalDenoise = 0.6f,
             dotCrawl = 0.8f,
             chromaDenoise = 0.5f,
+            steady = true,
             colorize = PictureAdjustment.Colorize.entries.last(),
         )
         val shown = TestPattern.pictureFor(household)
         assertEquals(0f, shown.temporalDenoise)
         assertEquals(0f, shown.dotCrawl)
         assertEquals(0f, shown.chromaDenoise)
+        assertEquals(false, shown.steady)
         assertEquals(PictureAdjustment.Colorize.OFF, shown.colorize)
     }
 }

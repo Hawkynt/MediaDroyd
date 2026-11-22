@@ -54,6 +54,8 @@ fun PictureSliders(
     tapeEdges: Boolean = false,
     /** Offer a look from a `.cube` table (CubeLuts); per video or folder, not a household default. */
     look: Boolean = false,
+    /** Offer steadying a shaky video (Deshake); per video or folder, not a household default. */
+    steady: Boolean = false,
     /**
      * Tries a choice of deinterlacing, upscaling or smooth motion before it is taken (see pictureCheck); a choice it
      * refuses is not taken, and why shows below its row. Takes everything by default.
@@ -393,6 +395,27 @@ fun PictureSliders(
                 "Off: no mpv shader runs."
             },
         )
+        // A shaky home video steadied (Deshake, #449).
+        if (steady) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text("Steady a shaky video", fontSize = 16.sp)
+                    Text(
+                        "For handheld camcorder and phone videos: the shaking is taken out, the picture a little " +
+                            "closer.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = picture.steady,
+                    onCheckedChange = {
+                        onChange(picture.copy(steady = it))
+                        onDone()
+                    },
+                )
+            }
+        }
         // A look from the .cube tables in the same folder (CubeLuts, #448), after the colour correction.
         if (look) {
             Text("Look", fontSize = 16.sp)

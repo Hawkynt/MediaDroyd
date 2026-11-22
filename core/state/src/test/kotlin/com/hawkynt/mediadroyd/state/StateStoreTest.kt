@@ -135,6 +135,8 @@ class StateStoreTest {
         // A look is the video's own: kept for it, never the household's.
         store.savePicture("/v/e.mkv", store.defaultPicture().copy(lut = "warm.cube"))
         assertEquals("warm.cube", StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/e.mkv").lut)
+        store.savePicture("/v/f.mkv", store.defaultPicture().copy(steady = true))
+        assertEquals(true, StateStore(Memory(StateStore.encode(store.data))).pictureFor("/v/f.mkv").steady)
         store.saveDefaultPicture(store.defaultPicture().copy(lut = "warm.cube"))
         assertEquals(null, store.defaultPicture().lut)
         assertEquals(0.2f, store.pictureFor("/v/b.mkv").brightness)

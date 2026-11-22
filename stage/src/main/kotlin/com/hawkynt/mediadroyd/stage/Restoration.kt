@@ -237,11 +237,18 @@ class Restoration(private val gl: Gles, private val passes: Passes) {
         set("uClarity", clarity)
     }
 
+    /** [from] steadied into [into] (Deshake): read through [matrix], Deshake.textureMatrix's, mirrored at the edges. */
+    fun steady(from: DrawTarget, into: DrawTarget, matrix: FloatArray): DrawTarget =
+        passes.draw(Shaders.VIDEO_STEADY, into, from.texture) {
+            matrix3("uSteady", matrix)
+        }
+
     /** Builds the programs of the passes a chip without GLSL ES 3.00 can run, and with [es3] the others. */
     fun build(es3: Boolean) {
         val all = listOf(
             Shaders.VIDEO_DOT_CRAWL, Shaders.VIDEO_DOT_CRAWL_PAL, Shaders.VIDEO_TEMPORAL_DENOISE,
             Shaders.VIDEO_LOGO_MASK, Shaders.VIDEO_DENOISE, Shaders.VIDEO_SHARPEN, Shaders.VIDEO_CHROMA_DENOISE,
+            Shaders.VIDEO_STEADY,
         )
         all.forEach { passes.program(it) }
         passes.program(if (es3) Shaders.VIDEO_DEBAND_ES3 else Shaders.VIDEO_DEBAND)
