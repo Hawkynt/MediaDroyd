@@ -796,6 +796,49 @@ class GlStageTest {
     }
 
     @Test
+    fun `a jolt of the camera is undone, the picture moved back towards where it was (#449)`() {
+        // Large enough for Motion's search at the scale it starts at.
+        val w = 640
+        val h = 360
+        // A smooth picture, as filmed ones are (a busy one jolted this far differs as much as a cut), then the same
+        // jolted 8 pixels to the right — on the grid of the vectors the search finds at any scale it settles at (steps
+        // of twice its scale): the camera moved left.
+        fun shot(shift: Int, k: Int) = MediaReader.Picture(k * 40L, w, h, ByteArray(w * h * 4) { i ->
+            val x = (i / 4 % w - shift).toDouble()
+            val y = (i / 4 / w).toDouble()
+            val v = 128 + 20 * kotlin.math.sin(x / 15 + y / 40) + 15 * kotlin.math.cos(y / 12 - x / 35)
+            if (i % 4 == 3) -1 else v.toInt().toByte()
+        })
+        val first = shot(0, 0)
+        val jolted = shot(8, 1)
+        val look = PictureAdjustment(steady = true)
+        stage.process(Moment(first, next = jolted), look, w, h)
+        // The search runs on its own thread: until it has the pair the picture is only zoomed, then corrected.
+        val waiting = stage.process(Moment(jolted, previous = first), look, w, h).rgba
+        var out = waiting
+        val end = System.currentTimeMillis() + 3000
+        while (out.contentEquals(waiting) && System.currentTimeMillis() < end) {
+            Thread.sleep(20)
+            out = stage.process(Moment(jolted, previous = first), look, w, h).rgba
+        }
+        val plain = stage.process(Moment(jolted, previous = first), PictureAdjustment.Neutral, w, h).rgba
+        assertEquals(8, shift(plain, first.rgba, w, h))
+        // Steadied, the jolt is undone but for what the smoothing leaves to the camera's own path (a tenth here).
+        val left = shift(out, first.rgba, w, h)
+        assertTrue("moved $left", abs(left) <= 2)
+    }
+
+    // How far [a] lies to the right of [b] around the middle, where the zoom hardly moves a pixel: the shift that
+    // matches them best.
+    private fun shift(a: ByteArray, b: ByteArray, w: Int, h: Int): Int = (-10..10).minBy { s ->
+        var sum = 0L
+        for (y in h / 2 - 8 until h / 2 + 8) for (x in w / 2 - 20 until w / 2 + 20) {
+            sum += abs((a[(y * w + x) * 4].toInt() and 255) - (b[(y * w + x - s) * 4].toInt() and 255))
+        }
+        sum
+    }
+
+    @Test
     fun `a PAL capture's dot crawl is combed out as the reference combs it`() {
         val w = 48
         val h = 32

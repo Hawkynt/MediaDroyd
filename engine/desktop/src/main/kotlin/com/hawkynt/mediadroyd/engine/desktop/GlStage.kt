@@ -3,6 +3,7 @@ package com.hawkynt.mediadroyd.engine.desktop
 import com.hawkynt.mediadroyd.player.ChromaDenoise
 import com.hawkynt.mediadroyd.player.CubeLuts
 import com.hawkynt.mediadroyd.player.Deblock
+import com.hawkynt.mediadroyd.player.Deshake
 import com.hawkynt.mediadroyd.player.Deinterlacer
 import com.hawkynt.mediadroyd.player.DotCrawl
 import com.hawkynt.mediadroyd.player.Dither
@@ -140,6 +141,13 @@ class GlStage(
     // Temporal denoising's own search between each picture and its neighbours (as decoded, the whole region), the
     // vectors' textures by the search's answer, and the noise level the searches read.
     internal val denoiseMotion = MotionSearch()
+
+    // Steadying (Deshake, #449): Motion's search between each picture and the one before, the path smoothed, the
+    // correction of the picture last corrected.
+    private val steadyMotion = MotionSearch()
+    private val steadySmoother = Deshake.Smoother()
+    private var steadyLast: MediaReader.Picture? = null
+    private var steadyCorrection = Deshake.Motion()
     private val denoiseVectors = LinkedHashMap<MotionSearch.Vectors, Int>()
     internal val noiseLevel = TemporalDenoise.NoiseLevel()
     private var noiseCounted: MotionSearch.Vectors? = null
@@ -459,6 +467,8 @@ class GlStage(
             val later = filtered(next, m.shown, m.after, a, false, earlier = m.previous)
             source = mixed(m, next, source, later, a)
         }
+        // A shaky video steadied (Deshake, #449), at the picture's own size, before it is enlarged.
+        if (a.steady) source = steadied(m, source, crop, a.stereo)
         // The mpv user shader's hooks before the picture is enlarged (its CHROMA ones, and LUMA ones where the picture
         // came with its planes, ran as it was uploaded).
         if (user != null) {
@@ -497,6 +507,43 @@ class GlStage(
         // (glsl/video/dither.glsl).
         // The frame's top row is where v is 1 (see upload).
         return finishing.dither(last, target("dithered", outW, outH)) as Target
+    }
+
+    /**
+     * [source], the moment's picture, steadied (Deshake): the camera's motion from the picture before, once Motion's
+     * search has it — until then the correction before stays — smoothed into a correction; a seek, a start or a cut
+     * starts the path afresh. The search for the next pair starts ahead.
+     */
+    private fun steadied(m: Moment, source: Target, crop: PictureCrop?, stereo: PictureAdjustment.Stereo): Target {
+        val shown = m.shown
+        val before = m.previous?.takeIf { it.width == shown.width && it.height == shown.height }
+        val part = region(shown, crop, stereo)
+        m.next?.takeIf { it.width == shown.width && it.height == shown.height }?.let {
+            steadyMotion.request(shown, it, region(it, crop, stereo))
+        }
+        if (shown !== steadyLast) {
+            if (before == null || before !== steadyLast) {
+                steadySmoother.reset()
+                steadyCorrection = Deshake.Motion()
+                steadyLast = shown
+            } else {
+                steadyMotion.request(before, shown, part)
+                val vectors = steadyMotion.vectors(before, shown)
+                if (vectors != null || steadyMotion.ended(before, shown)) {
+                    steadyCorrection = when {
+                        vectors == null -> steadyCorrection
+                        vectors.cut -> Deshake.Motion().also { steadySmoother.reset() }
+                        else -> Deshake.global(vectors.motion(), part.width, part.height)?.let(steadySmoother::next)
+                            ?: steadyCorrection
+                    }
+                    steadyLast = shown
+                }
+            }
+        }
+        val w = source.width
+        val h = source.height
+        val matrix = Deshake.textureMatrix(Deshake.matrix(steadyCorrection, w, h), w, h)
+        return restoration.steady(source, target("steadied", w, h, half = deep), matrix) as Target
     }
 
     /**
@@ -1312,6 +1359,7 @@ class GlStage(
         thread.shutdown()
         motion.close()
         denoiseMotion.close()
+        steadyMotion.close()
     }
 
     private companion object {
