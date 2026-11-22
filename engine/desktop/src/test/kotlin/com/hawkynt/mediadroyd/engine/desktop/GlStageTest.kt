@@ -800,8 +800,9 @@ class GlStageTest {
         // Large enough for Motion's search at the scale it starts at.
         val w = 640
         val h = 360
-        // A smooth picture, as filmed ones are (a busy one jolted this far differs as much as a cut), then the same jolted 6
-        // pixels to the right: the camera moved left.
+        // A smooth picture, as filmed ones are (a busy one jolted this far differs as much as a cut), then the same
+        // jolted 8 pixels to the right — on the grid of the vectors the search finds at any scale it settles at (steps
+        // of twice its scale): the camera moved left.
         fun shot(shift: Int, k: Int) = MediaReader.Picture(k * 40L, w, h, ByteArray(w * h * 4) { i ->
             val x = (i / 4 % w - shift).toDouble()
             val y = (i / 4 / w).toDouble()
@@ -809,7 +810,7 @@ class GlStageTest {
             if (i % 4 == 3) -1 else v.toInt().toByte()
         })
         val first = shot(0, 0)
-        val jolted = shot(6, 1)
+        val jolted = shot(8, 1)
         val look = PictureAdjustment(steady = true)
         stage.process(Moment(first, next = jolted), look, w, h)
         // The search runs on its own thread: until it has the pair the picture is only zoomed, then corrected.
@@ -821,7 +822,7 @@ class GlStageTest {
             out = stage.process(Moment(jolted, previous = first), look, w, h).rgba
         }
         val plain = stage.process(Moment(jolted, previous = first), PictureAdjustment.Neutral, w, h).rgba
-        assertEquals(6, shift(plain, first.rgba, w, h))
+        assertEquals(8, shift(plain, first.rgba, w, h))
         // Steadied, the jolt is undone but for what the smoothing leaves to the camera's own path (a tenth here).
         val left = shift(out, first.rgba, w, h)
         assertTrue("moved $left", abs(left) <= 2)
