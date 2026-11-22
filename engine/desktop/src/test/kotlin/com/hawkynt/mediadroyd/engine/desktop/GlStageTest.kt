@@ -796,6 +796,42 @@ class GlStageTest {
     }
 
     @Test
+    fun `NNEDI3 enlarges the picture with its rows and columns its network's, unlike plain scaling (#443)`() {
+        val w = picture.width * 2
+        val h = picture.height * 2
+        val nnedi3 = stage.process(picture, PictureAdjustment(upscaler = PictureAdjustment.Upscaler.NNEDI3), w, h)
+        val plain = stage.process(picture, PictureAdjustment.Neutral, w, h)
+        assertEquals(w * h * 4, nnedi3.rgba.size)
+        assertTrue(nnedi3.rgba.indices.any { abs(nnedi3.rgba[it] - plain.rgba[it]) > 8 })
+    }
+
+    @Test
+    fun `NNEDI3 rebuilds the other field as FFmpeg's nnedi does with the same network (#443)`() {
+        val w = 96
+        val h = 64
+        fun grey(name: String) = requireNotNull(javaClass.getResourceAsStream("/nnedi3/$name")).readBytes()
+        val input = grey("in.gray")
+        val picture = MediaReader.Picture(0, w, h, ByteArray(w * h * 4) { i -> if (i % 4 == 3) -1 else input[i / 4] })
+        val later = MediaReader.Picture(40, w, h, picture.rgba)
+        val look = PictureAdjustment(deinterlace = PictureAdjustment.Deinterlace.NNEDI3, fieldRate = true)
+        for ((phase, expected) in listOf(0f to "top.gray", 0.75f to "bottom.gray")) {
+            val out = stage.process(Moment(picture, picture, later, phase = phase), look, w, h).rgba
+            val oracle = grey(expected)
+            var worst = 0
+            var total = 0L
+            for (i in 0 until w * h) {
+                val d = abs((out[i * 4 + 1].toInt() and 255) - (oracle[i].toInt() and 255))
+                // Within four columns of the sides and two rows of the top and bottom the network's window reaches
+                // past the picture: FFmpeg mirrors it there, the graphics chip repeats the edge.
+                if (i % w in 4 until w - 4 && i / w in 2 until h - 2) worst = maxOf(worst, d)
+                total += d
+            }
+            assertTrue("$expected: mean ${total.toDouble() / (w * h)}, worst $worst", worst <= 3)
+            assertTrue("$expected: mean ${total.toDouble() / (w * h)}", total.toDouble() / (w * h) < 0.5)
+        }
+    }
+
+    @Test
     fun `a PAL capture's dot crawl is combed out as the reference combs it`() {
         val w = 48
         val h = 32

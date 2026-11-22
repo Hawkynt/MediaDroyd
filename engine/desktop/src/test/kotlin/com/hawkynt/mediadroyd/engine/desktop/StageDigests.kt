@@ -54,6 +54,7 @@ fun main(args: Array<String>) {
         add("deblock strong" to PictureAdjustment(deblock = 1f))
         add("dering" to PictureAdjustment(dering = 0.7f))
         add("dot crawl" to PictureAdjustment(dotCrawl = 0.5f))
+        add("nnedi3 deinterlace" to PictureAdjustment(deinterlace = PictureAdjustment.Deinterlace.NNEDI3))
         add("colour noise" to PictureAdjustment(chromaDenoise = 0.5f))
         for (mode in LogoMask.Mode.entries) {
             add("logo $mode" to PictureAdjustment(logo = LogoMask(LogoMask.Corner.TOP_RIGHT, 0.25f, mode)))

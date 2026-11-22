@@ -16,6 +16,7 @@ import com.hawkynt.mediadroyd.player.NeuralPace
 import com.hawkynt.mediadroyd.player.OldGame
 import com.hawkynt.mediadroyd.player.PeakDetect
 import com.hawkynt.mediadroyd.player.PictureAdjustment
+import com.hawkynt.mediadroyd.player.Prescalers
 import com.hawkynt.mediadroyd.player.SceneCuts
 import com.hawkynt.mediadroyd.player.PictureCrop
 import com.hawkynt.mediadroyd.player.ScreenWarp
@@ -405,7 +406,10 @@ class GlStage(
         hookOutW = outW
         hookOutH = outH
         // The mpv user shader chosen, where the stage can run it (MpvShader).
-        val user = a.shader?.let { MpvShaders.library[it] }?.takeIf { MpvShaders.runnable(it) }
+        // NNEDI3 as the upscaler (#443) runs as the shader does, where no shader of the household's is chosen.
+        val user = (a.shader?.let { MpvShaders.library[it] } ?: Prescalers.nnedi3.takeIf {
+            a.upscaler == PictureAdjustment.Upscaler.NNEDI3 && a.plainShare < 1f
+        })?.takeIf { MpvShaders.runnable(it) }
         val planeHooked = user?.takeIf { it.hooksPlanes }
         // LUMA on the decoded Y plane, as mpv runs it, where the picture comes with its planes — but where the shader
         // enlarges the Y plane, only while nothing between the upload and the hooks needs the picture at its decoded
@@ -628,8 +632,11 @@ class GlStage(
                 params) as Target
         } ?: quiet
         source = shown
-        // 1. Deinterlacing.
-        if (a.deinterlace.isTemporal) {
+        // 1. Deinterlacing. NNEDI3 (#443): the field kept, its other one the network's.
+        if (a.deinterlace == PictureAdjustment.Deinterlace.NNEDI3) {
+            source = deinterlacing.nnedi3(shown, target("nnedi3Field", w, h / 2, half = true),
+                target("deinterlaced", w, h, half = deep), mpvHooks, finishing, second) as Target
+        } else if (a.deinterlace.isTemporal) {
             val prev = neighbour(before ?: picture).takeIf { it.width == w && it.height == h } ?: raw
             val next = neighbour(after ?: picture).takeIf { it.width == w && it.height == h } ?: raw
             val method = when {
@@ -879,6 +886,8 @@ class GlStage(
             PictureAdjustment.Upscaler.ANIME4K -> upscaling.anime4k(from, net("netA"), net("netB"), up(w * 2, h * 2))
             PictureAdjustment.Upscaler.ACNET ->
                 upscaling.acnet(from, net("netA"), net("netB"), net("netC"), net("netD"), up(w * 2, h * 2))
+            // NNEDI3 doubled the brightness among the hooks; the screen's own scaling does the rest.
+            PictureAdjustment.Upscaler.NNEDI3 -> from
             PictureAdjustment.Upscaler.XBRZ -> {
                 val factor = Upscaling.xbrzFactor(w, h, outW, outH)
                 upscaling.xbrz(from, target("xbrzCorners", w + 1, h + 1), target("xbrzDecisions", w, h),

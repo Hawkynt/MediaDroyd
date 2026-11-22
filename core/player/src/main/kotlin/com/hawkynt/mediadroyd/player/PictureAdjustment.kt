@@ -263,6 +263,7 @@ data class PictureAdjustment(
         ANIME4K("Anime4K", "A small neural network for cartoons and anime: line art kept crisp when doubled."),
         ACNET("ACNet", "Anime4KCPP's small network on the picture's brightness: anime doubled, lines clean."),
         XBRZ("xBRZ", "Rules for pixel art and cartoons: smooth diagonals and curves, flat areas left flat."),
+        NNEDI3("NNEDI3", "A small neural network doubles the picture: smooth edges from the lines around them."),
         NEURAL("Real-ESRGAN", "A neural network enlarging four times with fine detail: the heaviest; tested first."),
         WAIFU2X(
             "waifu2x",
@@ -355,10 +356,14 @@ data class PictureAdjustment(
             "For 240p games and old computers: each field its own picture, smoothed, not deinterlaced.",
         ),
         FILM("Film", "For films on video: the film's own frames put back together, NTSC's 3:2 and PAL's 2:2."),
+        NNEDI3(
+            "NNEDI3",
+            "A small neural network rebuilds each missing line from the lines around it: smooth edges, no combing.",
+        ),
         ;
 
         /** Whether it needs the neighbouring frames, and so can show every field as a picture of its own. */
-        val isTemporal: Boolean get() = method != null || this == OLD_CONSOLE
+        val isTemporal: Boolean get() = method != null || this == OLD_CONSOLE || this == NNEDI3
 
         /** The temporal deinterlacer it runs — while the picture moves, for [ADAPTIVE] — or null. */
         val method: Deinterlacer.Method?

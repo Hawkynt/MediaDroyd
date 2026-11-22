@@ -6,6 +6,9 @@ kotlin {
     jvmToolchain(21)
 }
 
+// The vendored mpv prescalers (Vendored/mpv-prescalers, verbatim, LGPL-3.0-or-later), read by Prescalers.
+sourceSets["main"].resources.srcDir(rootProject.file("Vendored/mpv-prescalers"))
+
 dependencies {
     api(project(":core:library"))
     implementation(libs.serialization.json)
