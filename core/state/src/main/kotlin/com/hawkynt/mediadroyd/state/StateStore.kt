@@ -238,6 +238,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = shader,
             temporalDenoise = temporalDenoise,
             dotCrawl = dotCrawl,
+            chromaDenoise = chromaDenoise,
             colorize = colorizeOf(colorize),
             hue = hue,
             tint = tint,
@@ -276,6 +277,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = picture.shader
             temporalDenoise = picture.temporalDenoise
             dotCrawl = picture.dotCrawl
+            chromaDenoise = picture.chromaDenoise
             colorize = picture.colorize.name
         }
         save()
@@ -456,6 +458,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = it.shader,
             temporalDenoise = it.temporalDenoise,
             dotCrawl = it.dotCrawl,
+            chromaDenoise = it.chromaDenoise,
             colorize = colorizeOf(it.colorize),
             colourSystem = runCatching { PictureAdjustment.ColourSystem.valueOf(it.colourSystem) }
                 .getOrDefault(PictureAdjustment.ColourSystem.AUTO),
@@ -499,6 +502,7 @@ class StateStore(private val file: StateFile, private val watcher: StateWatcher 
             shader = picture.shader,
             temporalDenoise = picture.temporalDenoise,
             dotCrawl = picture.dotCrawl,
+            chromaDenoise = picture.chromaDenoise,
             colorize = picture.colorize.name,
             colourSystem = picture.colourSystem.name,
             hue = picture.hue,

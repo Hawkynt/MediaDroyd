@@ -1,5 +1,6 @@
 package com.hawkynt.mediadroyd.stage
 
+import com.hawkynt.mediadroyd.player.ChromaDenoise
 import com.hawkynt.mediadroyd.player.Deband
 import com.hawkynt.mediadroyd.player.TemporalDenoise
 import org.junit.Assert.assertEquals
@@ -43,5 +44,15 @@ class RestorationTest {
         repeat(3) { restoration.deband(picture, into, d) }
         assertTrue(gl.calls.contains("uFrame = 3.0"))
         assertTrue(gl.calls.contains("uRows = 30.0, -1.0"))
+    }
+
+    @Test
+    fun `a tape's colour noise reads the frames either side, its thresholds in 8-bit steps`() {
+        restoration.chromaDenoise(picture, FakeTarget(3, 40, 30), FakeTarget(4, 40, 30), into,
+            ChromaDenoise.Params(guide = 4f, motion = 5f))
+        assertTrue(gl.names.contains("uPrev"))
+        assertTrue(gl.names.contains("uNext"))
+        assertTrue(gl.calls.contains("uGuide2 = 32.0"))
+        assertTrue(gl.calls.contains("uMotion = 5.0"))
     }
 }

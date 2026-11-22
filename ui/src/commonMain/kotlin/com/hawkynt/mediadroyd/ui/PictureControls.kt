@@ -116,6 +116,8 @@ fun PictureSliders(
             Triple("Noise over time", picture.temporalDenoise) { v: Float -> picture.copy(temporalDenoise = v) },
             // A composite capture's crawling dots and rainbows, cancelled where nothing moves, see DotCrawl.
             Triple("Dot crawl", picture.dotCrawl) { v: Float -> picture.copy(dotCrawl = v) },
+            // A tape's colour blotches smoothed, the brightness left alone, see ChromaDenoise.
+            Triple("Colour noise", picture.chromaDenoise) { v: Float -> picture.copy(chromaDenoise = v) },
         ).forEach { (label, value, set) ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f))
