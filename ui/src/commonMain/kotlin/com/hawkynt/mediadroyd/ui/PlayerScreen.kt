@@ -151,6 +151,12 @@ interface PlayerPlatform {
     fun speakerEmbedder(): com.hawkynt.mediadroyd.player.SpeakerEmbedder? = null
 
     /**
+     * Where the people's references for the original voices (VoiceClones, #533) are cut to, on this computer; null
+     * where this platform has no original voices.
+     */
+    fun cloneFolder(): java.io.File? = null
+
+    /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
      * as the desktop does; otherwise, as on the phone, a switch of their own beside the track picked.
      */
@@ -601,10 +607,43 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
         fun castOf(line: Dub.Line) = casting.speakerOf(line) { sound.samples(line.startMs, line.endMs) }
             ?.let { casting.cast(it, sid) }
-        val speakerFor: (Dub.Line) -> Dub.LineSpeaker = if (speakers.size == 2) {
+        val piperFor: (Dub.Line) -> Dub.LineSpeaker = if (speakers.size == 2) {
             { line -> if (Dub.womanSpoke(line) == true) speakers[1] else speakers[0] }
         } else {
             { speakers[0] }
+        }
+        // The actors' own voices (VoiceClones, #533), once the helper on this computer answers with a graphics card
+        // and the engine: each person's imitated voice from their longest lines, cut from the film into the app's
+        // folder — the Piper voice for a line it cannot speak, and for a person not heard enough yet.
+        var originals: Pair<com.hawkynt.mediadroyd.player.VoiceClones.Client,
+            com.hawkynt.mediadroyd.player.VoiceClones.Engine>? = null
+        val cloneFolder = platform.cloneFolder()?.let { java.io.File(it, Integer.toHexString(video.hashCode())) }
+        val heardLanguage = dubCaptions?.language
+            ?: state.tracks.firstOrNull { it.kind == Track.Kind.AUDIO && it.selected }?.language
+        fun twoLetter(code: String?) =
+            code?.lowercase()?.let { com.hawkynt.mediadroyd.library.Languages.twoLetter(it) }.orEmpty()
+        val clones = HashMap<Int, Dub.LineSpeaker>()
+        fun originalVoice(person: Int): Dub.LineSpeaker? {
+            clones[person]?.let { return it }
+            val (client, kind) = originals ?: return null
+            val folder = cloneFolder ?: return null
+            val spans = com.hawkynt.mediadroyd.player.VoiceClones.reference(casting.linesOf(person)) ?: return null
+            folder.mkdirs()
+            val paths = spans.mapIndexedNotNull { i, (from, to) ->
+                val samples = sound.samples(from, to) ?: return@mapIndexedNotNull null
+                java.io.File(folder, "person-$person-$i.wav").apply {
+                    writeBytes(com.hawkynt.mediadroyd.player.VoiceClones.wav(samples, FilmSound.RATE))
+                }.path
+            }
+            if (paths.isEmpty()) return null
+            return com.hawkynt.mediadroyd.player.VoiceClones.Speaker(
+                client, kind, paths, twoLetter(language), twoLetter(heardLanguage),
+            ).also { clones[person] = it }
+        }
+        val speakerFor: (Dub.Line) -> Dub.LineSpeaker = { line ->
+            val piper = piperFor(line)
+            line.cast?.person?.takeIf { it >= 0 }?.let(::originalVoice)
+                ?.let { com.hawkynt.mediadroyd.player.VoiceClones.WithFallback(it, piper) } ?: piper
         }
         // A file's lines at the times its delay and drift give them; made ones as they are heard.
         val look = state.subtitleLook
@@ -618,6 +657,26 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             emptyList()
         }
         state.dubStatus = null
+        val household = state.store.data.settings
+        if (household.originalVoices && cloneFolder != null) {
+            val kind = com.hawkynt.mediadroyd.player.VoiceClones.Engine.of(household.originalVoicesEngine)
+            val client = runCatching {
+                com.hawkynt.mediadroyd.player.VoiceClones.Client(household.originalVoicesHelper)
+            }.getOrNull()
+            val health = client?.let { withContext(Dispatchers.IO) { it.health() } }
+            state.dubStatus = when {
+                client == null -> "The voice-clone helper must run on this computer; the usual voices speak."
+                health == null -> "The voice-clone helper does not answer; the usual voices speak."
+                !health.cuda -> "The voice-clone helper has no graphics card; the usual voices speak."
+                kind !in health.engines -> "The voice-clone helper has no ${kind.label}; the usual voices speak."
+                else -> {
+                    originals = client to kind
+                    // Always marked: the voices heard are imitations.
+                    "Original voices, imitated by ${kind.label} on this computer" +
+                        if (kind.commercialUse) "." else " — non-commercial use only."
+                }
+            }
+        }
         // Every line on the film's own speech (Dub.align), found in the film's shared sound (FilmSound, #535) — kept
         // decoded a minute ahead of the position, so each line is placed before it is spoken.
         val lines: () -> List<Dub.Line> = {
@@ -661,6 +720,8 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         } finally {
             speakers.forEach { it.close() }
             embedder?.close()
+            // The people's references stay on this computer only as long as the voice-over runs.
+            cloneFolder?.deleteRecursively()
         }
     }
 

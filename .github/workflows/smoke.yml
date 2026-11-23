@@ -31,6 +31,9 @@ jobs:
       - uses: android-actions/setup-android@v4
       - name: Unit tests (parser, library, binge logic)
         run: ./gradlew test --no-daemon
+      # The voice-clone helper (tools/voice-clone, Python), with fake engines: no graphics card or model needed.
+      - name: Voice-clone helper tests
+        run: python3 -I -m unittest discover -s tools/voice-clone
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --no-daemon
       # Cheap enough for the fast tier: the README check reads nothing but text.

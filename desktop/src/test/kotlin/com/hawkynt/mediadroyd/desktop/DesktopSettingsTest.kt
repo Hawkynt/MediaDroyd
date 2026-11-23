@@ -21,6 +21,7 @@ class DesktopSettingsTest {
             setOf(
                 PlatformSetting.SHADER_FOLDER,
                 PlatformSetting.HEADPHONES_IN_USE,
+                PlatformSetting.ORIGINAL_VOICES,
                 PlatformSetting.BINGE_WATCHING,
                 PlatformSetting.SKIP_INTRO_CREDITS,
                 PlatformSetting.EVEN_FRAMES,
