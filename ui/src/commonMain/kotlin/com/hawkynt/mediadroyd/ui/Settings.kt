@@ -357,8 +357,9 @@ fun SettingsScreen(
             SwitchRow(
                 label = "Original voices in the voice-over",
                 detail = "Each actor's lines spoken in an imitation of their own voice, made from the film on this " +
-                    "computer's graphics card by the voice-clone helper (tools/voice-clone). Nothing leaves this " +
-                    "computer. Only for your own copies, and the voices are always marked as imitated.",
+                    "computer's NVIDIA graphics card. The first time, the app sets the engine up by itself — several " +
+                    "GB, while the usual voices speak. Nothing leaves this computer. Only for your own copies; the " +
+                    "voices are always marked as imitated." + (platform.originalVoicesNote?.let { " $it" } ?: ""),
                 checked = settings.originalVoices,
                 onChange = { c -> update { it.originalVoices = c } },
             )
@@ -376,7 +377,8 @@ fun SettingsScreen(
                 val engine = com.hawkynt.mediadroyd.player.VoiceClones.Engine.of(settings.originalVoicesEngine)
                 Text(
                     "${engine.label}: ${engine.licence}." +
-                        if (engine.commercialUse) "" else " Not for any commercial use.",
+                        if (engine.commercialUse) "" else " Choosing it, you accept that licence: not for any " +
+                            "commercial use.",
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
