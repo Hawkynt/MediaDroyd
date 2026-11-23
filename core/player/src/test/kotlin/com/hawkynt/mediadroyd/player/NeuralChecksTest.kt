@@ -8,6 +8,15 @@ import java.nio.ByteBuffer
 
 class NeuralChecksTest {
     private val heights = ArrayList<Int>()
+
+    // The checks' clock: the fake networks take their time by moving it on, not by sleeping, so a busy machine's
+    // pauses cannot push a network that takes no time past the budget.
+    private var now = 0L
+    private val clock = { now }
+    private fun take(ms: Double) {
+        now += (ms * 1e6).toLong()
+    }
+    private val tooLong = NeuralInterpolation.BUDGET_MS + 5
     private val progress = object : NeuralChecks.Progress {
         override fun running(height: Int) = Unit
         override fun timed(height: Int, ms: Double) {
@@ -28,11 +37,11 @@ class NeuralChecksTest {
             if (earlierId == 0L) {
                 rgb(NeuralChecks.testFrame(w, h, 1), w, h)
             } else {
-                Thread.sleep(NeuralInterpolation.BUDGET_MS.toLong() + 5)
+                take(tooLong)
                 ByteBuffer.allocateDirect(w * h * 3)
             }
         }
-        val timing = requireNotNull(NeuralChecks.interpolator(net, "CPU", progress))
+        val timing = requireNotNull(NeuralChecks.interpolator(net, "CPU", progress, nanoTime = clock))
         assertEquals("CPU", timing.unit)
         assertEquals(listOf(480), timing.msByHeight.keys.toList())
         assertTrue(timing.msByHeight.getValue(480) > NeuralInterpolation.BUDGET_MS)
@@ -45,12 +54,14 @@ class NeuralChecksTest {
             if (earlierId == 0L) {
                 rgb(NeuralChecks.testFrame(w, h, 1), w, h)
             } else {
-                if (h > 240) Thread.sleep(NeuralInterpolation.BUDGET_MS.toLong() + 5)
+                if (h > 240) take(tooLong)
                 ByteBuffer.allocateDirect(w * h * 3)
             }
         }
         val sizes = NeuralInterpolation.testSizes(PictureAdjustment.Interpolation.RIFE)
-        val timing = requireNotNull(NeuralChecks.interpolator(net, "GPU", progress, sizes = sizes))
+        val timing = requireNotNull(
+            NeuralChecks.interpolator(net, "GPU", progress, sizes = sizes, nanoTime = clock),
+        )
         assertEquals(listOf(120, 180, 240, 360), timing.msByHeight.keys.toList())
         assertTrue(NeuralInterpolation.fastEnough(timing.msByHeight.getValue(120)))
     }
@@ -61,14 +72,16 @@ class NeuralChecksTest {
             if (earlierId == 0L) {
                 rgb(NeuralChecks.testFrame(w, h, 1), w, h)
             } else {
-                Thread.sleep(NeuralInterpolation.BUDGET_MS.toLong() + 5)
+                take(tooLong)
                 ByteBuffer.allocateDirect(w * h * 3)
             }
         }
         val flows = ByteBuffer.allocateDirect(32)
         val flowOnly = NeuralChecks.Between { _, _, _, _, _, _, _, _ -> flows }
         val sizes = NeuralInterpolation.testSizes(PictureAdjustment.Interpolation.RIFE)
-        val timing = requireNotNull(NeuralChecks.interpolator(net, "CPU", progress, sizes = sizes, timed = flowOnly))
+        val timing = requireNotNull(NeuralChecks.interpolator(
+            net, "CPU", progress, sizes = sizes, timed = flowOnly, nanoTime = clock,
+        ))
         assertTrue(NeuralInterpolation.fastEnough(timing.msByHeight.getValue(120)))
         assertEquals(sizes.map { it.height }, timing.msByHeight.keys.toList())
     }

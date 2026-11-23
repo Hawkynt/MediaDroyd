@@ -56,7 +56,8 @@ object NeuralChecks {
      * only on while the last kept up; null where it runs wrong. Past the budget on the small check already, the
      * smallest size is estimated from it by its pixels and nothing larger is given. [log] hears what the check found.
      * [timed] is what playback runs, timed in place of [net]: for a network handing back its flow, the flow alone (the
-     * graphics chip warps the frames by it).
+     * graphics chip warps the frames by it). [nanoTime] is the clock the times are read from: the system's, but for
+     * tests.
      */
     fun interpolator(
         net: Between,
@@ -65,10 +66,11 @@ object NeuralChecks {
         log: (String) -> Unit = {},
         sizes: List<NeuralInterpolation.Size> = NeuralInterpolation.TEST_SIZES,
         timed: Between = net,
+        nanoTime: () -> Long = System::nanoTime,
     ): NeuralSelfTest.Timing? {
         val smallest = sizes.first()
         progress.running(smallest.height)
-        val checkMs = check(net, unit, log) ?: return null
+        val checkMs = check(net, unit, log, nanoTime) ?: return null
         if (NeuralInterpolation.tooSlowAlready(checkMs)) {
             val estimate = NeuralInterpolation.estimate(checkMs, CHECK_SIDE * CHECK_SIDE, smallest)
             progress.timed(smallest.height, estimate)
@@ -77,7 +79,7 @@ object NeuralChecks {
         val times = LinkedHashMap<Int, Double>()
         for (size in sizes) {
             progress.running(size.height)
-            val ms = time(timed, size) ?: break
+            val ms = time(timed, size, nanoTime) ?: break
             times[size.height] = ms
             progress.timed(size.height, ms)
             if (!NeuralInterpolation.fastEnough(ms)) break
@@ -90,7 +92,7 @@ object NeuralChecks {
      * truly halfway, away from the edges where the motion uncovers what neither frame shows — what it took where it
      * is right (after once to warm up: the first run sets the unit up), null where it is not.
      */
-    private fun check(net: Between, unit: String, log: (String) -> Unit): Double? {
+    private fun check(net: Between, unit: String, log: (String) -> Unit, nanoTime: () -> Long): Double? {
         val w = CHECK_SIDE
         val h = CHECK_SIDE
         val first = testFrame(w, h, 0)
@@ -100,9 +102,9 @@ object NeuralChecks {
         val before = testFrame(w, h, -2)
         val after = testFrame(w, h, 4)
         net.run(first, last, w, h, 0, 0, before, after) ?: return null
-        val start = System.nanoTime()
+        val start = nanoTime()
         val between = net.run(first, last, w, h, 0, 0, before, after) ?: return null
-        val ms = (System.nanoTime() - start) / 1e6
+        val ms = (nanoTime() - start) / 1e6
         var networkError = 0L
         var blendError = 0L
         var count = 0
@@ -123,20 +125,20 @@ object NeuralChecks {
     // One in-between at [size] as playback makes them: a stream of test frames, each pair sharing its earlier frame
     // with the pair before (and so its features, by the frames' ids); the first pair warms up, the pairs after it are
     // timed. Null where it failed.
-    private fun time(net: Between, size: NeuralInterpolation.Size): Double? {
+    private fun time(net: Between, size: NeuralInterpolation.Size, nanoTime: () -> Long): Double? {
         val frames = Array(SAMPLE_RUNS + 2) { k -> testFrame(size.width, size.height, k * 2) }
         fun pair(k: Int) = net.run(
             frames[k], frames[k + 1], size.width, size.height, k + 1L, k + 2L,
             frames.getOrNull(k - 1), frames.getOrNull(k + 2),
         )
-        val warm = System.nanoTime()
+        val warm = nanoTime()
         pair(0) ?: return null
         // Far too slow already warming up: that is answer enough, without waiting for more of it.
-        val warmMs = (System.nanoTime() - warm) / 1e6
+        val warmMs = (nanoTime() - warm) / 1e6
         if (warmMs > FAR_TOO_SLOW * NeuralInterpolation.BUDGET_MS) return warmMs
-        val start = System.nanoTime()
+        val start = nanoTime()
         for (k in 1..SAMPLE_RUNS) pair(k) ?: return null
-        return (System.nanoTime() - start) / 1e6 / SAMPLE_RUNS
+        return (nanoTime() - start) / 1e6 / SAMPLE_RUNS
     }
 
     /**
