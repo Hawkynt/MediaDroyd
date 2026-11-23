@@ -6,33 +6,26 @@ and listens on this computer only; the app talks to nothing else, so neither the
 machine. Imitating real people's voices is the household's own choice, for its own copies: the app keeps it off until
 it is switched on in Settings, and marks the voice-over as imitated whenever it plays.
 
-## What it needs
+## How it runs
 
-A computer with an NVIDIA graphics card (CUDA) and Python 3.10 or later, with PyTorch for CUDA. Without a graphics card
-the helper says so and the app keeps its usual voices.
+The desktop app sets it up and starts it by itself (`VoiceCloneRuntime`, `VoiceCloneSetup` in `:core:player`): on a
+computer with an NVIDIA graphics card, the first time an engine is chosen in Settings it fetches a portable Python
+(python-build-standalone 3.10, digest-checked), makes the engine an environment of its own, installs its pinned packages
+and fetches its weights — following each engine's own installation instructions — then runs this file, carried in the
+app, on a free port of this computer (for GPT-SoVITS its `api_v2.py` beside it) and stops it when the app quits.
+Everything lives in the app-data folder under `voice-clone/`; `setup.log` and `helper.log` there say what happened.
 
-## The engines
-
-Install the ones you want; the helper offers those it finds. Each comes under its own licence, which you accept when
-you install it — MediaDroyd carries none of them.
-
-| Engine | Licence | Install | Languages spoken |
+| Engine | Licence | What the app sets up | Languages spoken |
 | --- | --- | --- | --- |
-| OpenVoice V2 | MIT | `pip install git+https://github.com/myshell-ai/OpenVoice git+https://github.com/myshell-ai/MeloTTS`, then `python -m unidic download`; its `checkpoints_v2` (from the OpenVoice README) beside the helper or named with `--checkpoints` | English, Spanish, French, Chinese, Japanese, Korean |
-| GPT-SoVITS | MIT | its repository and models as its README says; run its own server: `python api_v2.py -a 127.0.0.1 -p 9880` (the helper asks it, `--gpt-sovits` names another address) | Chinese, English, Japanese, Korean, Cantonese |
-| XTTS-v2 | Coqui Public Model License: **non-commercial use only** | `pip install coqui-tts`; the first run asks you to accept the licence and fetches the model | 17, German among them |
+| OpenVoice V2 | MIT | PyTorch, OpenVoice and MeloTTS at pinned commits, unidic's dictionary, the V2 converter and base speakers from its Hugging Face repository | English, Spanish, French, Chinese, Japanese, Korean |
+| GPT-SoVITS | MIT | its source at a pinned commit, PyTorch, its `extra-req.txt` and `requirements.txt`, its pretrained models, G2PW, NLTK's data and OpenJTalk's dictionary (as its `install.sh`) | Chinese, English, Japanese, Korean, Cantonese |
+| XTTS-v2 | Coqui Public Model License: **non-commercial use only** | PyTorch and coqui-tts 0.28.0; the model on first use, the licence accepted by choosing XTTS-v2 in Settings | 17, German among them |
 
-A line in a language its engine does not speak is spoken by the app's usual voice.
+A line in a language its engine does not speak is spoken by the app's usual voice. While the voice-over runs, the app
+cuts each person's longest clear lines — six to fifteen seconds of them — into `clones/`, hands the helper their paths,
+and deletes them when it stops.
 
-## Running it
-
-```sh
-python3 tools/voice-clone/server.py            # http://127.0.0.1:9890, what Settings expects
-```
-
-Then, in the desktop app's Settings: Original voices in the voice-over, the engine. The app cuts each person's longest
-clear lines — six to fifteen seconds of them — into its app-data folder (`clones/`) while the voice-over runs, hands the
-helper their paths, and deletes them when it stops.
+For development it can be run by hand: `python3 tools/voice-clone/server.py --port 9890`.
 
 The protocol: `GET /health` → `{"cuda": …, "engines": {"openvoice": …, "gpt-sovits": …, "xtts": …}}`; `POST /speak` with
 `{"engine", "text", "language", "references", "reference_language", "speed"}` → a 16-bit PCM WAV, 422 for what the

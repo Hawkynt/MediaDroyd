@@ -62,6 +62,11 @@ dependencies {
 // The icons (desktop/icons) on the classpath too, for the window's own icon.
 sourceSets["main"].resources.srcDir("icons")
 
+// The original voices' helper (#533), carried in the app and run by it: VoiceCloneRuntime writes it beside the engines.
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("tools/voice-clone/server.py")) { into("voice-clone") }
+}
+
 // AWT's X11 toolkit opened to the app, for answering the window manager's _NET_WM_PING (X11Ping, #502).
 val x11Opens = listOf("sun.awt", "sun.awt.X11", "java.awt").map { "--add-opens=java.desktop/$it=ALL-UNNAMED" }
 

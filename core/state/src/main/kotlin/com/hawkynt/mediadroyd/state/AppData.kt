@@ -202,7 +202,6 @@ data class Settings(
     var headphonesInUse: Boolean = false,     // the desktop's sound goes to headphones: it cannot tell (#453)
     var originalVoices: Boolean = false,      // the voice-over in the actors' imitated voices, desktop only (#533)
     var originalVoicesEngine: String = "openvoice", // VoiceClones.Engine id
-    var originalVoicesHelper: String = "http://127.0.0.1:9890", // the voice-clone helper, on this computer only
     var dubbing: Boolean = false,            // the voice-over on, for the next video too (#539)
     var captioning: Boolean = false,         // subtitles made from the speech on, for the next video too (#539)
     var nightMode: Boolean = false,          // the player's night mode, for the next video too (#539)

@@ -157,6 +157,13 @@ interface PlayerPlatform {
     fun cloneFolder(): java.io.File? = null
 
     /**
+     * The original voices' helper for [engine], set up and started by the app itself where it is not yet — telling
+     * [say] what it is doing, and why where it cannot — its address on this computer, or null. Blocks; the first time
+     * for minutes.
+     */
+    fun originalVoices(engine: com.hawkynt.mediadroyd.player.VoiceClones.Engine, say: (String) -> Unit): String? = null
+
+    /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
      * as the desktop does; otherwise, as on the phone, a switch of their own beside the track picked.
      */
@@ -615,8 +622,9 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         // The actors' own voices (VoiceClones, #533), once the helper on this computer answers with a graphics card
         // and the engine: each person's imitated voice from their longest lines, cut from the film into the app's
         // folder — the Piper voice for a line it cannot speak, and for a person not heard enough yet.
-        var originals: Pair<com.hawkynt.mediadroyd.player.VoiceClones.Client,
-            com.hawkynt.mediadroyd.player.VoiceClones.Engine>? = null
+        val originals = java.util.concurrent.atomic.AtomicReference<
+            Pair<com.hawkynt.mediadroyd.player.VoiceClones.Client, com.hawkynt.mediadroyd.player.VoiceClones.Engine>?,
+            >(null)
         val cloneFolder = platform.cloneFolder()?.let { java.io.File(it, Integer.toHexString(video.hashCode())) }
         val heardLanguage = dubCaptions?.language
             ?: state.tracks.firstOrNull { it.kind == Track.Kind.AUDIO && it.selected }?.language
@@ -625,7 +633,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         val clones = HashMap<Int, Dub.LineSpeaker>()
         fun originalVoice(person: Int): Dub.LineSpeaker? {
             clones[person]?.let { return it }
-            val (client, kind) = originals ?: return null
+            val (client, kind) = originals.get() ?: return null
             val folder = cloneFolder ?: return null
             val spans = com.hawkynt.mediadroyd.player.VoiceClones.reference(casting.linesOf(person)) ?: return null
             folder.mkdirs()
@@ -659,21 +667,21 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         state.dubStatus = null
         val household = state.store.data.settings
         if (household.originalVoices && cloneFolder != null) {
-            val kind = com.hawkynt.mediadroyd.player.VoiceClones.Engine.of(household.originalVoicesEngine)
-            val client = runCatching {
-                com.hawkynt.mediadroyd.player.VoiceClones.Client(household.originalVoicesHelper)
-            }.getOrNull()
-            val health = client?.let { withContext(Dispatchers.IO) { it.health() } }
-            state.dubStatus = when {
-                client == null -> "The voice-clone helper must run on this computer; the usual voices speak."
-                health == null -> "The voice-clone helper does not answer; the usual voices speak."
-                !health.cuda -> "The voice-clone helper has no graphics card; the usual voices speak."
-                kind !in health.engines -> "The voice-clone helper has no ${kind.label}; the usual voices speak."
-                else -> {
-                    originals = client to kind
-                    // Always marked: the voices heard are imitations.
-                    "Original voices, imitated by ${kind.label} on this computer" +
-                        if (kind.commercialUse) "." else " — non-commercial use only."
+            // Set up and started by the app itself — the first time for minutes — while the usual voices speak.
+            launch(Dispatchers.IO) {
+                val kind = com.hawkynt.mediadroyd.player.VoiceClones.Engine.of(household.originalVoicesEngine)
+                val address = platform.originalVoices(kind) { state.dubStatus = it }
+                val health = address?.let { com.hawkynt.mediadroyd.player.VoiceClones.Client(it).health() }
+                state.dubStatus = when {
+                    address == null -> state.dubStatus
+                    health == null || !health.cuda || kind !in health.engines ->
+                        "The original voices did not start; the usual voices speak."
+                    else -> {
+                        originals.set(com.hawkynt.mediadroyd.player.VoiceClones.Client(address) to kind)
+                        // Always marked: the voices heard are imitations.
+                        "Original voices, imitated by ${kind.label} on this computer" +
+                            if (kind.commercialUse) "." else " — non-commercial use only."
+                    }
                 }
             }
         }

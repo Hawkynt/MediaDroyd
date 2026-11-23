@@ -69,6 +69,9 @@ interface SettingsPlatform {
     /** The rows of [PlatformSetting] this platform acts on. */
     val offered: Set<PlatformSetting> get() = emptySet()
 
+    /** What the household should know about the original voices on this computer (#533), e.g. no graphics card. */
+    val originalVoicesNote: String? get() = null
+
     /** This device's memory in bytes, the decoded pictures' ceiling (DecodedBuffer.ceilingBytes) comes from. */
     val memoryBytes: Long get() = 0
 

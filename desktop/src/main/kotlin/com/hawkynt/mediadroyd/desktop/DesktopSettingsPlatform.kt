@@ -44,6 +44,12 @@ class DesktopSettingsPlatform(
     override val offered: Set<PlatformSetting> =
         if (displays.unavailable == null) OFFERED + PlatformSetting.MATCH_REFRESH_RATE else OFFERED
 
+    // Asked once: whether nvidia-smi names a card does not change while the app runs.
+    private val nvidia by lazy { VoiceCloneRuntime.nvidiaCard() }
+
+    override val originalVoicesNote: String?
+        get() = if (nvidia) null else "This computer has no NVIDIA graphics card: the original voices cannot run here."
+
     private val trial by lazy { DesktopTrial(store, DesktopNeural(File(folder, "models"))) }
 
     override val pictureCheck: PictureTry = { picture, say ->
