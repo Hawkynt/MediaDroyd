@@ -72,6 +72,7 @@ and the first is held to its own output.
 | [FFmpeg](https://ffmpeg.org) `libavfilter/vf_delogo.c` — © 2002 Jindrich Makovicka, 2011 Stefano Sabatini, 2013, 2015 Jean Delvare | GPL-2.0-or-later | `LogoMask`'s Blur: the rectangle filled from the ring around it, each side's three nearest ring pixels weighed by nearness — held to FFmpeg's own output, byte for byte |
 | DScaler's logo killer, as described in issue #264 | GPL-2.0 | `LogoMask`'s Grey and Dim: greying the logo, holding its brightness down |
 | DScaler's comb filtering of composite captures, as described in issue #263 | GPL-2.0 | `DotCrawl`'s idea only: still areas averaged over the frames where the composite residue alternates; written from NTSC's subcarrier relation (SMPTE 170M: 227.5 cycles a line, its phase turning over each frame) and PAL's (ITU-R BT.1700: 283.75 cycles a line plus 25 Hz, 625 lines, the V switch every line — back in phase after four frames) |
+| AviSynth's CNR2 (chroma noise reducer, its documentation) and [FFmpeg](https://ffmpeg.org)'s `hqdn3d` on the chroma planes (`libavfilter/vf_hqdn3d.c`) | GPL-2.0-or-later | `ChromaDenoise`'s behaviour: the colour alone smoothed, over time where nothing moves, along the picture otherwise; the filter itself is a joint bilateral after Petschnigg et al. (2004) |
 
 ## Test fixtures
 
