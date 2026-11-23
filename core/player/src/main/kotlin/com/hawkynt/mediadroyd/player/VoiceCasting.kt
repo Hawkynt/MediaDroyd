@@ -20,13 +20,17 @@ class VoiceCasting(
     private val embed: ((FloatArray) -> FloatArray?)?,
     private val same: Float = SAME,
 ) {
-    /** A person's voice: a [woman]'s or a man's, [pitch] semitones off it, [sid] the speaker in a voice of many. */
-    data class Cast(val woman: Boolean, val pitch: Float, val sid: Int)
+    /**
+     * A person's voice: a [woman]'s or a man's, [pitch] semitones off it, [sid] the speaker in a voice of many; the
+     * [person] it is (an index for [linesOf]).
+     */
+    data class Cast(val woman: Boolean, val pitch: Float, val sid: Int, val person: Int = -1)
 
     private class Person(val name: String?) {
         var centroid: FloatArray? = null
         var count = 0
         val pitches = ArrayList<Double>()
+        val lines = ArrayList<Pair<Long, Long>>()
 
         fun usualPitch(): Double? = pitches.sorted().takeIf { it.isNotEmpty() }?.let { it[it.size / 2] }
     }
@@ -54,7 +58,10 @@ class VoiceCasting(
         } else {
             samples?.let { Prosody.measure(it, Fbank.RATE, line.text.count(Char::isLetter)).pitchHz }
         }
-        person?.let { p -> pitch?.takeIf { it > 0 }?.let { all[p].pitches += it } }
+        person?.let { p ->
+            pitch?.takeIf { it > 0 }?.let { all[p].pitches += it }
+            all[p].lines += line.startMs to line.endMs
+        }
         sorted[key] = person
         person
     }
@@ -92,8 +99,11 @@ class VoiceCasting(
             ((rank - (alike.size - 1) / 2f) * STEP_SEMITONES).coerceIn(-MAX_SEMITONES, MAX_SEMITONES)
         }
         val sid = if (speakers > 1) (speaker * SID_STRIDE) % speakers else 0
-        Cast(woman, round(pitch * 4) / 4, sid)
+        Cast(woman, round(pitch * 4) / 4, sid, speaker)
     }
+
+    /** Where person [speaker]'s lines lie (start to end, ms), in the order they were sorted. */
+    fun linesOf(speaker: Int): List<Pair<Long, Long>> = synchronized(all) { all[speaker].lines.toList() }
 
     private fun cosine(a: FloatArray, b: FloatArray): Float {
         var dot = 0f

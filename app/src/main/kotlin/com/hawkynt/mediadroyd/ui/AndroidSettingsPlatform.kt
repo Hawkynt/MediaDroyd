@@ -28,8 +28,9 @@ import com.hawkynt.mediadroyd.ui.platform.SetupScreen
  * kept; the screens are this device's and the presentation display attached now; the test patterns run on the stage.
  */
 class AndroidSettingsPlatform(private val context: Context, private val store: StateStore) : SettingsPlatform {
-    // Android tells headphones by the output itself.
-    override val offered: Set<PlatformSetting> = PlatformSetting.entries.toSet() - PlatformSetting.HEADPHONES_IN_USE
+    // Android tells headphones by the output itself; the actors' imitated voices need a desktop's graphics card.
+    override val offered: Set<PlatformSetting> =
+        PlatformSetting.entries.toSet() - PlatformSetting.HEADPHONES_IN_USE - PlatformSetting.ORIGINAL_VOICES
 
     override val memoryBytes: Long
         get() = ActivityManager.MemoryInfo()

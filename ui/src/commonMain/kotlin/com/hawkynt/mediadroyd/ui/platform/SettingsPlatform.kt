@@ -56,6 +56,9 @@ enum class PlatformSetting {
 
     /** Whether the sound goes to headphones, where the platform cannot tell (#453). */
     HEADPHONES_IN_USE,
+
+    /** The voice-over in the actors' own voices, imitated by a helper on this computer's graphics card (#533). */
+    ORIGINAL_VOICES,
 }
 
 /** An output screen whose setup Settings → Screens keeps: its [key] (StateStore.screenSetup) and its [name]. */

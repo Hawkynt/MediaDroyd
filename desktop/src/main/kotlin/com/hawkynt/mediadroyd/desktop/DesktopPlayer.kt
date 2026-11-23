@@ -762,6 +762,9 @@ fun DesktopPlayer(
             com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.speaker(neural.folder(voice.download), voice)
         }.getOrNull()
 
+        // The people's references for the original voices (#533), in the app-data folder on this computer.
+        override fun cloneFolder() = java.io.File(AppFolder.current(), "clones")
+
         // The speaker network for a voice per character (#532).
         override fun speakerNetworkReady() = com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD.let {
             com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(it), it)

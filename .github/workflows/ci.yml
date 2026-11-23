@@ -56,6 +56,9 @@ jobs:
       - name: Unit tests
         run: ./gradlew test --no-daemon
       # The network sources against real servers on the runner — the slow tier `./gradlew test` leaves out.
+      # The voice-clone helper (tools/voice-clone, Python), with fake engines: no graphics card or model needed.
+      - name: Voice-clone helper tests
+        run: python3 -I -m unittest discover -s tools/voice-clone
       - name: Network-source integration tests
         run: |
           sudo apt-get update -qq

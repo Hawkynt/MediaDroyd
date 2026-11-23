@@ -351,6 +351,37 @@ fun SettingsScreen(
                 onChange = { c -> update { it.headphonesInUse = c } },
             )
         }
+        // The actors' own voices, imitated on this computer (VoiceClones, #533): the household's choice, off unless
+        // switched on, for its own copies; the engine's licence named with it.
+        if (offers(PlatformSetting.ORIGINAL_VOICES)) {
+            SwitchRow(
+                label = "Original voices in the voice-over",
+                detail = "Each actor's lines spoken in an imitation of their own voice, made from the film on this " +
+                    "computer's graphics card by the voice-clone helper (tools/voice-clone). Nothing leaves this " +
+                    "computer. Only for your own copies, and the voices are always marked as imitated.",
+                checked = settings.originalVoices,
+                onChange = { c -> update { it.originalVoices = c } },
+            )
+            if (settings.originalVoices) {
+                Text("Engine", fontSize = 16.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    com.hawkynt.mediadroyd.player.VoiceClones.Engine.entries.forEach { engine ->
+                        FilterChip(
+                            selected = settings.originalVoicesEngine == engine.id,
+                            onClick = { update { it.originalVoicesEngine = engine.id } },
+                            label = { Text(engine.label, fontSize = 15.sp) },
+                        )
+                    }
+                }
+                val engine = com.hawkynt.mediadroyd.player.VoiceClones.Engine.of(settings.originalVoicesEngine)
+                Text(
+                    "${engine.label}: ${engine.licence}." +
+                        if (engine.commercialUse) "" else " Not for any commercial use.",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         SwitchRow(
             label = "Even loudness",
             detail = "Every film and song plays about as loud as the last: by its ReplayGain tags where it has them, " +
