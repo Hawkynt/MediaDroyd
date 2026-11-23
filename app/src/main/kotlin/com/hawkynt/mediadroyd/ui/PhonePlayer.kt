@@ -1151,6 +1151,24 @@ fun PhonePlayer(
         override fun speaker(voice: com.hawkynt.mediadroyd.player.PiperVoices.Entry) =
             com.hawkynt.mediadroyd.data.AndroidVoices.speaker(context, voice)
 
+        // The speaker network for a voice per character (#532).
+        override fun speakerNetworkReady() = com.hawkynt.mediadroyd.data.ModelStore.ready(
+            context, com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD,
+        )
+
+        override fun fetchSpeakerNetwork(progress: (Float) -> Unit) = com.hawkynt.mediadroyd.data.ModelStore.fetch(
+            context, com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD, progress,
+        )
+
+        override fun speakerEmbedder() = runCatching {
+            val download = com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD
+            if (!com.hawkynt.mediadroyd.data.ModelStore.ready(context, download)) return@runCatching null
+            val folder = com.hawkynt.mediadroyd.data.ModelStore.folder(context, download)
+            com.hawkynt.mediadroyd.player.SpeakerEmbedder(
+                java.io.File(folder, com.hawkynt.mediadroyd.player.SpeakerEmbedder.MODEL),
+            )
+        }.getOrNull()
+
         // Media3's own controls take play, pause and seeking; a remote's keys reach them.
         override val commands = PHONE_COMMANDS
         override val subtitlesByTrack = false

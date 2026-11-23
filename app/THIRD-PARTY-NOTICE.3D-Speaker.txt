@@ -1,0 +1,14 @@
+3D-Speaker CAM++ (Alibaba, iic/speech_campplus_sv_zh_en_16k-common_advanced)
+https://github.com/modelscope/3D-Speaker
+
+The model is licensed under the Apache License 2.0. Fetched when the voice-over first needs it, as sherpa-onnx's ONNX
+export (3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx, from k2-fsa/sherpa-onnx's
+speaker-recongition-models release), checked against its digest, and run on ONNX Runtime to tell who speaks each line
+of the voice-over.
+
+How it is fed is converted from kaldi-native-fbank 1.32 (Apache-2.0, © Xiaomi Corporation, after Kaldi) — the
+filterbank, core/player/src/main/kotlin/com/hawkynt/mediadroyd/player/Fbank.kt — and follows sherpa-onnx's
+speaker-embedding extractor (Apache-2.0, © Xiaomi Corporation): its feature options and its "global-mean"
+normalisation.
+
+Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
