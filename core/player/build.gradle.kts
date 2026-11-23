@@ -15,6 +15,8 @@ dependencies {
     // Piper's voices (PiperSpeaker): each shell brings ONNX Runtime's own build, desktop jar or Android library.
     compileOnly(libs.onnxruntime)
     testImplementation(libs.junit)
+    // SpeakerEmbedderTest runs the speaker network where its file is at hand (MEDIADROYD_SPEAKER_MODEL).
+    testImplementation(libs.onnxruntime)
 }
 
 // Timings of the work the player does on the processor for every frame (Film's field matching and

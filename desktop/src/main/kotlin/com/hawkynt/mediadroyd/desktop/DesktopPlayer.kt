@@ -762,6 +762,26 @@ fun DesktopPlayer(
             com.hawkynt.mediadroyd.engine.desktop.EspeakLibrary.speaker(neural.folder(voice.download), voice)
         }.getOrNull()
 
+        // The speaker network for a voice per character (#532).
+        override fun speakerNetworkReady() = com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD.let {
+            com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(it), it)
+        }
+
+        override fun fetchSpeakerNetwork(progress: (Float) -> Unit) =
+            com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD.let {
+                com.hawkynt.mediadroyd.player.ModelFolder.fetch(neural.folder(it), it, progress)
+            }
+
+        override fun speakerEmbedder() = runCatching {
+            val download = com.hawkynt.mediadroyd.player.SpeakerEmbedder.DOWNLOAD
+            if (!com.hawkynt.mediadroyd.player.ModelFolder.ready(neural.folder(download), download)) {
+                return@runCatching null
+            }
+            com.hawkynt.mediadroyd.player.SpeakerEmbedder(
+                java.io.File(neural.folder(download), com.hawkynt.mediadroyd.player.SpeakerEmbedder.MODEL),
+            )
+        }.getOrNull()
+
         override val commands = PlayerCommand.entries.toSet()
         override val subtitlesByTrack = true
         override val controlsVisible = controlsShown

@@ -46,13 +46,16 @@ object Dub {
         val spokenMs: Long? = null,
         /** The pitch of the voice that spoke it in the film (Hz), where it was heard: a man's or a woman's (#532). */
         val heardPitchHz: Double? = null,
+        /** The voice its speaker is cast (VoiceCasting, #532), where who speaks it is known. */
+        val cast: VoiceCasting.Cast? = null,
     )
 
     /** Below this a voice is taken for a man's, from it on for a woman's: between their usual ranges. */
     const val WOMAN_HZ = 165.0
 
     /** Whether [line] was spoken by a woman, by its heard pitch; null where that is not known. */
-    fun womanSpoke(line: Line): Boolean? = line.heardPitchHz?.takeIf { it > 0 }?.let { it >= WOMAN_HZ }
+    fun womanSpoke(line: Line): Boolean? =
+        line.cast?.woman ?: line.heardPitchHz?.takeIf { it > 0 }?.let { it >= WOMAN_HZ }
 
     /** How far from its cue a line's speech is looked for. */
     const val ALIGN_MS = 700L
@@ -253,6 +256,8 @@ object Dub {
         private val lines: () -> List<Line>,
         private val speakerFor: (Line) -> LineSpeaker,
         private val track: Track,
+        /** The speaker of a voice of many each line is spoken by (VoiceCasting, #532); null: the one [ahead] is given. */
+        private val voiceOf: ((Line) -> Int)? = null,
     ) {
         constructor(lines: List<Line>, speaker: LineSpeaker, track: Track) : this({ lines }, { speaker }, track)
         constructor(lines: () -> List<Line>, speaker: LineSpeaker, track: Track) : this(lines, { speaker }, track)
@@ -285,7 +290,7 @@ object Dub {
                 }
                 val next = now.getOrNull(i + 1)?.startMs
                 val began = System.nanoTime()
-                val said = fit(line, speakerFor(line), next, voice)
+                val said = fit(line, speakerFor(line), next, voiceOf?.invoke(line) ?: voice)
                 onSpoken?.invoke(line, (System.nanoTime() - began) / 1_000_000, said != null)
                 spoken += line.startMs to line.text
                 if (said != null) {
