@@ -31,6 +31,7 @@
 | [NVIDIA Image Scaling SDK](https://github.com/NVIDIAGameWorks/NVIDIAImageScaling) v1.0.3 `NIS_Scaler.h` (NVScaler) and `NIS_Config.h` (settings, coefficient tables) — © 2022 NVIDIA Corporation | MIT | `Nis`, and the app's GL pass written from it (licence text: `app/THIRD-PARTY-NOTICE.NVIDIA-Image-Scaling.txt`) |
 | [FFmpeg](https://ffmpeg.org) `libavfilter/vf_minterpolate.c` and `motion_estimation.c` (bilateral EPZS search, OBMC, `obmc_linear32`, scene change) — © 2014-2015 Michael Niedermayer, 2016 Davinder Singh | LGPL-2.1-or-later | `MotionInterpolation`, and the app's GL pass written from it |
 | [libebur128](https://github.com/jiixyj/libebur128) v1.2.6 `ebur128/ebur128.c` (`ebur128_init_filter`, the filter, `ebur128_calc_gating_block`, `ebur128_gated_loudness`) — © 2011 Jan Kokemüller | MIT | `LoudnessMeter` — EBU R128 integrated loudness (licence text: `app/THIRD-PARTY-NOTICE.libebur128.txt`) |
+| [kaldi-native-fbank](https://github.com/csukuangfj/kaldi-native-fbank) 1.32 (`feature-fbank.cc`, `feature-window.cc`, `mel-computations.cc`, after Kaldi's) and [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)'s speaker-embedding extractor (its feature options, "global-mean") — © Xiaomi Corporation | Apache-2.0 | `Fbank` and `SpeakerEmbedder` — who speaks each line of the voice-over (licence and model notice: `app/THIRD-PARTY-NOTICE.3D-Speaker.txt`) |
 | [libbs2b](https://bs2b.sourceforge.net) 3.1.0 `src/bs2b.c` (`init`, `cross_feed_d`, `bs2b_cross_feed_s16`'s clipping, `BS2B_DEFAULT_CLEVEL`) — © 2005 Boris Mikhaylov | MIT | `Crossfeed` — Bauer's stereo-to-binaural crossfeed for headphones (licence text: `app/THIRD-PARTY-NOTICE.bs2b.txt`) |
 | [FFmpeg](https://ffmpeg.org) `libavfilter/vf_deshake.c` (`filter_frame`'s smoothing, `clean_mean`, the defaults: 20 reference frames, mirrored edges) — © 2010 Georg Martius, Daniel G. Taylor | LGPL-2.1-or-later | `Deshake` — the camera's path smoothed and the jitter undone; the motion itself from `MotionInterpolation`'s search, turns about the picture's middle |
 
@@ -143,3 +144,6 @@ made by `make-expected.sh`.
 `*-headphone.s16` files FFmpeg n9.1's `headphone` filter over the app's own responses, made by `make-expected.sh`.
 `src/test/resources/deshake/deshake.log` — FFmpeg n9.1's `deshake` log for its testsrc2 pattern shaken by a wandering crop,
 made by `make-expected.sh`.
+`src/test/resources/speakers/` — `voice.f32` written by `make-input.py` there; `voice-fbank.f32` kaldi-native-fbank 1.32's
+own filterbank for it (`make-expected.py`), `voice-embedding.f32` the 3D-Speaker CAM++ network's embedding of it on
+onnxruntime 1.32 from those features (`make-embedding.py`).

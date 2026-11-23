@@ -141,6 +141,15 @@ interface PlayerPlatform {
     /** [voice] ready to speak lines (Dub.LineSpeaker), or null where it cannot here. Blocks. */
     fun speaker(voice: PiperVoices.Entry): Dub.LineSpeaker? = null
 
+    /** Whether the speaker network (SpeakerEmbedder.DOWNLOAD, a voice per character, #532) is in place. */
+    fun speakerNetworkReady(): Boolean = false
+
+    /** Fetches the speaker network, telling [progress] (0 … 1); whether it is in place. Blocks. */
+    fun fetchSpeakerNetwork(progress: (Float) -> Unit): Boolean = false
+
+    /** The speaker network opened, or null where it cannot run here. Blocks. */
+    fun speakerEmbedder(): com.hawkynt.mediadroyd.player.SpeakerEmbedder? = null
+
     /**
      * Subtitles switched by picking a track — none being off, the one picked the household's language from then on —
      * as the desktop does; otherwise, as on the phone, a switch of their own beside the track picked.
@@ -573,6 +582,25 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                 return@LaunchedEffect
             }
         }
+        // A voice per character (#532): who speaks each line — the name the subtitles give, else the fingerprint of
+        // its voice in the film's sound (the speaker network, fetched once; without it names alone) — and that
+        // person's voice: a man's or a woman's by their usual pitch, spread from the others of their sex, a speaker
+        // of their own in a voice of many.
+        if (!platform.speakerNetworkReady()) {
+            state.dubStatus = "Fetching the speakers' network…"
+            withContext(Dispatchers.IO) {
+                platform.fetchSpeakerNetwork { done ->
+                    state.dubStatus = "Fetching the speakers' network… ${(done * 100).toInt()} %"
+                }
+            }
+        }
+        val embedder = withContext(Dispatchers.Default) { platform.speakerEmbedder() }
+        val casting = com.hawkynt.mediadroyd.player.VoiceCasting(embedder?.let { e -> { samples -> e.embed(samples) } })
+        val sid = voices.maxOf { it.speakers }
+        val video = session.current.videoPath
+        val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
+        fun castOf(line: Dub.Line) = casting.speakerOf(line) { sound.samples(line.startMs, line.endMs) }
+            ?.let { casting.cast(it, sid) }
         val speakerFor: (Dub.Line) -> Dub.LineSpeaker = if (speakers.size == 2) {
             { line -> if (Dub.womanSpoke(line) == true) speakers[1] else speakers[0] }
         } else {
@@ -592,8 +620,6 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
         state.dubStatus = null
         // Every line on the film's own speech (Dub.align), found in the film's shared sound (FilmSound, #535) — kept
         // decoded a minute ahead of the position, so each line is placed before it is spoken.
-        val video = session.current.videoPath
-        val sound = state.soundOf(video, engine.durationMs) { from, near -> platform.openSound(video, from, near) }
         val lines: () -> List<Dub.Line> = {
             val raw = dubCaptions?.lines()?.mapNotNull { line ->
                 // The tone heard in the line, its text's own hints on top (#534).
@@ -602,9 +628,16 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
                     line.copy(text = it.text, speaker = it.speaker, delivery = delivery)
                 }
             } ?: fileLines
-            Dub.align(raw, sound.speech())
+            // Each line cast as it was heard (#532) — by its own times, before it is laid on the speech — its person's
+            // spread on top of its own tone.
+            val cast = raw.map { line ->
+                castOf(line)?.let { c ->
+                    line.copy(cast = c, delivery = line.delivery.copy(pitch = line.delivery.pitch + c.pitch))
+                } ?: line
+            }
+            Dub.align(cast, sound.speech())
         }
-        val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack).apply {
+        val speaking = Dub.Speaking(lines, speakerFor, state.dubTrack, voiceOf = { it.cast?.sid ?: 0 }).apply {
             onSpoken = { line, took, said ->
                 val lead = line.startMs - state.positionMs
                 platform.log(
@@ -627,6 +660,7 @@ fun PlayerScreen(state: PlayerScreenState, platform: PlayerPlatform, modifier: M
             }
         } finally {
             speakers.forEach { it.close() }
+            embedder?.close()
         }
     }
 
