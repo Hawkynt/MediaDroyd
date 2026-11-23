@@ -161,7 +161,7 @@ val notices = tasks.register<Sync>("notices") {
     from(rootProject.file("app")) {
         listOf(
             "ACNet", "Anime4K", "FidelityFX-FSR", "NVIDIA-Image-Scaling", "Snapdragon-GSR", "hash-without-sine",
-            "dav1d",
+            "dav1d", "bs2b", "KEMAR",
         ).forEach { include("THIRD-PARTY-NOTICE.$it.txt") }
         // ncnn and the networks the desktop carries (DesktopNeural.CARRIED); libass, FreeType, FriBidi, HarfBuzz and
         // Chromaprint, inside the native library with ncnn.
